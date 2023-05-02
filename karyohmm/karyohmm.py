@@ -2,11 +2,10 @@ import numpy as np
 import pyximport
 
 pyximport.install(language_level=3)
+from hmm_utils import *
 from scipy.optimize import minimize
 from scipy.special import logsumexp as logsumexp_sp
 from tqdm import tqdm
-
-from .hmm_utils import *
 
 
 class AneuploidyHMM:
