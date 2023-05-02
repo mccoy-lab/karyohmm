@@ -1,0 +1,7 @@
+sandbox/
+nohup.out
+*.c
+*.so
+*.html
+*.egg-info/
+build/
