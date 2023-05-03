@@ -185,20 +185,7 @@ def forward_algo(bafs, lrrs, mat_haps, pat_haps, states, A, lrr_mu=lrr_mu, lrr_s
     m = len(states)
     ks = [sum([s >= 0 for s in state]) for state in states]
     alphas = np.zeros(shape=(m, n))
-    for j in range(m):
-        m_ij = mat_dosage(mat_haps[:, 0], states[j])
-        p_ij = pat_dosage(pat_haps[:, 0], states[j])
-        alphas[j,0] = log(emission_baf(
-                    bafs[0],
-                    m_ij,
-                    p_ij,
-                    pi0=pi0,
-                    std_dev=std_dev,
-                    eps=eps,
-                    k=ks[j],
-                ))
-        if logr:
-            alphas[j,0] += log(emission_lrr(lrr=lrrs_clip[0], k=ks[j], a=-4, b=1.0, lrr_mu=lrr_mu, lrr_sd=lrr_sd, pi0=pi0_lrr, eps=eps))
+    alphas[:, 0] = 1.0 / m
     scaler = np.zeros(n)
     scaler[0] = logsumexp(alphas[:, 0])
     alphas[:, 0] -= scaler[0]
@@ -220,8 +207,7 @@ def forward_algo(bafs, lrrs, mat_haps, pat_haps, states, A, lrr_mu=lrr_mu, lrr_s
             )
             if logr:
                 cur_emission += log(emission_lrr(lrr=lrrs_clip[i], k=ks[j], a=-4, b=1.0, lrr_mu=lrr_mu, lrr_sd=lrr_sd, pi0=pi0_lrr, eps=eps))
-            cur_transitions = logsumexp(A[j, :] + alphas[:, i - 1])
-            alphas[j, i] = cur_emission + cur_transitions
+            alphas[j, i] = cur_emission + logsumexp(A[j, :] + alphas[:, i - 1])
         scaler[i] = logsumexp(alphas[:, i])
         alphas[:, i] -= scaler[i]
     return alphas, scaler, states, None, sum(scaler)
@@ -235,20 +221,7 @@ def backward_algo(bafs, lrrs, mat_haps, pat_haps, states, A, lrr_mu=lrr_mu, lrr_
     m = len(states)
     ks = [sum([s >= 0 for s in state]) for state in states]
     betas = np.zeros(shape=(m, n))
-    for j in range(m):
-        m_ij = mat_dosage(mat_haps[:, -1], states[j])
-        p_ij = pat_dosage(pat_haps[:, -1], states[j])
-        betas[j,-1] = log(emission_baf(
-                    bafs[-1],
-                    m_ij,
-                    p_ij,
-                    pi0=pi0,
-                    std_dev=std_dev,
-                    eps=eps,
-                    k=ks[j],
-                ))
-        if logr:
-            betas[j,-1] = log(emission_lrr(lrrs_clip[-1], ks[j], a=-4, b=1.0, lrr_mu=lrr_mu, lrr_sd=lrr_sd, eps=eps))
+    betas[:,-1] = 1.0
     scaler = np.zeros(n)
     scaler[-1] = logsumexp(betas[:, -1])
     betas[:, -1] -= scaler[-1]
@@ -270,7 +243,7 @@ def backward_algo(bafs, lrrs, mat_haps, pat_haps, states, A, lrr_mu=lrr_mu, lrr_
             )
             if logr:
                 cur_emission += log(emission_lrr(lrrs_clip[i+1], ks[j], a=-4, b=1.0, lrr_mu=lrr_mu, lrr_sd=lrr_sd, eps=eps))
-            betas[j, i] = logsumexp(A[:, j] + cur_emission + betas[:, i + 1])
+            betas[j,i] = logsumexp(A[:, j] + cur_emission + betas[:, i + 1])
         scaler[i] = logsumexp(betas[:, i])
         betas[:, i] -= scaler[i]
     return betas, scaler, states, None, sum(scaler)

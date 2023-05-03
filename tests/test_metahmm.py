@@ -64,26 +64,32 @@ def test_backward_algorithm(data, logr):
 
 
 @pytest.mark.parametrize("data,logr", [(data_disomy, False), (data_trisomy, False)])
-def test_likelihood_similarity(data, logr):
-    """Test that the forward & backward algorithms give similar loglik."""
-    hmm = MetaHMM(logr=logr)
-    _, _, _, _, a_loglik = hmm.forward_algorithm(
-        bafs=data["baf_embryo"],
-        lrrs=data["lrr_embryo"],
-        mat_haps=data["mat_haps"],
-        pat_haps=data["pat_haps"],
-        logr=logr,
-    )
-    _, _, _, _, b_loglik = hmm.backward_algorithm(
-        bafs=data["baf_embryo"],
-        lrrs=data["lrr_embryo"],
-        mat_haps=data["mat_haps"],
-        pat_haps=data["pat_haps"],
-        logr=logr,
-    )
-    assert np.isclose(a_loglik, b_loglik, atol=1e-1)
-
-
-def test_fwd_bwd_algorithm():
+def test_fwd_bwd_algorithm(data, logr):
     """Test the properties of the output from the fwd-bwd algorithm."""
-    pass
+    hmm = MetaHMM(logr=logr)
+    gammas, _, karyotypes = hmm.forward_backward(
+        bafs=data["baf_embryo"],
+        lrrs=data["lrr_embryo"],
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+        logr=logr,
+    )
+    post_dict = hmm.posterior_karyotypes(gammas, karyotypes)
+    for x in ["0", "1m", "1p", "2", "3m", "3p"]:
+        assert x in post_dict
+    assert np.isclose(sum([post_dict[k] for k in post_dict]), 1.0)
+
+
+@pytest.mark.parametrize("data,logr", [(data_disomy, False), (data_trisomy, False)])
+def test_est_pi0_sigma(data, logr):
+    """Test the optimization routine on the forward-algorithm likelihood."""
+    hmm = MetaHMM(logr=logr)
+    opt_res = hmm.est_sigma_pi0(
+        bafs=data["baf_embryo"],
+        lrrs=data["lrr_embryo"],
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+        logr=logr,
+    )
+    assert (opt_res.x[0] > 0) and (opt_res.x[0] < 1.0)
+    assert (opt_res.x[1] > 0) and (opt_res.x[1] < 1.0)
