@@ -10,6 +10,7 @@ sim_ploidy_values = ["0", "1m", "1p", "2", "3m", "3p"]
 lrr_mu = {0: -3.527211, 1: np.log2(0.5), 2: np.log2(1.0), 3: np.log2(1.5)}
 lrr_sd = {0: 1.329152, 1: 0.284338, 2: 0.159645, 3: 0.209089}
 
+
 def draw_parental_genotypes(afs=None, m=100, seed=42):
     """Draw parental genotypes from a beta distribution.
 
@@ -263,6 +264,7 @@ def sim_logR_ratio(mat_hap, pat_hap, ploidy=2, alpha=1.0, seed=42):
     m = mat_hap.size
     lrr = norm.rvs(lrr_mu[ploidy], scale=lrr_sd[ploidy] * alpha, size=m)
     return lrr
+
 
 def full_ploidy_sim(
     afs=None,
