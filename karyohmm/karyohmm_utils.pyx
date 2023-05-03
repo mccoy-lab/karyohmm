@@ -1,6 +1,5 @@
 from libc.math cimport erf, exp, log, pi, sqrt
 from libcpp cimport bool
-
 import numpy as np
 
 # NOTE: these are fixed for K=0, 1, 2, 3 in terms of ploidy
