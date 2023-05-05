@@ -6,7 +6,6 @@ import pandas as pd
 
 from karyohmm import EuploidyHMM, MetaHMM
 
-
 def read_data_np(input_fp):
     """Read data from an .npy or npz file and reformat for karyohmm."""
     data = np.load(input_fp)
@@ -63,5 +62,6 @@ def main(input, out, logr, viterbi, mode):
     else:
         hmm = EuploidyHMM()
     print(f'Inference of HMM-parameters ...', file=sys.stderr)
+    
     # TODO :place the actual inference here ...
     pass
