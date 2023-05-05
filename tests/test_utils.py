@@ -1,5 +1,5 @@
 import pytest
-from karyohmm_utils import *
+from karyohmm_utils import mat_dosage, pat_dosage
 
 
 @pytest.mark.parametrize(
@@ -29,5 +29,5 @@ def test_mat_dosage(hap, state, expected):
     ],
 )
 def test_pat_dosage(hap, state, expected):
-    """Test the paternal dosage function"""
+    """Test the paternal dosage function."""
     assert pat_dosage(hap, state) == expected

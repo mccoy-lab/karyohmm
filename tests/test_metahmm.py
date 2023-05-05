@@ -84,15 +84,15 @@ def test_fwd_bwd_algorithm(data, logr):
 def test_est_pi0_sigma(data, logr):
     """Test the optimization routine on the forward-algorithm likelihood."""
     hmm = MetaHMM(logr=logr)
-    opt_res = hmm.est_sigma_pi0(
+    pi0_est, sigma_est = hmm.est_sigma_pi0(
         bafs=data["baf_embryo"],
         lrrs=data["lrr_embryo"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
         logr=logr,
     )
-    assert (opt_res.x[0] > 0) and (opt_res.x[0] < 1.0)
-    assert (opt_res.x[1] > 0) and (opt_res.x[1] < 1.0)
+    assert (pi0_est > 0) and (pi0_est < 1.0)
+    assert (sigma_est > 0) and (sigma_est < 1.0)
 
 
 def test_string_rep(logr=False):
@@ -112,8 +112,11 @@ def test_string_rep(logr=False):
             assert len(x) == 2 * m
 
 
-@pytest.mark.parametrize("r,a,logr", [(1e-3, 1e-7, False)])
+@pytest.mark.parametrize(
+    "r,a,logr", [(1e-3, 1e-7, False), (1e-3, 1e-9, False), (1e-3, 1e-10, True)]
+)
 def test_transition_matrices(r, a, logr):
+    """Test that transition matrices obey the rules."""
     hmm = MetaHMM(logr=logr)
     A = hmm.create_transition_matrix(hmm.karyotypes, r=r, a=a)
     for i in range(A.shape[0]):
