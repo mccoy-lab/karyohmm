@@ -28,24 +28,16 @@ class AneuploidyHMM:
 
     def get_state_str(self, state):
         """NOTE: this might have to be slightly revised ..."""
-        if len(state) == 2:
-            return f"m{state[0]}p{state[1]}"
-        else:
-            t = []
-            m = sum([s >= 0 for s in state])
-            for i, s in enumerate(state):
-                if s < 0:
-                    if m == 2:
-                        if i == 0:
-                            t.append(f"m{s}")
-                        if i == 1:
-                            t.append(f"p{s}")
-                    if m == 4:
-                        if i < 2:
-                            t.append(f"m{s}")
-                        if i >= 2:
-                            t.append(f"p{s}")
-            return "".join(t)
+        t = []
+        for i, s in enumerate(state):
+            if s != -1:
+                if i < 2:
+                    t.append(f"m{s}")
+                if i >= 2:
+                    t.append(f"p{s}")
+        if not t:
+            t.append("0")
+        return "".join(t)
 
     def est_sigma_pi0(self, bafs, mat_haps, pat_haps, **kwargs):
         """Estimate sigma and pi0 using the forward algorithm for the HMM."""

@@ -93,3 +93,15 @@ def test_est_pi0_sigma(data, logr):
     )
     assert (opt_res.x[0] > 0) and (opt_res.x[0] < 1.0)
     assert (opt_res.x[1] > 0) and (opt_res.x[1] < 1.0)
+
+
+def test_string_rep(logr=False):
+    """Test that the string representation of states makes sense."""
+    hmm = MetaHMM(logr=logr)
+    for s in hmm.states:
+        x = hmm.get_state_str(s)
+        m = sum([j >= 0 for j in s])
+        if m == 0:
+            assert x == "0"
+        else:
+            assert len(x) == 2 * m
