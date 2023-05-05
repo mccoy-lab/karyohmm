@@ -20,7 +20,7 @@ cdef double logsumexp(double[:] x):
         c += exp(x[i] - m)
     return m + log(c)
 
-cdef double mat_dosage(mat_hap, state):
+cpdef double mat_dosage(mat_hap, state):
     """Obtain the maternal dosage."""
     cdef int k,i,l;
     cdef double m;
@@ -43,10 +43,10 @@ cdef double mat_dosage(mat_hap, state):
         if state[1] != -1:
             m = mat_hap[state[0]] + mat_hap[state[1]]
         else:
-            m = mat_hap[state[0]]            
+            m = mat_hap[state[0]]
     return m
 
-cdef double pat_dosage(pat_hap, state):
+cpdef double pat_dosage(pat_hap, state):
     cdef int k,i,l;
     cdef double p;
     k = 0

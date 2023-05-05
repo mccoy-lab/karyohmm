@@ -104,9 +104,17 @@ def test_string_rep(logr=False):
         if m == 0:
             assert x == "0"
         elif m == 1:
-            if x[0] == 'm':
+            if x[0] == "m":
                 assert s in hmm.m_monosomy_states
             else:
                 assert s in hmm.p_monosomy_states
         else:
             assert len(x) == 2 * m
+
+
+@pytest.mark.parametrize("r,a,logr", [(1e-3, 1e-7, False)])
+def test_transition_matrices(r, a, logr):
+    hmm = MetaHMM(logr=logr)
+    A = hmm.create_transition_matrix(hmm.karyotypes, r=r, a=a)
+    for i in range(A.shape[0]):
+        assert np.isclose(np.sum(np.exp(A[i, :])), 1.0)

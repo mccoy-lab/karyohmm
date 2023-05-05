@@ -367,6 +367,7 @@ class MetaHMM(AneuploidyHMM):
             )
 
     def create_transition_matrix(self, karyotypes, r=1e-4, a=1e-7, unphased=False):
+        """Create an inter-karyotype transition matrix."""
         m = karyotypes.size
         assert r <= (1 / m)
         assert a <= (1 / m)
