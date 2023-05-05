@@ -33,7 +33,7 @@ class AneuploidyHMM:
             if s != -1:
                 if i < 2:
                     t.append(f"m{s}")
-                if i >= 2:
+                else:
                     t.append(f"p{s}")
         if not t:
             t.append("0")
@@ -265,7 +265,7 @@ class MetaHMM(AneuploidyHMM):
         self.aploid = "meta"
         self.logr = logr
         self.nullisomy_state = [(-1, -1, -1, -1)]
-        self.p_monosomy_states = [(-1, 1, -1, -1), (-1, 0, -1, -1)]
+        self.p_monosomy_states = [(-1, -1, 1, -1), (-1, -1, 0, -1)]
         self.m_monosomy_states = [(0, -1, -1, -1), (1, -1, -1, -1)]
         self.isodisomy_states = [(0, 1, -1, -1), (-1, -1, 0, 1)]
         self.euploid_states = [

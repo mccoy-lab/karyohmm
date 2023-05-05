@@ -103,5 +103,10 @@ def test_string_rep(logr=False):
         m = sum([j >= 0 for j in s])
         if m == 0:
             assert x == "0"
+        elif m == 1:
+            if x[0] == 'm':
+                assert s in hmm.m_monosomy_states
+            else:
+                assert s in hmm.p_monosomy_states
         else:
             assert len(x) == 2 * m
