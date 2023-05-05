@@ -31,7 +31,7 @@ cdef double mat_dosage(mat_hap, state):
         k += (state[i] >= 0)
     if k == 0:
         m = -1
-    if k == 1:
+    elif k == 1:
         if state[0] != -1:
             m = mat_hap[state[0]]
     elif k == 2:
@@ -40,10 +40,10 @@ cdef double mat_dosage(mat_hap, state):
         else:
             m = mat_hap[state[0]]
     elif k == 3:
-        if state[1] == -1:
-            m = mat_hap[state[0]]
-        else:
+        if state[1] != -1:
             m = mat_hap[state[0]] + mat_hap[state[1]]
+        else:
+            m = mat_hap[state[0]]            
     return m
 
 cdef double pat_dosage(pat_hap, state):
@@ -56,7 +56,7 @@ cdef double pat_dosage(pat_hap, state):
         k += (state[i] >= 0)
     if k == 0:
         p = -1
-    if k == 1:
+    elif k == 1:
         if state[2] != -1:
             p = pat_hap[state[2]]
     elif k == 2:
@@ -65,7 +65,7 @@ cdef double pat_dosage(pat_hap, state):
         else:
             p = pat_hap[state[2]]
     elif k == 3:
-        if state[1] == -1:
+        if state[3] != -1:
             p = pat_hap[state[2]] + pat_hap[state[3]]
         else:
             p = pat_hap[state[2]]
