@@ -1,5 +1,5 @@
 import numpy as np
-from karyohmm_utils import *
+from karyohmm_utils import backward_algo, forward_algo, viterbi_algo
 from scipy.optimize import minimize
 from scipy.special import logsumexp as logsumexp_sp
 from tqdm import tqdm
@@ -9,43 +9,22 @@ class AneuploidyHMM:
     """Base class for defining all the aneuploidy HMM."""
 
     def __init__(self):
+        """Initialize the base aneuploidy HMM class."""
         self.ploidy = 2
         self.aploid = None
 
-    def emission_prob(self, baf, m, p, pi0=0.2, std_dev=0.3, eps=1e-4, err=1e-20, k=2):
-        """Emission density of embryo BAF at site i."""
-        assert (pi0 < 1.0) & (pi0 > 0.0)
-        assert (eps > 0.0) & (eps < 1.0)
-        assert std_dev > 0
-        return emission_help(baf, m, p, pi0=pi0, std_dev=std_dev, eps=eps, err=err, k=k)
-
-    def transition_prob(self, zprime, zi, r=1e-2, k=4):
-        """Transition probability between hidden state zprime and zi."""
-        if zprime == zi:
-            return 1 - r / (k - 1)
-        else:
-            return r / (k - 1)
-
     def get_state_str(self, state):
         """NOTE: this might have to be slightly revised ..."""
-        if len(state) == 2:
-            return f"m{state[0]}p{state[1]}"
-        else:
-            t = []
-            m = sum([s >= 0 for s in state])
-            for i, s in enumerate(state):
-                if s < 0:
-                    if m == 2:
-                        if i == 0:
-                            t.append(f"m{s}")
-                        if i == 1:
-                            t.append(f"p{s}")
-                    if m == 4:
-                        if i < 2:
-                            t.append(f"m{s}")
-                        if i >= 2:
-                            t.append(f"p{s}")
-            return "".join(t)
+        t = []
+        for i, s in enumerate(state):
+            if s != -1:
+                if i < 2:
+                    t.append(f"m{s}")
+                else:
+                    t.append(f"p{s}")
+        if not t:
+            t.append("0")
+        return "".join(t)
 
     def est_sigma_pi0(self, bafs, mat_haps, pat_haps, **kwargs):
         """Estimate sigma and pi0 using the forward algorithm for the HMM."""
@@ -59,7 +38,6 @@ class AneuploidyHMM:
                 std_dev=x[1],
                 **kwargs,
             )[4]
-            print(x, loglik)
             return loglik
 
         opt_res = minimize(
@@ -68,8 +46,11 @@ class AneuploidyHMM:
             method="L-BFGS-B",
             bounds=[(0.05, 0.95), (0.1, 0.5)],
             tol=1e-3,
+            options={"disp": True},
         )
-        return opt_res
+        pi0_est = opt_res.x[0]
+        sigma_est = opt_res.x[1]
+        return pi0_est, sigma_est
 
     def est_lrr_sd(
         self,
@@ -79,7 +60,7 @@ class AneuploidyHMM:
         b=1.0,
         **kwargs,
     ):
-        """Estimate the underlying approach to estimate variances in LRR distributions."""
+        """Estimate the variances in the LRR distribution."""
         lrrs_clip = np.clip(lrrs, a, b)
         pis, mus, std, logliks = est_gmm_variance(
             lrrs_clip, mus=lrr_mu, a=a, b=b, **kwargs
@@ -247,10 +228,7 @@ class EuploidyHMM(AneuploidyHMM):
 
         NOTE: how do we establish this for faulty haplotypes?
         """
-        windows = []
-        for c in changepts:
-            pass
-        return windows
+        raise NotImplementedError()
 
     def filter_switch_errors(self, intervals, p=0.5):
         """Filtering putative switch errors.
@@ -261,7 +239,7 @@ class EuploidyHMM(AneuploidyHMM):
 
         NOTE: this will likely use an interval tree for comparisons.
         """
-        pass
+        raise NotImplementedError()
 
 
 class MetaHMM(AneuploidyHMM):
@@ -273,7 +251,7 @@ class MetaHMM(AneuploidyHMM):
         self.aploid = "meta"
         self.logr = logr
         self.nullisomy_state = [(-1, -1, -1, -1)]
-        self.p_monosomy_states = [(-1, 1, -1, -1), (-1, 0, -1, -1)]
+        self.p_monosomy_states = [(-1, -1, 1, -1), (-1, -1, 0, -1)]
         self.m_monosomy_states = [(0, -1, -1, -1), (1, -1, -1, -1)]
         self.isodisomy_states = [(0, 1, -1, -1), (-1, -1, 0, 1)]
         self.euploid_states = [
@@ -375,6 +353,7 @@ class MetaHMM(AneuploidyHMM):
             )
 
     def create_transition_matrix(self, karyotypes, r=1e-4, a=1e-7, unphased=False):
+        """Create an inter-karyotype transition matrix."""
         m = karyotypes.size
         assert r <= (1 / m)
         assert a <= (1 / m)
@@ -554,6 +533,7 @@ class MetaHMM(AneuploidyHMM):
         unphased=False,
         logr=False,
     ):
+        """Implements a viterbi traceback through the various files."""
         assert bafs.ndim == 1
         assert (mat_haps.ndim == 2) & (pat_haps.ndim == 2)
         assert (pi0 > 0) & (pi0 < 1.0)
