@@ -1,5 +1,6 @@
 import numpy as np
-from karyohmm_utils import backward_algo, forward_algo, viterbi_algo
+from karyohmm_utils import (backward_algo, est_gmm_variance, forward_algo,
+                            viterbi_algo)
 from scipy.optimize import minimize
 from scipy.special import logsumexp as logsumexp_sp
 from tqdm import tqdm
