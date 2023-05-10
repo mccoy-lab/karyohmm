@@ -399,8 +399,6 @@ class MetaHMM(AneuploidyHMM):
         assert (eps > 0) & (eps < 1e-1)
         assert bafs.size == mat_haps.shape[1]
         assert mat_haps.shape == pat_haps.shape
-        n = bafs.size
-        m = len(self.states)
         A = self.create_transition_matrix(self.karyotypes, r=r, a=a, unphased=unphased)
         alphas, scaler, _, _, loglik = forward_algo(
             bafs,
@@ -444,8 +442,6 @@ class MetaHMM(AneuploidyHMM):
         assert (eps > 0) & (eps < 1e-1)
         assert bafs.size == mat_haps.shape[1]
         assert mat_haps.shape == pat_haps.shape
-        n = bafs.size
-        m = len(self.states)
         A = self.create_transition_matrix(self.karyotypes, r=r, a=a, unphased=unphased)
         betas, scaler, _, _, loglik = backward_algo(
             bafs,
