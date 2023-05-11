@@ -104,27 +104,6 @@ cdef double truncnorm_pf(double x, double a, double b, double mu=0.5, double sig
     p = logdiffexp(upper, lower) - z
     return exp(p)
 
-cdef double truncnorm_pf_grid(double a, double b, double x1, double x2, double mu=0.5, double sigma=0.2):
-    """Custom definition of the truncated normal pdf discretized.
-
-    NOTE: should we define alpha,beta,z outside of this function to save time?
-    """
-    cdef double p, z, alpha, beta, epsx;
-    cdef double upper, lower;
-    beta = (b - mu) / sigma
-    alpha = (a - mu) / sigma
-    # The boundaries are estimated by search sorted?
-    eps1 = (min(x2, b) - mu) / sigma
-    eps2 = (max(x1, a) - mu) / sigma
-    z = logdiffexp(psi(beta), psi(alpha))
-    if (eps1 > mu) and (eps2 > mu):
-        upper = psi(-eps2)
-        lower = psi(-eps1)
-    else:
-        upper = psi(eps1)
-        lower = psi(eps2)
-    p = logdiffexp(upper, lower) - z
-    return exp(p)
 
 cdef double loglik_gmm(double[:] lrrs, double[:] pis, double[:] mus, double[:] stds, double a=-2, double b=1, double eps=1e-6):
     """Estimate the log-likelihood of a given set of LRR values.
