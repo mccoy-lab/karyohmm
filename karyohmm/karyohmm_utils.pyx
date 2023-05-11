@@ -71,6 +71,10 @@ cpdef double pat_dosage(pat_hap, state):
             p = pat_hap[state[2]]
     return p
 
+cdef double zeta(double x):
+    """PDF of a normal distribution function."""
+    return log(1/(2*sqrtpi)) -0.5*(x**2)
+
 cdef double psi(double x):
     """CDF for a normal distribution function in log-space."""
     if x < -4:
@@ -90,6 +94,28 @@ cdef double truncnorm_pf(double x, double a, double b, double mu=0.5, double sig
     alpha = (a - mu) / sigma
     eps1 = (min(x + eps, b) - mu) / sigma
     eps2 = (max(x - eps, a) - mu) / sigma
+    z = logdiffexp(psi(beta), psi(alpha))
+    if (eps1 > mu) and (eps2 > mu):
+        upper = psi(-eps2)
+        lower = psi(-eps1)
+    else:
+        upper = psi(eps1)
+        lower = psi(eps2)
+    p = logdiffexp(upper, lower) - z
+    return exp(p)
+
+cdef double truncnorm_pf_grid(double a, double b, double x1, double x2, double mu=0.5, double sigma=0.2):
+    """Custom definition of the truncated normal pdf discretized.
+
+    NOTE: should we define alpha,beta,z outside of this function to save time?
+    """
+    cdef double p, z, alpha, beta, epsx;
+    cdef double upper, lower;
+    beta = (b - mu) / sigma
+    alpha = (a - mu) / sigma
+    # The boundaries are estimated by search sorted?
+    eps1 = (min(x2, b) - mu) / sigma
+    eps2 = (max(x1, a) - mu) / sigma
     z = logdiffexp(psi(beta), psi(alpha))
     if (eps1 > mu) and (eps2 > mu):
         upper = psi(-eps2)
@@ -151,20 +177,11 @@ cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double
     """Emission distribution helper function ..."""
     cdef double mu_i, x;
     if (m == -1) & (p == -1):
-        # NOTE: this only happens in the case of nullisomy ...
-        return (baf + eps) - (baf - eps)
+        # NOTE: this is just trying to keep this on the same scale ...
+        return truncnorm_pf(0.5, 0.0, 1.0, mu=0.0, sigma=std_dev, eps=eps)
     mu_i = (m + p) / k
     x = truncnorm_pf(baf, 0.0, 1.0, mu=mu_i, sigma=std_dev, eps=eps)
-    if mu_i == 0:
-        return (
-            pi0 * (baf == 0) + (1.0 - pi0)* x
-        )
-    elif mu_i == 1:
-        return (
-            pi0 * (baf == 1) + (1.0 - pi0) * x
-        )
-    else:
-        return x
+    return pi0/2*(baf == 0) + pi0/2*(baf == 1) + (1 - pi0)*(baf > 0 and baf < 1)*x
 
 cpdef double emission_lrr(double lrr, int k, double[:] lrr_mu, double[:] lrr_sd, double a=-4.0, double b=1.0, double pi0=0.2, double eps=1e-6):
     """Emission function for LRR which is based on a truncated-normal distribution."""
@@ -173,7 +190,6 @@ cpdef double emission_lrr(double lrr, int k, double[:] lrr_mu, double[:] lrr_sd,
     mu = lrr_mu[k]
     sd = lrr_sd[k]
     x = truncnorm_pf(lrr, a, b, mu=mu, sigma=sd, eps=eps)
-    # NOTE: you can have pi0 just as the estimated proportion of uniform.
     return pi0 + (1 - pi0)*x
 
 def forward_algo(bafs, lrrs, mat_haps, pat_haps, states, A, lrr_mu=lrr_mu, lrr_sd=lrr_sd, double pi0=0.2, double std_dev=0.25, double pi0_lrr=0.2, double eps=1e-6, int logr=True):
