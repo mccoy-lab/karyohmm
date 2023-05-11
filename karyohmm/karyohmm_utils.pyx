@@ -156,8 +156,7 @@ cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double
     """Emission distribution helper function ..."""
     cdef double mu_i, x;
     if (m == -1) & (p == -1):
-        # NOTE: this is just trying to keep this on the same scale ...
-        return truncnorm_pf(0.5, 0.0, 1.0, mu=0.0, sigma=std_dev, eps=eps)
+        return truncnorm_pf(0.3333, 0.0, 1.0, mu=0.0, sigma=std_dev, eps=eps)
     mu_i = (m + p) / k
     x = truncnorm_pf(baf, 0.0, 1.0, mu=mu_i, sigma=std_dev, eps=eps)
     return pi0/2*(baf == 0) + pi0/2*(baf == 1) + (1 - pi0)*(baf > 0 and baf < 1)*x
