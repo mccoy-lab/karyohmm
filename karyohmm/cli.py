@@ -90,7 +90,6 @@ def read_data(input_fp):
     required=True,
     default="Meta",
     type=click.Choice(["Meta", "Euploid"]),
-    case_sensitive=False,
     show_default=True,
 )
 @click.option(
@@ -123,7 +122,7 @@ def read_data(input_fp):
     help="Output file prefix.",
 )
 def main(input, logr, viterbi, mode, unphased, eps, niter, out):
-    """Main CLI entrypoint for calling karyohmm."""
+    """Karyohmm CLI."""
     print(f"Reading in input data {input} ...", file=sys.stderr)
     data_df = read_data(input)
     assert data_df is not None
@@ -152,7 +151,7 @@ def main(input, logr, viterbi, mode, unphased, eps, niter, out):
     lrr_sd = np.nan
     if logr:
         pi0_lrr, lrr_mu, lrr_sd, _ = hmm.est_lrr_sd(lrrs, niter=niter)
-    print("Finished inference of HMM-parameters.", file=sys.stderr)
+    print("Finished inference of HMM-parameters!", file=sys.stderr)
     print("Running analyses ... ", file=sys.stderr)
     if viterbi:
         if mode == "Meta":
@@ -187,12 +186,11 @@ def main(input, logr, viterbi, mode, unphased, eps, niter, out):
                 + [col for col in path_df.columns if col not in cols_to_move]
             ]
             path_df.to_csv(f"{out}.meta.viterbi.tsv", sep="\t", index=None)
+            print(f"Wrote viterbi algorithm traceback to {out}.meta.viterbi.tsv")
         else:
             path, states, _, _ = hmm.viterbi(
                 bafs=bafs,
                 lrrs=lrrs,
-                mat_haps=mat_haps,
-                pat_haps=pat_haps,
                 mat_haps=mat_haps,
                 pat_haps=pat_haps,
                 pi0=pi0_est,
@@ -218,6 +216,7 @@ def main(input, logr, viterbi, mode, unphased, eps, niter, out):
                 + [col for col in path_df.columns if col not in cols_to_move]
             ]
             path_df.to_csv(f"{out}.disomy.viterbi.tsv", sep="\t", index=None)
+            print(f"Wrote viterbi algorithm traceback to {out}.disomy.viterbi.tsv")
     else:
         if mode == "Meta":
             gammas, states, karyotypes = hmm.forward_backward(
@@ -234,12 +233,16 @@ def main(input, logr, viterbi, mode, unphased, eps, niter, out):
                 unphased=unphased,
                 logr=logr,
             )
-            # TODO: write out the gamma files ...
             kar_prob = hmm.posterior_karyotypes(gammas, karyotypes)
             kar_prob["pi0_hat"] = pi0_est
             kar_prob["sigma_hat"] = sigma_est
             df = pd.DataFrame(kar_prob, index=[0])
             df.to_csv(f"{out}.meta.posterior.tsv", sep="\t", index=None)
+            print(
+                f"Wrote posterior karyotypes to {out}.meta.posterior.tsv",
+                file=sys.stderr,
+            )
+
             state_lbls = [hmm.get_state_str(s) for s in states]
             gamma_df = pd.DataFrame(gammas.T)
             gamma_df.columns = state_lbls
@@ -253,6 +256,11 @@ def main(input, logr, viterbi, mode, unphased, eps, niter, out):
                 + [col for col in gamma_df.columns if col not in cols_to_move]
             ]
             gamma_df.to_csv(f"{out}.meta.gammas.tsv", sep="\t", index=None)
+            print(
+                f"Wrote forward-backward algorithm results to {out}.meta.gammas.tsv",
+                file=sys.stderr,
+            )
+
         else:
             gammas, states, karyotypes = hmm.forward_backward(
                 bafs=bafs,
@@ -265,12 +273,16 @@ def main(input, logr, viterbi, mode, unphased, eps, niter, out):
                 unphased=unphased,
                 logr=logr,
             )
-            # TODO: write out the gamma files ...
             kar_prob = hmm.posterior_karyotypes(gammas, karyotypes)
             kar_prob["pi0_hat"] = pi0_est
             kar_prob["sigma_hat"] = sigma_est
             df = pd.DataFrame(kar_prob, index=[0])
             df.to_csv(f"{out}.disomy.posterior.tsv", sep="\t", index=None)
+            print(
+                f"Wrote posterior karyotypes to {out}.disomy.posterior.tsv",
+                file=sys.stderr,
+            )
+
             state_lbls = [hmm.get_state_str(s) for s in states]
             gamma_df = pd.DataFrame(gammas.T)
             gamma_df.columns = state_lbls
@@ -284,4 +296,9 @@ def main(input, logr, viterbi, mode, unphased, eps, niter, out):
                 + [col for col in gamma_df.columns if col not in cols_to_move]
             ]
             gamma_df.to_csv(f"{out}.disomy.gammas.tsv", sep="\t", index=None)
+            print(
+                f"Wrote forward-backward algorithm results to {out}.meta.gammas.tsv",
+                file=sys.stderr,
+            )
+
     print("Finished karyohmm analysis!", file=sys.stderr)
