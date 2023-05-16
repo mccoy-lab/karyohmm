@@ -249,7 +249,7 @@ def viterbi_algo(bafs, lrrs, mat_haps, pat_haps, states, A, lrr_mu=lrr_mu, lrr_s
     n = bafs.size
     m = len(states)
     deltas = np.zeros(shape=(m, n))
-    deltas[:, 0] = log(1 / m)
+    deltas[:, 0] = log(1.0 / m)
     psi = np.zeros(shape=(m, n), dtype=int)
     ks = [sum([s >= 0 for s in state]) for state in states]
     for i in range(1, n):

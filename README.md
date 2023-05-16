@@ -43,7 +43,7 @@ The `EuploidyHMM` mode is a restricted version of the `karyohmm` framework in th
 
 ## CLI
 
-The installation of `karyohmm` also includes a `karyohmm-cli` implementation that can be run directly from the command-line. This is work in progress, but currently implements the majority of the `MetaHMM` inference steps for a single data file. To see this on a simulated example of two embryos: 
+The installation of `karyohmm` also includes a `karyohmm-cli` implementation that can be run directly from the command-line. This is work in progress, but currently implements the majority of the `MetaHMM` inference steps for a single data file. To see this on a simulated example of two embryos:
 
 ```
 karyohmm-cli -i data/test_disomy_embryo.tsv -o data/out_disomy
