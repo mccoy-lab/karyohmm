@@ -71,9 +71,6 @@ cpdef double pat_dosage(pat_hap, state):
             p = pat_hap[state[2]]
     return p
 
-cdef double zeta(double x):
-    """PDF of a normal distribution function."""
-    return log(1/(2*sqrtpi)) -0.5*(x**2)
 
 cdef double psi(double x):
     """CDF for a normal distribution function in log-space."""
@@ -270,6 +267,146 @@ def viterbi_algo(bafs, lrrs, mat_haps, pat_haps, states, A, lrr_mu=lrr_mu, lrr_s
             )
             if logr:
                 deltas[j,i] += log(emission_lrr(lrrs_clip[i], ks[j], a=-4, b=1.0, lrr_mu=lrr_mu, lrr_sd=lrr_sd, eps=eps))
+            psi[j, i] = np.argmax(deltas[:, i - 1] + A[:, j]).astype(int)
+    path = np.zeros(n, dtype=int)
+    path[-1] = np.argmax(deltas[:, -1]).astype(int)
+    for i in range(n - 2, -1, -1):
+        path[i] = psi[path[i + 1], i]
+    path[0] = psi[path[1], 1]
+    return path, states, deltas, psi
+
+
+def forward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.1, double eps=1e-6):
+    """Compute the forward algorithm for a scenario with sibling embryos."""
+    cdef int i,j,n,m;
+    assert len(bafs == 2)
+    assert bafs[1].size == bafs[0].size
+    n = bafs[0].size
+    m = len(states)
+    alphas = np.zeros(shape=(m, n))
+    alphas[:, 0] = 1.0 / m
+    scaler = np.zeros(n)
+    scaler[0] = logsumexp(alphas[:, 0])
+    alphas[:, 0] -= scaler[0]
+    for i in range(1, n):
+        for j in range(m):
+            # First sibling embryo
+            m_ij0 = mat_dosage(mat_haps[:, i], states[j][0])
+            p_ij0 = pat_dosage(pat_haps[:, i], states[j][0])
+            # Second sibling embryo
+            m_ij1 = mat_dosage(mat_haps[:, i], states[j][1])
+            p_ij1 = pat_dosage(pat_haps[:, i], states[j][1])
+            # This is in log-space ...
+            cur_emission = log(
+                emission_baf(
+                    bafs[0][i],
+                    m_ij0,
+                    p_ij0,
+                    pi0=pi0,
+                    std_dev=std_dev,
+                    eps=eps,
+                    k=2,
+                )
+            ) + log(emission_baf(
+                    bafs[1][i],
+                    m_ij1,
+                    p_ij1,
+                    pi0=pi0,
+                    std_dev=std_dev,
+                    eps=eps,
+                    k=2,
+                ))
+            alphas[j, i] = cur_emission + logsumexp(A[j, :] + alphas[:, i - 1])
+        scaler[i] = logsumexp(alphas[:, i])
+        alphas[:, i] -= scaler[i]
+    return alphas, scaler, states, None, sum(scaler)
+
+
+def backward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.1, double eps=1e-6):
+    """Helper function for backward algorithm loop-optimization."""
+    cdef int i,j,n,m;
+    assert len(bafs == 2)
+    assert bafs[1].size == bafs[0].size
+    n = bafs[0].size
+    m = len(states)
+    betas = np.zeros(shape=(m, n))
+    betas[:,-1] = 1.0
+    scaler = np.zeros(n)
+    scaler[-1] = logsumexp(betas[:, -1])
+    betas[:, -1] -= scaler[-1]
+    for i in range(n - 2, -1, -1):
+        for j in range(m):
+            m_ij0 = mat_dosage(mat_haps[:, i], states[j][0])
+            p_ij0 = pat_dosage(pat_haps[:, i], states[j][0])
+            m_ij1 = mat_dosage(mat_haps[:, i], states[j][1])
+            p_ij1 = pat_dosage(pat_haps[:, i], states[j][1])
+            # This is in log-space as well
+            cur_emission = log(
+                emission_baf(
+                    bafs[0][i + 1],
+                    m_ij0,
+                    p_ij0,
+                    pi0=pi0,
+                    std_dev=std_dev,
+                    eps=eps,
+                    k=2,
+                )
+            ) + log(
+                emission_baf(
+                    bafs[1][i + 1],
+                    m_ij1,
+                    p_ij1,
+                    pi0=pi0,
+                    std_dev=std_dev,
+                    eps=eps,
+                    k=2,
+                )
+            )
+
+            betas[j,i] = logsumexp(A[:, j] + cur_emission + betas[:, i + 1])
+        scaler[i] = logsumexp(betas[:, i])
+        betas[:, i] -= scaler[i]
+    return betas, scaler, states, None, sum(scaler)
+
+
+
+def viterbi_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.1, double eps=1e-6):
+    cdef int i,j,n,m;
+    assert len(bafs == 2)
+    assert bafs[1].size == bafs[0].size
+    n = bafs[0].size
+    m = len(states)
+    deltas = np.zeros(shape=(m, n))
+    deltas[:, 0] = log(1.0 / m)
+    psi = np.zeros(shape=(m, n), dtype=int)
+    for i in range(1, n):
+        for j in range(m):
+            m_ij0 = mat_dosage(mat_haps[:, i], states[j][0])
+            p_ij0 = pat_dosage(pat_haps[:, i], states[j][0])
+            m_ij1 = mat_dosage(mat_haps[:, i], states[j][1])
+            p_ij1 = pat_dosage(pat_haps[:, i], states[j][1])
+            deltas[j,i] = np.max(deltas[:,i-1] + A[:,j])
+            deltas[j,i] += log(
+                emission_baf(
+                    bafs[0][i],
+                    m_ij0,
+                    p_ij0,
+                    pi0=pi0,
+                    std_dev=std_dev,
+                    eps=eps,
+                    k=2,
+                )
+            ) + log(
+                emission_baf(
+                    bafs[1][i],
+                    m_ij1,
+                    p_ij1,
+                    pi0=pi0,
+                    std_dev=std_dev,
+                    eps=eps,
+                    k=2,
+                )
+            )
             psi[j, i] = np.argmax(deltas[:, i - 1] + A[:, j]).astype(int)
     path = np.zeros(n, dtype=int)
     path[-1] = np.argmax(deltas[:, -1]).astype(int)

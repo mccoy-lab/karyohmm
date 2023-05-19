@@ -2,4 +2,4 @@
 
 __version__ = "0.1.2"
 
-from .karyohmm import EuploidyHMM, MetaHMM
+from .karyohmm import MetaHMM, QuadHMM

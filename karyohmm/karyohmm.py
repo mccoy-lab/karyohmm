@@ -1,6 +1,7 @@
 import numpy as np
-from karyohmm_utils import (backward_algo, est_gmm_variance, forward_algo,
-                            viterbi_algo)
+from karyohmm_utils import (backward_algo, backward_algo_sibs,
+                            est_gmm_variance, forward_algo, forward_algo_sibs,
+                            viterbi_algo, viterbi_algo_sibs)
 from scipy.optimize import minimize
 from scipy.special import logsumexp as logsumexp_sp
 from tqdm import tqdm
@@ -68,179 +69,6 @@ class AneuploidyHMM:
         )
         pi0 = pis[0]
         return pi0, mus[1:], std[1:], logliks
-
-
-class EuploidyHMM(AneuploidyHMM):
-    """HMM to estimate haplotype traceback in the euploid context."""
-
-    def __init__(self, aploid="2"):
-        """Implement the euploidy HMM (mostly for crossover detection)"""
-        super().__init__()
-        assert aploid in ["2"]
-        self.ploidy = 2
-        self.aploid = aploid
-        self.states = [
-            (0, -1, 0, -1),
-            (0, -1, 1, -1),
-            (1, -1, 0, -1),
-            (1, -1, 1, -1),
-        ]
-
-    def create_transition_matrix(self, r=1e-4):
-        """Create the full transition matrix for this set of samples."""
-        assert (r < 1) and (r > 0)
-        A = np.zeros(shape=(4, 4))
-        for i in range(4):
-            A[i, :] = r / 3.0
-            A[i, i] = 1.0 - r
-        return np.log(A)
-
-    def forward_algorithm(
-        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.25, r=1e-4, eps=1e-8
-    ):
-        """Forward HMM algorithm under a specified statespace model."""
-        assert bafs.ndim == 1
-        assert (mat_haps.ndim == 2) & (pat_haps.ndim == 2)
-        assert (pi0 > 0) & (pi0 < 1.0)
-        assert std_dev > 0
-        assert (eps > 0) & (eps < 1e-2)
-        assert bafs.size == mat_haps.shape[1]
-        assert mat_haps.shape == pat_haps.shape
-
-        A = self.create_transition_matrix(r=r)
-        alphas, scaler, _, _, loglik = forward_algo(
-            bafs,
-            np.ones(bafs.size),
-            mat_haps,
-            pat_haps,
-            self.states,
-            A,
-            pi0=pi0,
-            std_dev=std_dev,
-            eps=eps,
-            logr=False,
-        )
-        return alphas, scaler, self.states, None, loglik
-
-    def backward_algorithm(
-        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.25, r=1e-4, eps=1e-8
-    ):
-        """Backward HMM algorithm under a given statespace model."""
-        assert bafs.ndim == 1
-        assert (mat_haps.ndim == 2) & (pat_haps.ndim == 2)
-        assert (pi0 > 0) & (pi0 < 1.0)
-        assert std_dev > 0
-        assert (eps > 0) & (eps < 1e-2)
-        assert bafs.size == mat_haps.shape[1]
-        assert mat_haps.shape == pat_haps.shape
-        A = self.create_transition_matrix(r=r)
-        betas, scaler, _, _, loglik = backward_algo(
-            bafs,
-            np.ones(bafs.size),
-            mat_haps,
-            pat_haps,
-            self.states,
-            A,
-            pi0=pi0,
-            std_dev=std_dev,
-            eps=eps,
-            logr=False,
-        )
-        return betas, scaler, self.states, None, loglik
-
-    def forward_backward(
-        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.25, r=1e-4, eps=1e-8
-    ):
-        """Apply the forward-backward algorithm."""
-        alphas, _, states, _, _ = self.forward_algorithm(
-            bafs,
-            mat_haps,
-            pat_haps,
-            pi0=pi0,
-            std_dev=std_dev,
-            eps=eps,
-            r=r,
-        )
-        betas, _, _, _, _ = self.backward_algorithm(
-            bafs,
-            mat_haps,
-            pat_haps,
-            pi0=pi0,
-            std_dev=std_dev,
-            eps=eps,
-            r=r,
-        )
-        gammas = (alphas + betas) - logsumexp_sp(alphas + betas, axis=0)
-        return gammas, states, None
-
-    def viterbi_algorithm(
-        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.25, r=1e-4, eps=1e-8
-    ):
-        """Implements the Viterbi algorithm."""
-        assert bafs.ndim == 1
-        assert (mat_haps.ndim == 2) & (pat_haps.ndim == 2)
-        assert (pi0 > 0) & (pi0 < 1.0)
-        assert std_dev > 0
-        assert (eps > 0) & (eps < 1e-2)
-        assert bafs.size == mat_haps.shape[1]
-        assert mat_haps.shape == pat_haps.shape
-        A = self.create_transition_matrix(r=r)
-        path, states, deltas, psi = viterbi_algo(
-            bafs,
-            np.ones(bafs.size),
-            mat_haps,
-            pat_haps,
-            self.states,
-            A,
-            pi0=pi0,
-            std_dev=std_dev,
-            eps=eps,
-            logr=False,
-        )
-        return path, states, deltas, psi
-
-    def assign_recomb(self, states, path):
-        """Obtain the indices and sex-specific recombination events.
-
-        NOTE: to obtain true intervals we will have to look at distance to nearest heterozygote from the changept
-        """
-        assert len(states) > 0
-        assert np.min(path) >= 0
-        assert np.max(path) <= len(states)
-        changepts = np.where(path[:-1] != path[1:])[0]
-        paternal = []
-        maternal = []
-        for c in changepts:
-            if states[path[c]][2] != states[path[c + 1]][2]:
-                paternal.append(c)
-            else:
-                maternal.append(c)
-        maternal = np.array(maternal, dtype=int)
-        paternal = np.array(paternal, dtype=int)
-        assert changepts.size == (maternal.size + paternal.size)
-        return maternal, paternal, changepts
-
-    def assign_co_windows(self, changepts, haps):
-        """Assign crossover windows based on distance to nearest heterozygote.
-
-        Args:
-            - changepts (`np.array`): inferred changepts for specific parent
-            - haps (`np.array`): haplotypes for parental individuals.
-
-        NOTE: how do we establish this for faulty haplotypes?
-        """
-        raise NotImplementedError()
-
-    def filter_switch_errors(self, intervals, p=0.5):
-        """Filtering putative switch errors.
-
-        Args:
-         - intervals (`list`): list
-         - p (`float`): proportion of embryos for window to be representative.
-
-        NOTE: this will likely use an interval tree for comparisons.
-        """
-        raise NotImplementedError()
 
 
 class MetaHMM(AneuploidyHMM):
@@ -579,3 +407,76 @@ class MetaHMM(AneuploidyHMM):
         for k in np.unique(karyotypes):
             kar_prob[k] = np.sum(np.exp(gammas[(karyotypes == k), :])) / m
         return kar_prob
+
+
+class QuadHMM:
+    """Updated HMM for sibling embryos based on the model of Roach et al 2010 but designed for BAF data."""
+
+    def __init__(self):
+        """"""
+        self.ploidy = 2
+        self.aploid = "2"
+        self.single_states = [
+            (0, -1, 0, -1),
+            (0, -1, 1, -1),
+            (1, -1, 0, -1),
+            (1, -1, 1, -1),
+        ]
+        self.states = []
+        for i in self.single_states:
+            for j in self.single_states:
+                self.states.append((i, j))
+
+    def create_transition_matrix(self):
+        """Create the transition matrix here."""
+        m = len(self.states)
+        A = np.zeros(shape=(m, m))
+        A[:, :] = 1 / m
+        for i in range(m):
+            A[i, i] = 0.0
+            A[i, i] = 1.0 - np.sum(A[i, :])
+        return np.log(A)
+
+    def forward_backward(
+        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, eps=1e-6
+    ):
+        A = self.create_transition_matrix()
+        alphas, _, states, _, _ = forward_algo_sibs(
+            bafs,
+            mat_haps,
+            pat_haps,
+            states=self.states,
+            A=A,
+            pi0=pi0,
+            std_dev=std_dev,
+            eps=eps,
+        )
+        betas, _, _, _, _ = backward_algo_sibs(
+            bafs,
+            mat_haps,
+            pat_haps,
+            states=self.states,
+            A=A,
+            pi0=pi0,
+            std_dev=std_dev,
+            eps=eps,
+        )
+        gammas = (alphas + betas) - logsumexp_sp(alphas + betas, axis=0)
+        return gammas, states, karyotypes
+
+    def viterbi_algorithm(
+        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, eps=1e-6
+    ):
+        """Viterbi algorithm definition in a quad-context."""
+        A = self.create_transition_matrix()
+        path, states, deltas, psi = viterbi_algo_sibs(
+            bafs,
+            mat_haps,
+            pat_haps,
+            states=self.states,
+            A=A,
+            pi0=pi0,
+            std_dev=std_dev,
+            eps=eps,
+        )
+        return path, states, deltas, psi
