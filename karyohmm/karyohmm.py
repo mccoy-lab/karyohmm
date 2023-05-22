@@ -427,20 +427,20 @@ class QuadHMM:
             for j in self.single_states:
                 self.states.append((i, j))
 
-    def create_transition_matrix(self):
+    def create_transition_matrix(self, r=1e-2):
         """Create the transition matrix here."""
         m = len(self.states)
         A = np.zeros(shape=(m, m))
-        A[:, :] = 1 / m
+        A[:, :] = r / m
         for i in range(m):
             A[i, i] = 0.0
             A[i, i] = 1.0 - np.sum(A[i, :])
         return np.log(A)
 
     def forward_backward(
-        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, eps=1e-6
+        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-3, eps=1e-6
     ):
-        A = self.create_transition_matrix()
+        A = self.create_transition_matrix(r=r)
         alphas, _, states, _, _ = forward_algo_sibs(
             bafs,
             mat_haps,
@@ -465,10 +465,10 @@ class QuadHMM:
         return gammas, states, karyotypes
 
     def viterbi_algorithm(
-        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, eps=1e-6
+        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-3, eps=1e-6
     ):
         """Viterbi algorithm definition in a quad-context."""
-        A = self.create_transition_matrix()
+        A = self.create_transition_matrix(r=r)
         path, states, deltas, psi = viterbi_algo_sibs(
             bafs,
             mat_haps,
