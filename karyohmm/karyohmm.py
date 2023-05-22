@@ -480,3 +480,76 @@ class QuadHMM:
             eps=eps,
         )
         return path, states, deltas, psi
+
+    def det_recomb_sex(self, i, j, states=self.states):
+        """Determine whether the recombination is maternal or paternal."""
+        states_i = states[i][0]
+        states_j = states[j][0]
+        m = -1
+        if states_i[0] != states_j[0]:
+            if states_i[2] == states_j[2]:
+                m = 0
+            else:
+                m = 2
+        elif states_i[2] != states_j[2]:
+            if states_i[0] == states_j[0]:
+                m = 1
+            else:
+                m = 2
+        else:
+            raise ValueError(
+                f"Erroneous index where {i,j} does not change for the first haplotype!"
+            )
+        return m
+
+    def isolate_recomb_triplet(self, bafs, mat_haps, pat_haps, **kwargs):
+        """Leverage triplets for separation of recombination events vs switch errors."""
+        assert len(bafs) == 3
+        # Compute the viterbi decoding of the current "triplet"
+        paths01, states, _, _ = self.viterbi_algorithm(
+            bafs=[bafs[0], bafs[1]], mat_haps=mat_haps, pat_haps=pat_haps, **kwargs
+        )
+        paths12, _, _, _ = self.viterbi_algorithm(
+            bafs=[bafs[1], bafs[2]], mat_haps=mat_haps, pat_haps=pat_haps, **kwargs
+        )
+        paths20, _, _, _ = self.viterbi_algorithm(
+            bafs=[bafs[2], bafs[0]], mat_haps=mat_haps, pat_haps=pat_haps, **kwargs
+        )
+
+        # isolate transitions points that are shared across all three sets as putative switch errors
+        idx01 = np.where(paths01[1:] != paths01[:-1])[0]
+        idx12 = np.where(paths12[1:] != paths12[:-1])[0]
+        idx20 = np.where(paths20[1:] != paths20[:-1])[0]
+        unq, counts = np.unique(np.hstack([idx01, idx12, idx02]), return_counts=True)
+        switch_err = unq[counts == 3]
+        rec01 = idx01[~np.isin(idx01, switch_err)]
+        rec12 = idx12[~np.isin(idx12, switch_err)]
+        rec20 = idx20[~np.isin(idx20, switch_err)]
+
+        # Exploit the triplet setting here
+        rec0 = rec01[np.isin(rec01, rec20)]
+        rec1 = rec12[np.isin(rec12, rec01)]
+        rec2 = rec20[np.isin(rec20, rec12)]
+        assigned_recomb_dict = {}
+        i = 0
+        for rec, path in zip([rec0, rec1, rec2], [paths01, paths12, paths20]):
+            mat_rec = []
+            pat_rec = []
+            for r in rec:
+                i, j = paths[r - 1], paths[r]
+                m = self.det_recomb_sex(i, j)
+                if m == 0:
+                    mat_rec.append(r)
+                elif m == 1:
+                    pat_rec.append(r)
+                elif m == 2:
+                    mat_rec.append(r)
+                    pat_rec.append(r)
+                else:
+                    raise ValueError(
+                        "Incorrect sex-determination for recombination estimation!"
+                    )
+            recomb_dict[f"mat_rec{i}"] = mat_rec
+            recomb_dict[f"pat_rec{i}"] = pat_rec
+            i += 1
+        return assigned_recomb_dict
