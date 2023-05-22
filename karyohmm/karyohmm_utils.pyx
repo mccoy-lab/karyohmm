@@ -279,7 +279,7 @@ def viterbi_algo(bafs, lrrs, mat_haps, pat_haps, states, A, lrr_mu=lrr_mu, lrr_s
 def forward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.1, double eps=1e-6):
     """Compute the forward algorithm for a scenario with sibling embryos."""
     cdef int i,j,n,m;
-    assert len(bafs == 2)
+    assert len(bafs) == 2
     assert bafs[1].size == bafs[0].size
     n = bafs[0].size
     m = len(states)
@@ -325,7 +325,7 @@ def forward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
 def backward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.1, double eps=1e-6):
     """Helper function for backward algorithm loop-optimization."""
     cdef int i,j,n,m;
-    assert len(bafs == 2)
+    assert len(bafs) == 2
     assert bafs[1].size == bafs[0].size
     n = bafs[0].size
     m = len(states)
@@ -372,7 +372,7 @@ def backward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doub
 
 def viterbi_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.1, double eps=1e-6):
     cdef int i,j,n,m;
-    assert len(bafs == 2)
+    assert len(bafs) == 2
     assert bafs[1].size == bafs[0].size
     n = bafs[0].size
     m = len(states)
