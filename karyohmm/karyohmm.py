@@ -462,7 +462,7 @@ class QuadHMM:
             eps=eps,
         )
         gammas = (alphas + betas) - logsumexp_sp(alphas + betas, axis=0)
-        return gammas, states, karyotypes
+        return gammas, states, None
 
     def viterbi_algorithm(
         self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-3, eps=1e-6
@@ -481,25 +481,67 @@ class QuadHMM:
         )
         return path, states, deltas, psi
 
-    def det_recomb_sex(self, i, j, states=self.states):
-        """Determine whether the recombination is maternal or paternal."""
-        states_i = states[i][0]
-        states_j = states[j][0]
+    def restrict_states(self, path):
+        """Break down states into the same categories as Roach et al for determining recombinations."""
+        maternal_haploidentical = []
+        paternal_haploidentical = []
+        identical = []
+        non_identical = []
+        for i, (x, y) in enumerate(self.states):
+            if x == y:
+                identical.append(i)
+            elif (x[0] == y[0]) and (x[2] != y[2]):
+                maternal_haploidentical.append(i)
+            elif (x[2] == y[2]) and (x[0] != y[0]):
+                paternal_haploidentical.append(i)
+            else:
+                non_identical.append(i)
+        # Refining the path estimation to only the Roach et al 2010 states
+        refined_path = np.zeros(path.size)
+        for i in range(path.size):
+            if path[i] in maternal_haploidentical:
+                refined_path[i] = 0
+            elif path[i] in paternal_haploidentical:
+                refined_path[i] = 1
+            elif path[i] in identical:
+                refined_path[i] = 2
+            elif path[i] in non_identical:
+                refined_path[i] = 3
+            else:
+                raise ValueError("Incorrect path estimate!")
+        return refined_path
+
+    def det_recomb_sex(self, i, j):
+        """Determine whether the purported recombination event is maternal or paternal."""
+        assert i != j
         m = -1
-        if states_i[0] != states_j[0]:
-            if states_i[2] == states_j[2]:
-                m = 0
-            else:
-                m = 2
-        elif states_i[2] != states_j[2]:
-            if states_i[0] == states_j[0]:
-                m = 1
-            else:
-                m = 2
-        else:
-            raise ValueError(
-                f"Erroneous index where {i,j} does not change for the first haplotype!"
-            )
+        if i == 0 and j == 1:
+            # maternal haploidentity -> paternal haploidentity
+            m = 0
+        if i == 0 and j == 3:
+            # maternal haploidentity -> non-identity
+            m = 0
+        if i == 0 and j == 2:
+            # maternal haploidentity -> identity
+            m = 1
+        if i == 1 and j == 3:
+            # paternal haploidentity -> non-identity
+            m = 1
+        if i == 1 and j == 2:
+            # maternal haploidentity -> identity
+            m = 0
+        if i == 2 and j == 0:
+            # identical -> maternal haploidentity
+            m = 1
+        if i == 2 and j == 1:
+            # identical -> paternal haploidentity
+            m = 0
+        if i == 3 and j == 0:
+            # non-identical -> maternal haploidentity
+            m = 0
+        if i == 3 and j == 1:
+            # non-identical -> paternal haploidentity
+            m = 1
         return m
 
     def isolate_recomb_triplet(self, bafs, mat_haps, pat_haps, **kwargs):
@@ -516,40 +558,65 @@ class QuadHMM:
             bafs=[bafs[2], bafs[0]], mat_haps=mat_haps, pat_haps=pat_haps, **kwargs
         )
 
+        # Change the paths to their reduced representations here
+        paths01 = self.restrict_states(paths01)
+        paths12 = self.restrict_states(paths12)
+        paths20 = self.restrict_states(paths20)
+
         # isolate transitions points that are shared across all three sets as putative switch errors
-        idx01 = np.where(paths01[1:] != paths01[:-1])[0]
-        idx12 = np.where(paths12[1:] != paths12[:-1])[0]
-        idx20 = np.where(paths20[1:] != paths20[:-1])[0]
-        unq, counts = np.unique(np.hstack([idx01, idx12, idx02]), return_counts=True)
+        idx01 = np.where(paths01[:-1] != paths01[1:])[0]
+        idx12 = np.where(paths12[:-1] != paths12[1:])[0]
+        idx20 = np.where(paths20[:-1] != paths20[1:])[0]
+        unq, counts = np.unique(np.hstack([idx01, idx12, idx20]), return_counts=True)
+        # Switch errors are those that are shared across all pairs
+        # NOTE: switch errors will also switch both siblings at the same time so can be used to dissect...
         switch_err = unq[counts == 3]
+        switch_err = np.hstack(
+            [
+                switch_err,
+                switch_err - 3,
+                switch_err - 2,
+                switch_err - 1,
+                switch_err + 1,
+                switch_err + 2,
+                switch_err + 3,
+            ]
+        )
+
         rec01 = idx01[~np.isin(idx01, switch_err)]
         rec12 = idx12[~np.isin(idx12, switch_err)]
         rec20 = idx20[~np.isin(idx20, switch_err)]
+        rec01_fuzzy = np.hstack(
+            [rec01, rec01 - 3, rec01 - 2, rec01 - 1, rec01 + 1, rec01 + 2, rec01 + 3]
+        )
+        rec12_fuzzy = np.hstack(
+            [rec12, rec12 - 3, rec12 - 2, rec12 - 1, rec12 + 1, rec12 + 2, rec12 + 3]
+        )
+        rec20_fuzzy = np.hstack(
+            [rec20, rec20 - 3, rec20 - 2, rec20 - 1, rec20 + 1, rec20 + 2, rec20 + 3]
+        )
 
-        # Exploit the triplet setting here
-        rec0 = rec01[np.isin(rec01, rec20)]
-        rec1 = rec12[np.isin(rec12, rec01)]
-        rec2 = rec20[np.isin(rec20, rec12)]
-        assigned_recomb_dict = {}
-        i = 0
+        # True recombinations are those that are shared between only the specific pair
+        rec0 = rec01[np.isin(rec01, rec20_fuzzy)]
+        rec1 = rec12[np.isin(rec12, rec01_fuzzy)]
+        rec2 = rec20[np.isin(rec20, rec12_fuzzy)]
+        recomb_dict = {}
+        paths_dict = {}
+        paths_dict["paths01"] = paths01
+        paths_dict["paths12"] = paths12
+        paths_dict["paths20"] = paths20
+        k = 0
         for rec, path in zip([rec0, rec1, rec2], [paths01, paths12, paths20]):
             mat_rec = []
             pat_rec = []
             for r in rec:
-                i, j = paths[r - 1], paths[r]
+                i, j = path[r], path[r + 1]
                 m = self.det_recomb_sex(i, j)
                 if m == 0:
                     mat_rec.append(r)
-                elif m == 1:
+                if m == 1:
                     pat_rec.append(r)
-                elif m == 2:
-                    mat_rec.append(r)
-                    pat_rec.append(r)
-                else:
-                    raise ValueError(
-                        "Incorrect sex-determination for recombination estimation!"
-                    )
-            recomb_dict[f"mat_rec{i}"] = mat_rec
-            recomb_dict[f"pat_rec{i}"] = pat_rec
-            i += 1
-        return assigned_recomb_dict
+            recomb_dict[f"mat_rec{k}"] = mat_rec
+            recomb_dict[f"pat_rec{k}"] = pat_rec
+            k += 1
+        return recomb_dict, switch_err, paths_dict
