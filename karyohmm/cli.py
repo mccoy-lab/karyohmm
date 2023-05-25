@@ -4,7 +4,7 @@ import click
 import numpy as np
 import pandas as pd
 
-from karyohmm import EuploidyHMM, MetaHMM
+from karyohmm import MetaHMM
 
 
 def read_data_np(input_fp):
@@ -89,7 +89,7 @@ def read_data(input_fp):
     "--mode",
     required=True,
     default="Meta",
-    type=click.Choice(["Meta", "Euploid"]),
+    type=click.Choice(["Meta"]),
     show_default=True,
 )
 @click.option(
