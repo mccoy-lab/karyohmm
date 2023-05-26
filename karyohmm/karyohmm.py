@@ -1,7 +1,8 @@
 import numpy as np
-from karyohmm_utils import (backward_algo, backward_algo_sibs,
+from karyohmm_utils import (backward_algo, backward_algo_sibs, emission_baf,
                             est_gmm_variance, forward_algo, forward_algo_sibs,
-                            viterbi_algo, viterbi_algo_sibs)
+                            mat_dosage, pat_dosage, viterbi_algo,
+                            viterbi_algo_sibs)
 from scipy.optimize import minimize
 from scipy.special import logsumexp as logsumexp_sp
 from tqdm import tqdm
@@ -427,7 +428,7 @@ class QuadHMM:
             for j in self.single_states:
                 self.states.append((i, j))
 
-    def create_transition_matrix(self, r=1e-2):
+    def create_transition_matrix(self, r=1e-4):
         """Create the transition matrix here."""
         m = len(self.states)
         A = np.zeros(shape=(m, m))
@@ -481,7 +482,42 @@ class QuadHMM:
         )
         return path, states, deltas, psi
 
-    def restrict_states(self, path):
+    def restrict_states(self):
+        """Break down states into the same categories as Roach et al for determining recombinations."""
+        maternal_haploidentical = []
+        paternal_haploidentical = []
+        identical = []
+        non_identical = []
+        for i, (x, y) in enumerate(self.states):
+            if x == y:
+                identical.append(i)
+            elif (x[0] == y[0]) and (x[2] != y[2]):
+                maternal_haploidentical.append(i)
+            elif (x[2] == y[2]) and (x[0] != y[0]):
+                paternal_haploidentical.append(i)
+            else:
+                non_identical.append(i)
+        # # Refining the path estimation to only the Roach et al 2010 states
+        # refined_path = np.zeros(path.size)
+        # for i in range(path.size):
+        #     if path[i] in maternal_haploidentical:
+        #         refined_path[i] = 0
+        #     elif path[i] in paternal_haploidentical:
+        #         refined_path[i] = 1
+        #     elif path[i] in identical:
+        #         refined_path[i] = 2
+        #     elif path[i] in non_identical:
+        #         refined_path[i] = 3
+        #     else:
+        #         raise ValueError("Incorrect path estimate!")
+        return (
+            maternal_haploidentical,
+            paternal_haploidentical,
+            identical,
+            non_identical,
+        )
+
+    def restrict_path(self, path):
         """Break down states into the same categories as Roach et al for determining recombinations."""
         maternal_haploidentical = []
         paternal_haploidentical = []
@@ -512,7 +548,7 @@ class QuadHMM:
         return refined_path
 
     def det_recomb_sex(self, i, j):
-        """Determine whether the purported recombination event is maternal or paternal."""
+        """Determine the parental origin of the recombination event."""
         assert i != j
         m = -1
         if i == 0 and j == 1:

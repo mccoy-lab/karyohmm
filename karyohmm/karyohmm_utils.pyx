@@ -156,7 +156,7 @@ cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double
         return truncnorm_pf(0.3333, 0.0, 1.0, mu=0.0, sigma=std_dev, eps=eps)
     mu_i = (m + p) / k
     x = truncnorm_pf(baf, 0.0, 1.0, mu=mu_i, sigma=std_dev, eps=eps)
-    return pi0/2*(baf == 0) + pi0/2*(baf == 1) + (1 - pi0)*(baf > 0 and baf < 1)*x
+    return pi0/2*(baf==0) + pi0/2*(baf==1)+(1-pi0)*(baf >0 and baf < 1)*x
 
 cpdef double emission_lrr(double lrr, int k, double[:] lrr_mu, double[:] lrr_sd, double a=-4.0, double b=1.0, double pi0=0.2, double eps=1e-6):
     """Emission function for LRR which is based on a truncated-normal distribution."""
