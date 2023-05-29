@@ -410,7 +410,7 @@ class MetaHMM(AneuploidyHMM):
         return kar_prob
 
 
-class QuadHMM:
+class QuadHMM(AneuploidyHMM):
     """Updated HMM for sibling embryos based on the model of Roach et al 2010 but designed for BAF data."""
 
     def __init__(self):
@@ -438,8 +438,24 @@ class QuadHMM:
             A[i, i] = 1.0 - np.sum(A[i, :])
         return np.log(A)
 
+    def forward_algorithm(
+        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15, eps=1e-4
+    ):
+        A = self.create_transition_matrix(r=r)
+        alphas, scaler, states, karyotypes, loglik = forward_algo_sibs(
+            bafs,
+            mat_haps,
+            pat_haps,
+            states=self.states,
+            A=A,
+            pi0=pi0,
+            std_dev=std_dev,
+            eps=eps,
+        )
+        return alphas, scaler, states, karyotypes, loglik
+
     def forward_backward(
-        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-3, eps=1e-6
+        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15, eps=1e-4
     ):
         A = self.create_transition_matrix(r=r)
         alphas, _, states, _, _ = forward_algo_sibs(
@@ -466,7 +482,7 @@ class QuadHMM:
         return gammas, states, None
 
     def viterbi_algorithm(
-        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-3, eps=1e-6
+        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15, eps=1e-4
     ):
         """Viterbi algorithm definition in a quad-context."""
         A = self.create_transition_matrix(r=r)
@@ -497,19 +513,6 @@ class QuadHMM:
                 paternal_haploidentical.append(i)
             else:
                 non_identical.append(i)
-        # # Refining the path estimation to only the Roach et al 2010 states
-        # refined_path = np.zeros(path.size)
-        # for i in range(path.size):
-        #     if path[i] in maternal_haploidentical:
-        #         refined_path[i] = 0
-        #     elif path[i] in paternal_haploidentical:
-        #         refined_path[i] = 1
-        #     elif path[i] in identical:
-        #         refined_path[i] = 2
-        #     elif path[i] in non_identical:
-        #         refined_path[i] = 3
-        #     else:
-        #         raise ValueError("Incorrect path estimate!")
         return (
             maternal_haploidentical,
             paternal_haploidentical,
@@ -580,79 +583,29 @@ class QuadHMM:
             m = 1
         return m
 
-    def isolate_recomb_triplet(self, bafs, mat_haps, pat_haps, **kwargs):
-        """Leverage triplets for separation of recombination events vs switch errors."""
-        assert len(bafs) == 3
-        # Compute the viterbi decoding of the current "triplet"
-        paths01, states, _, _ = self.viterbi_algorithm(
-            bafs=[bafs[0], bafs[1]], mat_haps=mat_haps, pat_haps=pat_haps, **kwargs
-        )
-        paths12, _, _, _ = self.viterbi_algorithm(
-            bafs=[bafs[1], bafs[2]], mat_haps=mat_haps, pat_haps=pat_haps, **kwargs
-        )
-        paths20, _, _, _ = self.viterbi_algorithm(
-            bafs=[bafs[2], bafs[0]], mat_haps=mat_haps, pat_haps=pat_haps, **kwargs
-        )
+    def isolate_recomb(self, path_xy, path_xz, window=100):
+        """Isolate key recombination events from a pair of refined viterbi paths.
 
-        # Change the paths to their reduced representations here
-        paths01 = self.restrict_states(paths01)
-        paths12 = self.restrict_states(paths12)
-        paths20 = self.restrict_states(paths20)
-
-        # isolate transitions points that are shared across all three sets as putative switch errors
-        idx01 = np.where(paths01[:-1] != paths01[1:])[0]
-        idx12 = np.where(paths12[:-1] != paths12[1:])[0]
-        idx20 = np.where(paths20[:-1] != paths20[1:])[0]
-        unq, counts = np.unique(np.hstack([idx01, idx12, idx20]), return_counts=True)
-        # Switch errors are those that are shared across all pairs
-        # NOTE: switch errors will also switch both siblings at the same time so can be used to dissect...
-        switch_err = unq[counts == 3]
-        switch_err = np.hstack(
-            [
-                switch_err,
-                switch_err - 3,
-                switch_err - 2,
-                switch_err - 1,
-                switch_err + 1,
-                switch_err + 2,
-                switch_err + 3,
-            ]
-        )
-
-        rec01 = idx01[~np.isin(idx01, switch_err)]
-        rec12 = idx12[~np.isin(idx12, switch_err)]
-        rec20 = idx20[~np.isin(idx20, switch_err)]
-        rec01_fuzzy = np.hstack(
-            [rec01, rec01 - 3, rec01 - 2, rec01 - 1, rec01 + 1, rec01 + 2, rec01 + 3]
-        )
-        rec12_fuzzy = np.hstack(
-            [rec12, rec12 - 3, rec12 - 2, rec12 - 1, rec12 + 1, rec12 + 2, rec12 + 3]
-        )
-        rec20_fuzzy = np.hstack(
-            [rec20, rec20 - 3, rec20 - 2, rec20 - 1, rec20 + 1, rec20 + 2, rec20 + 3]
-        )
-
-        # True recombinations are those that are shared between only the specific pair
-        rec0 = rec01[np.isin(rec01, rec20_fuzzy)]
-        rec1 = rec12[np.isin(rec12, rec01_fuzzy)]
-        rec2 = rec20[np.isin(rec20, rec12_fuzzy)]
-        recomb_dict = {}
-        paths_dict = {}
-        paths_dict["paths01"] = paths01
-        paths_dict["paths12"] = paths12
-        paths_dict["paths20"] = paths20
-        k = 0
-        for rec, path in zip([rec0, rec1, rec2], [paths01, paths12, paths20]):
-            mat_rec = []
-            pat_rec = []
-            for r in rec:
-                i, j = path[r], path[r + 1]
-                m = self.det_recomb_sex(i, j)
-                if m == 0:
-                    mat_rec.append(r)
-                if m == 1:
-                    pat_rec.append(r)
-            recomb_dict[f"mat_rec{k}"] = mat_rec
-            recomb_dict[f"pat_rec{k}"] = pat_rec
-            k += 1
-        return recomb_dict, switch_err, paths_dict
+        NOTE: we will be comparing the viterbi path to the nearest recombinaton event
+        """
+        assert path_xy.size == path_xz.size
+        transitions_01 = np.where(path_xy[:-1] != path_xy[1:])[0]
+        transitions_02 = np.where(path_xz[:-1] != path_xz[1:])[0]
+        mat_recomb = []
+        pat_recomb = []
+        for r in transitions_01:
+            # This is the targetted transition that we want to assign to maternal or paternal position.
+            i0, j0 = path_xy[r], path_xy[r + 1]
+            dists = np.sqrt((transitions_02 - r) ** 2)
+            if np.any(dists < window):
+                min_dist = np.min(dists)
+                r2 = transitions_02[np.argmin(dists)]
+                i1, j1 = path_xz[r2], path_xz[r2 + 1]
+                m = self.det_recomb_sex(i0, j0)
+                m2 = self.det_recomb_sex(i1, j1)
+                if m == 1 and (m2 == 1 or m2 == -1):
+                    pat_recomb.append((r, min_dist))
+                elif m == 0 and (m2 == 0 or m2 == -1):
+                    mat_recomb.append((r, min_dist))
+        # This returns the list of tuples on the recombination positions and minimum distances across the traces.
+        return mat_recomb, pat_recomb
