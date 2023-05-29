@@ -289,7 +289,6 @@ def full_ploidy_sim(
         rec_prob=rec_prob,
         seed=seed,
     )
-    # print(ploidy, aploid, mat_hap1, pat_hap1)
     geno, baf = sim_b_allele_freq(
         mat_hap1, pat_hap1, ploidy=ploidy, std_dev=std_dev, mix_prop=mix_prop, seed=seed
     )
@@ -320,4 +319,66 @@ def full_ploidy_sim(
         "alpha": alpha,
         "seed": seed,
     }
+    return res_table
+
+
+def sibling_euploid_sim(
+    afs=None,
+    ploidy=2,
+    m=10000,
+    nsibs=5,
+    rec_prob=1e-4,
+    std_dev=0.2,
+    mix_prop=0.3,
+    alpha=1.0,
+    switch_err_rate=1e-2,
+    seed=42,
+):
+    """Simulate euploid embryos that are siblings."""
+    assert ploidy == 2
+    assert m > 0
+    assert seed > 0
+    assert nsibs > 0
+    np.random.seed(seed)
+
+    res_table = {}
+    mat_haps, pat_haps = draw_parental_genotypes(afs=None, m=m, seed=seed)
+    mat_haps_prime, pat_haps_prime, mat_switch, pat_switch = create_switch_errors(
+        mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
+    )
+    res_table["mat_haps_true"] = mat_haps
+    res_table["pat_haps_true"] = pat_haps
+    res_table["mat_haps_real"] = mat_haps_prime
+    res_table["pat_haps_real"] = pat_haps_prime
+    res_table["mat_switch"] = mat_switch
+    res_table["pat_switch"] = pat_switch
+    res_table["nsibs"] = nsibs
+    res_table["aploid"] = "2"
+    for i in range(nsibs):
+        zs_maternal, zs_paternal, mat_hap1, pat_hap1, aploid = sim_haplotype_paths(
+            mat_haps,
+            pat_haps,
+            ploidy=ploidy,
+            rec_prob=rec_prob,
+            seed=seed + i,
+        )
+        # print(ploidy, aploid, mat_hap1, pat_hap1)
+        geno, baf = sim_b_allele_freq(
+            mat_hap1,
+            pat_hap1,
+            ploidy=ploidy,
+            std_dev=std_dev,
+            mix_prop=mix_prop,
+            seed=seed + i,
+        )
+        lrr = sim_logR_ratio(
+            mat_hap1, pat_hap1, ploidy=ploidy, alpha=alpha, seed=seed + i
+        )
+
+        assert geno.size == m
+        assert baf.size == m
+        res_table[f"baf_embryo{i}"] = baf
+        res_table[f"lrr_embryo{i}"] = lrr
+        res_table[f"zs_maternal{i}"] = zs_maternal
+        res_table[f"zs_paternal{i}"] = zs_paternal
     return res_table

@@ -130,7 +130,7 @@ def main(input, logr, viterbi, mode, unphased, eps, niter, out):
     if mode == "Meta":
         hmm = MetaHMM(logr=logr)
     else:
-        hmm = EuploidyHMM()
+        raise NotImplementedError("Meta-HMM is currently the only supported mode!")
     print("Inference of HMM-parameters ...", file=sys.stderr)
     # Defining the numpy objects to test out.
     mat_haps = np.vstack([data_df.mat_hap0.values, data_df.mat_hap1.values])
