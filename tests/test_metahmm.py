@@ -1,4 +1,4 @@
-"""Test suite for karyoHMM."""
+"""Test suite for karyoHMM MetaHMM."""
 import numpy as np
 import pytest
 from utils import full_ploidy_sim

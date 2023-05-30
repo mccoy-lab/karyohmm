@@ -1,3 +1,4 @@
+"""CLI for karyohmm."""
 import sys
 
 import click
@@ -30,12 +31,12 @@ def read_data_np(input_fp):
 
 
 def read_data_df(input_fp):
-    """Method to read in data from a pre-existing pandas dataset."""
+    """Read in data from a pre-existing text-based dataset."""
     sep = ","
     if ".tsv" in input_fp:
         sep = "\t"
     elif ".txt" in input_fp:
-        sep = "\s"
+        sep = " "
     df = pd.read_csv(input_fp, sep=sep)
     for x in [
         "chrom",
@@ -57,7 +58,7 @@ def read_data(input_fp):
     """Read in data in either pandas/numpy format."""
     try:
         df = read_data_df(input_fp)
-    except:
+    except Exception:
         df = read_data_np(input_fp)
     return df
 

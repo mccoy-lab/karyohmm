@@ -1,8 +1,9 @@
+"""Main implementation of karyohmm classes."""
+
 import numpy as np
 from karyohmm_utils import (backward_algo, backward_algo_sibs, emission_baf,
                             est_gmm_variance, forward_algo, forward_algo_sibs,
-                            mat_dosage, pat_dosage, viterbi_algo,
-                            viterbi_algo_sibs)
+                            viterbi_algo, viterbi_algo_sibs)
 from scipy.optimize import minimize
 from scipy.special import logsumexp as logsumexp_sp
 from tqdm import tqdm
@@ -76,6 +77,7 @@ class MetaHMM(AneuploidyHMM):
     """A meta-HMM that attempts to evaluate all possible ploidy states at once."""
 
     def __init__(self, logr=True):
+        """Initialize the MetaHMM class."""
         super().__init__()
         self.ploidy = 0
         self.aploid = "meta"
@@ -359,7 +361,7 @@ class MetaHMM(AneuploidyHMM):
         unphased=False,
         logr=False,
     ):
-        """Implements a viterbi traceback through the various files."""
+        """Implement the viterbi traceback through karyotypic states."""
         assert bafs.ndim == 1
         assert (mat_haps.ndim == 2) & (pat_haps.ndim == 2)
         assert (pi0 > 0) & (pi0 < 1.0)
@@ -414,7 +416,7 @@ class QuadHMM(AneuploidyHMM):
     """Updated HMM for sibling embryos based on the model of Roach et al 2010 but designed for BAF data."""
 
     def __init__(self):
-        """"""
+        """Initialize the QuadHMM model."""
         self.ploidy = 2
         self.aploid = "2"
         self.single_states = [
@@ -441,6 +443,7 @@ class QuadHMM(AneuploidyHMM):
     def forward_algorithm(
         self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15, eps=1e-4
     ):
+        """Implement the forward algorithm for QuadHMM model."""
         A = self.create_transition_matrix(r=r)
         alphas, scaler, states, karyotypes, loglik = forward_algo_sibs(
             bafs,
@@ -457,6 +460,7 @@ class QuadHMM(AneuploidyHMM):
     def forward_backward(
         self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15, eps=1e-4
     ):
+        """Implement the forward-backward algorithm for the QuadHMM model."""
         A = self.create_transition_matrix(r=r)
         alphas, _, states, _, _ = forward_algo_sibs(
             bafs,

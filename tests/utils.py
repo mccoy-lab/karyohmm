@@ -1,4 +1,4 @@
-#!python3
+"""Simulation utilities for unit-testing suite."""
 
 import numpy as np
 from scipy.stats import beta, binom, norm, rv_histogram, truncnorm, uniform
