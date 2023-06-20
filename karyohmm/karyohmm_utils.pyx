@@ -1,13 +1,14 @@
 from libc.math cimport erf, exp, log, pi, sqrt
 from libcpp cimport bool
 import numpy as np
+from scipy.stats import truncnorm
 
 # NOTE: these are fixed for K=0, 1, 2, 3 in terms of ploidy
 lrr_mu = [-3.527211, -0.664184, 0.000000, 0.395621]
 lrr_sd = [1.329152, 0.284338, 0.159645, 0.209089]
 
 cdef double sqrt2 = sqrt(2.);
-cdef double sqrtpi = sqrt(pi);
+cdef double sqrt2pi = sqrt(2*pi);
 
 cdef double logsumexp(double[:] x):
     cdef int i,n;
@@ -75,15 +76,20 @@ cpdef double pat_dosage(pat_hap, state):
 cdef double psi(double x):
     """CDF for a normal distribution function in log-space."""
     if x < -4:
-        return log(1/(2*sqrtpi))- 0.5*(x**2) - log(-x)
+        return log(1/(sqrt2pi))- 0.5*(x**2) - log(-x)
     else:
         return log((1.0 + erf(x / sqrt2))) - log(2.0)
+
+cdef double norm_pdf(double x):
+    """PDF for the normal distribution function in log-space."""
+    return log(1/sqrt2pi) -  0.5*(x**2)
 
 cdef double logdiffexp(double a, double b):
     """Log-sum-exp trick but for differences."""
     return log(exp(a) - exp(b) + 1e-323)
 
-cdef double truncnorm_pf(double x, double a, double b, double mu=0.5, double sigma=0.2, double eps=1e-4):
+
+cpdef double truncnorm_pf(double x, double a, double b, double mu=0.5, double sigma=0.2, double eps=1e-4):
     """Custom definition of the truncated normal probability."""
     cdef double p, z, alpha, beta, eps1, eps2;
     cdef double upper, lower;
@@ -99,6 +105,25 @@ cdef double truncnorm_pf(double x, double a, double b, double mu=0.5, double sig
         upper = psi(eps1)
         lower = psi(eps2)
     p = logdiffexp(upper, lower) - z
+    return exp(p)
+
+cpdef double truncnorm_pdf(double x, double a, double b, double mu=0.5, double sigma=0.2):
+    """Custom definition of the truncated normal probability."""
+    cdef double p, z, alpha, beta, eta;
+    # cdef double upper, lower;
+    beta = (b - mu) / sigma
+    alpha = (a - mu) / sigma
+    eta = (max(min(x,b),a) - mu) / sigma
+    # eps1 = (min(x, b) - mu) / sigma
+    # eps2 = (max(x, a) - mu) / sigma
+    z = logdiffexp(psi(beta), psi(alpha))
+#     if (eps1 > mu) and (eps2 > mu):
+        # upper = psi(-eps2)
+        # lower = psi(-eps1)
+    # else:
+        # upper = psi(eps1)
+        # lower = psi(eps2)
+    p = norm_pdf(eta) - log(sigma) - z
     return exp(p)
 
 
@@ -151,12 +176,23 @@ def est_gmm_variance(lrrs, mus, a=-4, b=1.0, niter=30, eps=1e-6):
 
 cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double std_dev=0.2, double eps=1e-6, int k=2):
     """Emission distribution helper function ..."""
-    cdef double mu_i, x;
+    cdef double mu_i, x, prob;
     if (m == -1) & (p == -1):
-        return truncnorm_pf(0.3333, 0.0, 1.0, mu=0.0, sigma=std_dev, eps=eps)
+        # return truncnorm_pf(0.3333, 0.0, 1.0, mu=0.0, sigma=std_dev, eps=eps)
+        return truncnorm_pdf(0.3333, 0.0, 1.0, mu=0.0, sigma=std_dev)
     mu_i = (m + p) / k
-    x = truncnorm_pf(baf, 0.0, 1.0, mu=mu_i, sigma=std_dev, eps=eps)
-    return pi0*(baf == 0) + pi0*(baf == 1) + (1-pi0)*x
+    # x = truncnorm.pdf(baf, 0, 1, loc=mu_i, scale=std_dev)
+    x = truncnorm_pdf(baf, 0.0, 1.0, mu=mu_i, sigma=std_dev)
+    # prob = \cpi0
+    return (1.0 - pi0)*x + (pi0 - (1. - pi0)*x)*(baf == 0 or baf == 1)
+     
+    # if baf == 0:
+        # prob += 
+    # elif baf == 1:
+        # prob += (1. - pi0)*x
+    # else:
+        # prob += (1. - pi0) * x
+    # return prob 
 
 cpdef double emission_lrr(double lrr, int k, double[:] lrr_mu, double[:] lrr_sd, double a=-4.0, double b=1.0, double pi0=0.2, double eps=1e-6):
     """Emission function for LRR which is based on a truncated-normal distribution."""

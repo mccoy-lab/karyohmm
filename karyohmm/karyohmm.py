@@ -48,9 +48,9 @@ class AneuploidyHMM:
             f,
             x0=[0.2, 0.2],
             method="L-BFGS-B",
-            bounds=[(0.05, 0.95), (0.1, 0.5)],
+            bounds=[(0.05, 0.95), (0.05, 0.5)],
             tol=1e-3,
-            options={"disp": False},
+            options={"disp": True},
         )
         pi0_est = opt_res.x[0]
         sigma_est = opt_res.x[1]
