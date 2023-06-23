@@ -1,7 +1,6 @@
 from libc.math cimport erf, exp, log, pi, sqrt
 from libcpp cimport bool
 import numpy as np
-from scipy.stats import truncnorm
 
 # NOTE: these are fixed for K=0, 1, 2, 3 in terms of ploidy
 lrr_mu = [-3.527211, -0.664184, 0.000000, 0.395621]
@@ -176,16 +175,20 @@ def est_gmm_variance(lrrs, mus, a=-4, b=1.0, niter=30, eps=1e-6):
 
 cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double std_dev=0.2, double eps=1e-6, int k=2):
     """Emission distribution helper function ..."""
-    cdef double mu_i, x, prob;
+    cdef double mu_i, x;
     if (m == -1) & (p == -1):
-        # return truncnorm_pf(0.3333, 0.0, 1.0, mu=0.0, sigma=std_dev, eps=eps)
-        return truncnorm_pdf(0.3333, 0.0, 1.0, mu=0.0, sigma=std_dev)
+        return 1.0 
+        # truncnorm_pdf(0.3333, 0.0, 1.0, mu=0.0, sigma=std_dev)
     mu_i = (m + p) / k
-    # x = truncnorm.pdf(baf, 0, 1, loc=mu_i, scale=std_dev)
     x = truncnorm_pdf(baf, 0.0, 1.0, mu=mu_i, sigma=std_dev)
-    x0 = truncnorm_pdf(baf, 0.0, 1.0, mu=0.0, sigma=1e-3)
-    x1 = truncnorm_pdf(baf, 0.0, 1.0, mu=1.0, sigma=1e-3)
-    return (pi0/2)*x0 + (pi0/2)*x1 + (1 - pi0)*x
+    x0 = truncnorm_pdf(baf, 0.0, 1.0, mu=0.0, sigma=std_dev/10)
+    x1 = truncnorm_pdf(baf, 0.0, 1.0, mu=1.0, sigma=std_dev/10)
+    if mu_i == 0:
+        return pi0*x0 + (1 - pi0)*x
+    if mu_i == 1:
+        return pi0*x1 + (1 - pi0)*x
+    else:
+        return x
      
 
 cpdef double emission_lrr(double lrr, int k, double[:] lrr_mu, double[:] lrr_sd, double a=-4.0, double b=1.0, double pi0=0.2, double eps=1e-6):

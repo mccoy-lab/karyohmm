@@ -48,7 +48,7 @@ class AneuploidyHMM:
             f,
             x0=[0.2, 0.2],
             method="L-BFGS-B",
-            bounds=[(0.05, 0.95), (0.05, 0.5)],
+            bounds=[(0.01, 0.99), (0.05, 0.5)],
             tol=1e-3,
             options={"disp": True},
         )
