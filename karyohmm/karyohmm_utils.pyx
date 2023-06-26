@@ -87,7 +87,6 @@ cdef double logdiffexp(double a, double b):
     """Log-sum-exp trick but for differences."""
     return log(exp(a) - exp(b) + 1e-323)
 
-
 cpdef double truncnorm_pf(double x, double a, double b, double mu=0.5, double sigma=0.2, double eps=1e-4):
     """Custom definition of the truncated normal probability."""
     cdef double p, z, alpha, beta, eps1, eps2;
@@ -109,19 +108,10 @@ cpdef double truncnorm_pf(double x, double a, double b, double mu=0.5, double si
 cpdef double truncnorm_pdf(double x, double a, double b, double mu=0.5, double sigma=0.2):
     """Custom definition of the truncated normal probability."""
     cdef double p, z, alpha, beta, eta;
-    # cdef double upper, lower;
     beta = (b - mu) / sigma
     alpha = (a - mu) / sigma
     eta = (max(min(x,b),a) - mu) / sigma
-    # eps1 = (min(x, b) - mu) / sigma
-    # eps2 = (max(x, a) - mu) / sigma
     z = logdiffexp(psi(beta), psi(alpha))
-#     if (eps1 > mu) and (eps2 > mu):
-        # upper = psi(-eps2)
-        # lower = psi(-eps1)
-    # else:
-        # upper = psi(eps1)
-        # lower = psi(eps2)
     p = norm_pdf(eta) - log(sigma) - z
     return exp(p)
 
@@ -174,22 +164,21 @@ def est_gmm_variance(lrrs, mus, a=-4, b=1.0, niter=30, eps=1e-6):
     return pis, mus, std, logliks
 
 cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double std_dev=0.2, double eps=1e-6, int k=2):
-    """Emission distribution helper function ..."""
-    cdef double mu_i, x;
+    """Emission distribution function ..."""
+    cdef double mu_i, x, x0, x1;
     if (m == -1) & (p == -1):
-        return 1.0 
-        # truncnorm_pdf(0.3333, 0.0, 1.0, mu=0.0, sigma=std_dev)
+        return 1.0
     mu_i = (m + p) / k
     x = truncnorm_pdf(baf, 0.0, 1.0, mu=mu_i, sigma=std_dev)
-    x0 = truncnorm_pdf(baf, 0.0, 1.0, mu=0.0, sigma=std_dev/10)
-    x1 = truncnorm_pdf(baf, 0.0, 1.0, mu=1.0, sigma=std_dev/10)
-    if mu_i == 0:
+    x0 = truncnorm_pdf(baf, 0.0, 1.0, mu=0.0, sigma=1e-2)
+    x1 = truncnorm_pdf(baf, 0.0, 1.0, mu=1.0, sigma=1e-2)
+    if mu_i == 0.0:
         return pi0*x0 + (1 - pi0)*x
-    if mu_i == 1:
+    if mu_i == 1.0:
         return pi0*x1 + (1 - pi0)*x
     else:
         return x
-     
+
 
 cpdef double emission_lrr(double lrr, int k, double[:] lrr_mu, double[:] lrr_sd, double a=-4.0, double b=1.0, double pi0=0.2, double eps=1e-6):
     """Emission function for LRR which is based on a truncated-normal distribution."""
@@ -250,10 +239,11 @@ def backward_algo(bafs, lrrs, mat_haps, pat_haps, states, A, lrr_mu=lrr_mu, lrr_
     scaler[-1] = logsumexp(betas[:, -1])
     betas[:, -1] -= scaler[-1]
     for i in range(n - 2, -1, -1):
+        # Calculate the full set of emissions
         for j in range(m):
-            m_ij = mat_dosage(mat_haps[:, i], states[j])
-            p_ij = pat_dosage(pat_haps[:, i], states[j])
-            # This is in log-space as well
+            m_ij = mat_dosage(mat_haps[:, i+1], states[j])
+            p_ij = pat_dosage(pat_haps[:, i+1], states[j])
+            # This is in log-space as well ...
             cur_emission = log(
                 emission_baf(
                     bafs[i + 1],
@@ -267,7 +257,8 @@ def backward_algo(bafs, lrrs, mat_haps, pat_haps, states, A, lrr_mu=lrr_mu, lrr_
             )
             if logr:
                 cur_emission += log(emission_lrr(lrrs_clip[i+1], ks[j], a=-4, b=1.0, lrr_mu=lrr_mu, lrr_sd=lrr_sd, eps=eps))
-            betas[j,i] = logsumexp(A[:, j] + cur_emission + betas[:, i + 1])
+            betas[j,i] = logsumexp(A[j, :] + cur_emission + betas[:, (i + 1)])
+        # Do the rescaling here ...
         scaler[i] = logsumexp(betas[:, i])
         betas[:, i] -= scaler[i]
     return betas, scaler, states, None, sum(scaler)
@@ -369,10 +360,10 @@ def backward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doub
     betas[:, -1] -= scaler[-1]
     for i in range(n - 2, -1, -1):
         for j in range(m):
-            m_ij0 = mat_dosage(mat_haps[:, i], states[j][0])
-            p_ij0 = pat_dosage(pat_haps[:, i], states[j][0])
-            m_ij1 = mat_dosage(mat_haps[:, i], states[j][1])
-            p_ij1 = pat_dosage(pat_haps[:, i], states[j][1])
+            m_ij0 = mat_dosage(mat_haps[:, i+1], states[j][0])
+            p_ij0 = pat_dosage(pat_haps[:, i+1], states[j][0])
+            m_ij1 = mat_dosage(mat_haps[:, i+1], states[j][1])
+            p_ij1 = pat_dosage(pat_haps[:, i+1], states[j][1])
             # This is in log-space as well
             cur_emission = log(
                 emission_baf(
@@ -395,8 +386,7 @@ def backward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doub
                     k=2,
                 )
             )
-
-            betas[j,i] = logsumexp(A[:, j] + cur_emission + betas[:, i + 1])
+            betas[j,i] = logsumexp(A[j, :] + cur_emission + betas[:, (i + 1)])
         scaler[i] = logsumexp(betas[:, i])
         betas[:, i] -= scaler[i]
     return betas, scaler, states, None, sum(scaler)
