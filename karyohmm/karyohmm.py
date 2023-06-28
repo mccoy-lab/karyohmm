@@ -46,11 +46,11 @@ class AneuploidyHMM:
 
         opt_res = minimize(
             f,
-            x0=[0.2, 0.2],
+            x0=[0.5, 0.2],
             method="L-BFGS-B",
-            bounds=[(0.01, 0.99), (0.05, 0.5)],
-            tol=1e-4,
-            options={"disp": True},
+            bounds=[(0.3, 0.99), (0.05, 0.25)],
+            tol=1e-6,
+            options={"disp": False},
         )
         pi0_est = opt_res.x[0]
         sigma_est = opt_res.x[1]
