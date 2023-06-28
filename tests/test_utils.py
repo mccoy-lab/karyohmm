@@ -57,6 +57,6 @@ def test_pat_dosage(hap, state, expected):
 )
 def test_emission_disomy(pi0, sigma, m, p, k):
     bs = np.linspace(0, 1, 1000)
-    e = [emission_baf(b, m=m, p=p, k=k, pi0=pi0, std_dev=sigma) for b in bs]
+    e = [np.exp(emission_baf(b, m=m, p=p, k=k, pi0=pi0, std_dev=sigma)) for b in bs]
     integrand = trapezoid(e, bs)
     assert np.isclose(integrand, 1, atol=1e-02)
