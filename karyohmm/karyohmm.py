@@ -56,22 +56,6 @@ class AneuploidyHMM:
         sigma_est = opt_res.x[1]
         return pi0_est, sigma_est
 
-    def est_lrr_sd(
-        self,
-        lrrs,
-        lrr_mu=np.array([-9, -4, np.log2(0.5), 0.0, np.log2(1.5)]),
-        a=-4,
-        b=1.0,
-        **kwargs,
-    ):
-        """Estimate the variances in the LRR distribution."""
-        lrrs_clip = np.clip(lrrs, a, b)
-        pis, mus, std, logliks = est_gmm_variance(
-            lrrs_clip, mus=lrr_mu, a=a, b=b, **kwargs
-        )
-        pi0 = pis[0]
-        return pi0, mus[1:], std[1:], logliks
-
 
 class MetaHMM(AneuploidyHMM):
     """A meta-HMM that attempts to evaluate all possible ploidy states at once."""
@@ -81,7 +65,6 @@ class MetaHMM(AneuploidyHMM):
         super().__init__()
         self.ploidy = 0
         self.aploid = "meta"
-        self.logr = logr
         self.nullisomy_state = [(-1, -1, -1, -1)]
         self.p_monosomy_states = [(-1, -1, 1, -1), (-1, -1, 0, -1)]
         self.m_monosomy_states = [(0, -1, -1, -1), (1, -1, -1, -1)]
@@ -208,14 +191,10 @@ class MetaHMM(AneuploidyHMM):
     def forward_algorithm(
         self,
         bafs,
-        lrrs,
         mat_haps,
         pat_haps,
-        lrr_mu=None,
-        lrr_sd=None,
         pi0=0.2,
         std_dev=0.25,
-        pi0_lrr=0.2,
         r=1e-4,
         a=1e-7,
         eps=1e-4,
@@ -233,32 +212,23 @@ class MetaHMM(AneuploidyHMM):
         A = self.create_transition_matrix(self.karyotypes, r=r, a=a, unphased=unphased)
         alphas, scaler, _, _, loglik = forward_algo(
             bafs,
-            lrrs,
             mat_haps,
             pat_haps,
             self.states,
             A,
-            lrr_mu=lrr_mu,
-            lrr_sd=lrr_sd,
             pi0=pi0,
             std_dev=std_dev,
-            pi0_lrr=pi0_lrr,
             eps=eps,
-            logr=logr,
         )
         return alphas, scaler, self.states, self.karyotypes, loglik
 
     def backward_algorithm(
         self,
         bafs,
-        lrrs,
         mat_haps,
         pat_haps,
-        lrr_mu=None,
-        lrr_sd=None,
         pi0=0.2,
         std_dev=0.25,
-        pi0_lrr=0.2,
         r=1e-4,
         a=1e-7,
         eps=1e-4,
@@ -276,18 +246,13 @@ class MetaHMM(AneuploidyHMM):
         A = self.create_transition_matrix(self.karyotypes, r=r, a=a, unphased=unphased)
         betas, scaler, _, _, loglik = backward_algo(
             bafs,
-            lrrs,
             mat_haps,
             pat_haps,
             self.states,
             A,
-            lrr_mu=lrr_mu,
-            lrr_sd=lrr_sd,
             pi0=pi0,
             std_dev=std_dev,
-            pi0_lrr=pi0_lrr,
             eps=eps,
-            logr=logr,
         )
         return betas, scaler, self.states, self.karyotypes, loglik
 
@@ -297,49 +262,35 @@ class MetaHMM(AneuploidyHMM):
         lrrs,
         mat_haps,
         pat_haps,
-        lrr_mu=None,
-        lrr_sd=None,
         pi0=0.2,
         std_dev=0.25,
-        pi0_lrr=0.2,
         r=1e-4,
         a=1e-7,
         eps=1e-4,
         unphased=False,
-        logr=False,
     ):
         """Run the forward-backward algorithm across all states."""
         alphas, _, states, karyotypes, _ = self.forward_algorithm(
             bafs,
-            lrrs,
             mat_haps,
             pat_haps,
-            lrr_mu=lrr_mu,
-            lrr_sd=lrr_sd,
             pi0=pi0,
             std_dev=std_dev,
-            pi0_lrr=pi0_lrr,
             eps=eps,
             r=r,
             a=a,
             unphased=unphased,
-            logr=logr,
         )
         betas, _, _, _, _ = self.backward_algorithm(
             bafs,
-            lrrs,
             mat_haps,
             pat_haps,
-            lrr_mu=lrr_mu,
-            lrr_sd=lrr_sd,
             pi0=pi0,
             std_dev=std_dev,
-            pi0_lrr=pi0_lrr,
             eps=eps,
             r=r,
             a=a,
             unphased=unphased,
-            logr=logr,
         )
         gammas = (alphas + betas) - logsumexp_sp(alphas + betas, axis=0)
         return gammas, states, karyotypes
@@ -347,11 +298,8 @@ class MetaHMM(AneuploidyHMM):
     def viterbi_algorithm(
         self,
         bafs,
-        lrrs,
         mat_haps,
         pat_haps,
-        lrr_mu=None,
-        lrr_sd=None,
         pi0=0.2,
         std_dev=0.25,
         pi0_lrr=0.2,
@@ -359,7 +307,6 @@ class MetaHMM(AneuploidyHMM):
         a=1e-7,
         eps=1e-4,
         unphased=False,
-        logr=False,
     ):
         """Implement the viterbi traceback through karyotypic states."""
         assert bafs.ndim == 1
@@ -373,16 +320,13 @@ class MetaHMM(AneuploidyHMM):
         A = self.create_transition_matrix(self.karyotypes, r=r, a=a, unphased=unphased)
         path, states, deltas, psi = viterbi_algo(
             bafs,
-            lrrs,
             mat_haps,
             pat_haps,
             self.states,
             A,
             pi0=pi0,
             std_dev=std_dev,
-            pi0_lrr=pi0_lrr,
             eps=eps,
-            logr=logr,
         )
         return path, states, deltas, psi
 
