@@ -6,3 +6,4 @@ nohup.out
 *.egg-info/
 build/
 *.coverage*
+.hypothesis/

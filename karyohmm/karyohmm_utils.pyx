@@ -108,13 +108,12 @@ cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double
     mu_i = (m + p) / k
     x = truncnorm_pdf(baf, 0.0, 1.0, mu=mu_i, sigma=std_dev)
     # NOTE: should we have something a little more sophisticated for the middle points?
-    x_s = truncnorm_pdf(baf, 0.0, 1.0, mu=mu_i, sigma=std_dev/4)
     x0 = truncnorm_pdf(baf, 0.0, 1.0, mu=0.0, sigma=5e-3)
     x1 = truncnorm_pdf(baf, 0.0, 1.0, mu=1.0, sigma=5e-3)
     if mu_i == 0.0:
-        return logaddexp(log(pi0) + x0, log((1 - pi0)) + x_s)
+        return logaddexp(log(pi0) + x0, log((1 - pi0)) + x)
     if mu_i == 1.0:
-        return logaddexp(log(pi0) + x1, log((1 - pi0)) + x_s)
+        return logaddexp(log(pi0) + x1, log((1 - pi0)) + x)
     else:
         return x
 
@@ -229,23 +228,21 @@ def forward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
             m_ij1 = mat_dosage(mat_haps[:, i], states[j][1])
             p_ij1 = pat_dosage(pat_haps[:, i], states[j][1])
             # This is in log-space ...
-            cur_emission = log(
-                emission_baf(
+            cur_emission = emission_baf(
                     bafs[0][i],
                     m_ij0,
                     p_ij0,
                     pi0=pi0,
                     std_dev=std_dev,
                     k=2,
-                )
-            ) + log(emission_baf(
+                ) + emission_baf(
                     bafs[1][i],
                     m_ij1,
                     p_ij1,
                     pi0=pi0,
                     std_dev=std_dev,
                     k=2,
-                ))
+                )
             alphas[j, i] = cur_emission + logsumexp(A[j, :] + alphas[:, i - 1])
         scaler[i] = logsumexp(alphas[:, i])
         alphas[:, i] -= scaler[i]
@@ -271,17 +268,14 @@ def backward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doub
             m_ij1 = mat_dosage(mat_haps[:, i+1], states[j][1])
             p_ij1 = pat_dosage(pat_haps[:, i+1], states[j][1])
             # This is in log-space as well
-            cur_emission = log(
-                emission_baf(
+            cur_emission = emission_baf(
                     bafs[0][i + 1],
                     m_ij0,
                     p_ij0,
                     pi0=pi0,
                     std_dev=std_dev,
                     k=2,
-                )
-            ) + log(
-                emission_baf(
+                ) + emission_baf(
                     bafs[1][i + 1],
                     m_ij1,
                     p_ij1,
@@ -289,7 +283,6 @@ def backward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doub
                     std_dev=std_dev,
                     k=2,
                 )
-            )
             betas[j,i] = logsumexp(A[j, :] + cur_emission + betas[:, (i + 1)])
         scaler[i] = logsumexp(betas[:, i])
         betas[:, i] -= scaler[i]
@@ -313,17 +306,14 @@ def viterbi_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
             m_ij1 = mat_dosage(mat_haps[:, i], states[j][1])
             p_ij1 = pat_dosage(pat_haps[:, i], states[j][1])
             deltas[j,i] = np.max(deltas[:,i-1] + A[:,j])
-            deltas[j,i] += log(
-                emission_baf(
+            deltas[j,i] += emission_baf(
                     bafs[0][i],
                     m_ij0,
                     p_ij0,
                     pi0=pi0,
                     std_dev=std_dev,
                     k=2,
-                )
-            ) + log(
-                emission_baf(
+                ) + emission_baf(
                     bafs[1][i],
                     m_ij1,
                     p_ij1,
@@ -331,7 +321,6 @@ def viterbi_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
                     std_dev=std_dev,
                     k=2,
                 )
-            )
             psi[j, i] = np.argmax(deltas[:, i - 1] + A[:, j]).astype(int)
     path = np.zeros(n, dtype=int)
     path[-1] = np.argmax(deltas[:, -1]).astype(int)

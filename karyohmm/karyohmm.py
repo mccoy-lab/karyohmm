@@ -1,9 +1,8 @@
 """Main implementation of karyohmm classes."""
 
 import numpy as np
-from karyohmm_utils import (backward_algo, backward_algo_sibs, emission_baf,
-                            est_gmm_variance, forward_algo, forward_algo_sibs,
-                            viterbi_algo, viterbi_algo_sibs)
+from karyohmm_utils import (backward_algo, backward_algo_sibs, forward_algo,
+                            forward_algo_sibs, viterbi_algo, viterbi_algo_sibs)
 from scipy.optimize import minimize
 from scipy.special import logsumexp as logsumexp_sp
 from tqdm import tqdm
@@ -60,7 +59,7 @@ class AneuploidyHMM:
 class MetaHMM(AneuploidyHMM):
     """A meta-HMM that attempts to evaluate all possible ploidy states at once."""
 
-    def __init__(self, logr=True):
+    def __init__(self):
         """Initialize the MetaHMM class."""
         super().__init__()
         self.ploidy = 0
@@ -92,80 +91,40 @@ class MetaHMM(AneuploidyHMM):
             (1, -1, 0, 1),
             (1, -1, 1, 1),
         ]
-        # NOTE: all of these states are combined here ...
-        if self.logr:
-            self.states = (
-                self.nullisomy_state
-                + self.m_monosomy_states
-                + self.p_monosomy_states
-                + self.isodisomy_states
-                + self.euploid_states
-                + self.m_trisomy_states
-                + self.p_trisomy_states
-            )
-            self.karyotypes = np.array(
-                [
-                    "0",
-                    "1m",
-                    "1m",
-                    "1p",
-                    "1p",
-                    "2m",
-                    "2p",
-                    "2",
-                    "2",
-                    "2",
-                    "2",
-                    "3m",
-                    "3m",
-                    "3m",
-                    "3m",
-                    "3m",
-                    "3m",
-                    "3p",
-                    "3p",
-                    "3p",
-                    "3p",
-                    "3p",
-                    "3p",
-                ],
-                dtype=str,
-            )
-        else:
-            self.states = (
-                self.nullisomy_state
-                + self.m_monosomy_states
-                + self.p_monosomy_states
-                + self.euploid_states
-                + self.m_trisomy_states
-                + self.p_trisomy_states
-            )
-            self.karyotypes = np.array(
-                [
-                    "0",
-                    "1m",
-                    "1m",
-                    "1p",
-                    "1p",
-                    "2",
-                    "2",
-                    "2",
-                    "2",
-                    "3m",
-                    "3m",
-                    "3m",
-                    "3m",
-                    "3m",
-                    "3m",
-                    "3p",
-                    "3p",
-                    "3p",
-                    "3p",
-                    "3p",
-                    "3p",
-                ],
-                dtype=str,
-            )
+        self.states = (
+            self.nullisomy_state
+            + self.m_monosomy_states
+            + self.p_monosomy_states
+            + self.euploid_states
+            + self.m_trisomy_states
+            + self.p_trisomy_states
+        )
+        self.karyotypes = np.array(
+            [
+                "0",
+                "1m",
+                "1m",
+                "1p",
+                "1p",
+                "2",
+                "2",
+                "2",
+                "2",
+                "3m",
+                "3m",
+                "3m",
+                "3m",
+                "3m",
+                "3m",
+                "3p",
+                "3p",
+                "3p",
+                "3p",
+                "3p",
+                "3p",
+            ],
+            dtype=str,
+        )
 
     def create_transition_matrix(self, karyotypes, r=1e-4, a=1e-7, unphased=False):
         """Create an inter-karyotype transition matrix."""
@@ -197,16 +156,13 @@ class MetaHMM(AneuploidyHMM):
         std_dev=0.25,
         r=1e-4,
         a=1e-7,
-        eps=1e-4,
         unphased=False,
-        logr=False,
     ):
         """Forward HMM algorithm under a multi-ploidy model."""
         assert bafs.ndim == 1
         assert (mat_haps.ndim == 2) & (pat_haps.ndim == 2)
         assert (pi0 > 0) & (pi0 < 1.0)
         assert std_dev > 0
-        assert (eps > 0) & (eps < 1e-1)
         assert bafs.size == mat_haps.shape[1]
         assert mat_haps.shape == pat_haps.shape
         A = self.create_transition_matrix(self.karyotypes, r=r, a=a, unphased=unphased)
@@ -218,7 +174,6 @@ class MetaHMM(AneuploidyHMM):
             A,
             pi0=pi0,
             std_dev=std_dev,
-            eps=eps,
         )
         return alphas, scaler, self.states, self.karyotypes, loglik
 
@@ -231,7 +186,6 @@ class MetaHMM(AneuploidyHMM):
         std_dev=0.25,
         r=1e-4,
         a=1e-7,
-        eps=1e-4,
         unphased=False,
         logr=False,
     ):
@@ -240,7 +194,6 @@ class MetaHMM(AneuploidyHMM):
         assert (mat_haps.ndim == 2) & (pat_haps.ndim == 2)
         assert (pi0 > 0) & (pi0 < 1.0)
         assert std_dev > 0
-        assert (eps > 0) & (eps < 1e-1)
         assert bafs.size == mat_haps.shape[1]
         assert mat_haps.shape == pat_haps.shape
         A = self.create_transition_matrix(self.karyotypes, r=r, a=a, unphased=unphased)
@@ -252,21 +205,18 @@ class MetaHMM(AneuploidyHMM):
             A,
             pi0=pi0,
             std_dev=std_dev,
-            eps=eps,
         )
         return betas, scaler, self.states, self.karyotypes, loglik
 
     def forward_backward(
         self,
         bafs,
-        lrrs,
         mat_haps,
         pat_haps,
         pi0=0.2,
         std_dev=0.25,
         r=1e-4,
         a=1e-7,
-        eps=1e-4,
         unphased=False,
     ):
         """Run the forward-backward algorithm across all states."""
@@ -276,7 +226,6 @@ class MetaHMM(AneuploidyHMM):
             pat_haps,
             pi0=pi0,
             std_dev=std_dev,
-            eps=eps,
             r=r,
             a=a,
             unphased=unphased,
@@ -287,7 +236,6 @@ class MetaHMM(AneuploidyHMM):
             pat_haps,
             pi0=pi0,
             std_dev=std_dev,
-            eps=eps,
             r=r,
             a=a,
             unphased=unphased,
@@ -302,10 +250,8 @@ class MetaHMM(AneuploidyHMM):
         pat_haps,
         pi0=0.2,
         std_dev=0.25,
-        pi0_lrr=0.2,
         r=1e-4,
         a=1e-7,
-        eps=1e-4,
         unphased=False,
     ):
         """Implement the viterbi traceback through karyotypic states."""
@@ -313,7 +259,6 @@ class MetaHMM(AneuploidyHMM):
         assert (mat_haps.ndim == 2) & (pat_haps.ndim == 2)
         assert (pi0 > 0) & (pi0 < 1.0)
         assert std_dev > 0
-        assert (eps > 0) & (eps < 1e-1)
         assert bafs.size == mat_haps.shape[1]
         assert mat_haps.shape == pat_haps.shape
 
@@ -326,7 +271,6 @@ class MetaHMM(AneuploidyHMM):
             A,
             pi0=pi0,
             std_dev=std_dev,
-            eps=eps,
         )
         return path, states, deltas, psi
 
@@ -385,7 +329,7 @@ class QuadHMM(AneuploidyHMM):
         return np.log(A)
 
     def forward_algorithm(
-        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15, eps=1e-4
+        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15
     ):
         """Implement the forward algorithm for QuadHMM model."""
         A = self.create_transition_matrix(r=r)
@@ -397,13 +341,10 @@ class QuadHMM(AneuploidyHMM):
             A=A,
             pi0=pi0,
             std_dev=std_dev,
-            eps=eps,
         )
         return alphas, scaler, states, karyotypes, loglik
 
-    def forward_backward(
-        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15, eps=1e-4
-    ):
+    def forward_backward(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15):
         """Implement the forward-backward algorithm for the QuadHMM model."""
         A = self.create_transition_matrix(r=r)
         alphas, _, states, _, _ = forward_algo_sibs(
@@ -414,7 +355,6 @@ class QuadHMM(AneuploidyHMM):
             A=A,
             pi0=pi0,
             std_dev=std_dev,
-            eps=eps,
         )
         betas, _, _, _, _ = backward_algo_sibs(
             bafs,
@@ -424,13 +364,12 @@ class QuadHMM(AneuploidyHMM):
             A=A,
             pi0=pi0,
             std_dev=std_dev,
-            eps=eps,
         )
         gammas = (alphas + betas) - logsumexp_sp(alphas + betas, axis=0)
         return gammas, states, None
 
     def viterbi_algorithm(
-        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15, eps=1e-4
+        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15
     ):
         """Viterbi algorithm definition in a quad-context."""
         A = self.create_transition_matrix(r=r)
@@ -442,7 +381,6 @@ class QuadHMM(AneuploidyHMM):
             A=A,
             pi0=pi0,
             std_dev=std_dev,
-            eps=eps,
         )
         return path, states, deltas, psi
 

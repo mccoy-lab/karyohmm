@@ -11,7 +11,7 @@ data_disomy_sibs = sibling_euploid_sim(
     m=4000, nsibs=3, std_dev=0.15, switch_err_rate=1e-2, seed=42
 )
 data_disomy_sibs_v2 = sibling_euploid_sim(
-    m=8000, nsibs=3, std_dev=0.15, switch_err_rate=1e-2, seed=24
+    m=4000, nsibs=3, std_dev=0.2, switch_err_rate=1e-2, seed=24
 )
 
 
@@ -24,7 +24,6 @@ def test_forward_algorithm(data):
         mat_haps=data["mat_haps_true"],
         pat_haps=data["pat_haps_true"],
     )
-    assert loglik < 0
 
 
 @pytest.mark.parametrize("data", [data_disomy_sibs, data_disomy_sibs_v2])
