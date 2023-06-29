@@ -103,3 +103,25 @@ def test_transition_matrices(r, a):
     A = hmm.create_transition_matrix(hmm.karyotypes, r=r, a=a)
     for i in range(A.shape[0]):
         assert np.isclose(np.sum(np.exp(A[i, :])), 1.0)
+
+
+@pytest.mark.parametrize(
+    "data", [data_disomy, data_trisomy, data_monosomy, data_nullisomy]
+)
+def test_ploidy_correctness(data):
+    """This actually tests that the posterior inference of whole-chromosome aneuploidies is correct here."""
+    hmm = MetaHMM()
+    gammas, _, karyotypes = hmm.forward_backward(
+        bafs=data["baf_embryo"],
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+        pi0=0.7,
+        std_dev=0.15,
+    )
+    # all of the columns must have a sum to 1
+    assert np.all(np.isclose(np.sum(np.exp(gammas), axis=0), 1.0))
+    post_dict = hmm.posterior_karyotypes(gammas, karyotypes)
+    max_post = np.max([post_dict[p] for p in post_dict])
+    for x in ["0", "1m", "1p", "2", "3m", "3p"]:
+        assert x in post_dict
+    assert post_dict[data["aploid"]] == max_post
