@@ -5,3 +5,5 @@ nohup.out
 *.html
 *.egg-info/
 build/
+*.coverage*
+.hypothesis/

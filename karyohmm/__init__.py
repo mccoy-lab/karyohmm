@@ -1,5 +1,5 @@
 """Initializing the karyoHMM package."""
 
-__version__ = "0.1.2"
+__version__ = "0.1.4"
 
-from .karyohmm import EuploidyHMM, MetaHMM
+from .karyohmm import MetaHMM, QuadHMM

@@ -1,3 +1,6 @@
+"""Setup module for building karyohmm."""
+
+
 from Cython.Build import cythonize
 from setuptools import Extension, setup
 
