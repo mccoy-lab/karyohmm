@@ -14,8 +14,14 @@ data_disomy_sibs_v2 = sibling_euploid_sim(
     m=4000, nsibs=3, std_dev=0.2, switch_err_rate=1e-2, seed=24
 )
 
+data_disomy_sibs_v3 = sibling_euploid_sim(
+    m=8000, nsibs=3, std_dev=0.25, switch_err_rate=2e-2, seed=18
+)
 
-@pytest.mark.parametrize("data", [data_disomy_sibs, data_disomy_sibs_v2])
+
+@pytest.mark.parametrize(
+    "data", [data_disomy_sibs, data_disomy_sibs_v2, data_disomy_sibs_v3]
+)
 def test_forward_algorithm(data):
     """Test the forward algorithm implementation of the QuadHMM."""
     hmm = QuadHMM()
@@ -26,7 +32,9 @@ def test_forward_algorithm(data):
     )
 
 
-@pytest.mark.parametrize("data", [data_disomy_sibs, data_disomy_sibs_v2])
+@pytest.mark.parametrize(
+    "data", [data_disomy_sibs, data_disomy_sibs_v2, data_disomy_sibs_v3]
+)
 def test_viterbi_algorithm(data):
     """Test the viterbi algorithm in the QuadHMM."""
     hmm = QuadHMM()
@@ -40,7 +48,9 @@ def test_viterbi_algorithm(data):
     assert np.all((res_path >= 0) & (res_path <= 3))
 
 
-@pytest.mark.parametrize("data", [data_disomy_sibs, data_disomy_sibs_v2])
+@pytest.mark.parametrize(
+    "data", [data_disomy_sibs, data_disomy_sibs_v2, data_disomy_sibs_v3]
+)
 def test_recomb_isolation(data):
     """Test the viterbi algorithm in the QuadHMM."""
     hmm = QuadHMM()

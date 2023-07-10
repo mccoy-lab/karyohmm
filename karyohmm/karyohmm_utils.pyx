@@ -1,5 +1,4 @@
 from libc.math cimport erf, exp, log, pi, sqrt
-from libcpp cimport bool
 import numpy as np
 
 
@@ -7,6 +6,7 @@ cdef double sqrt2 = sqrt(2.);
 cdef double sqrt2pi = sqrt(2*pi);
 
 cdef double logsumexp(double[:] x):
+    """Cython implementation of the logsumexp trick"""
     cdef int i,n;
     cdef double m = -1e32;
     cdef double c = 0.0;
@@ -178,6 +178,7 @@ def backward_algo(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double st
     return betas, scaler, states, None, sum(scaler)
 
 def viterbi_algo(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.25):
+    """Cython implementation of the Viterbi algorithm for MLE path estimation through states."""
     cdef int i,j,n,m;
     n = bafs.size
     m = len(states)
@@ -208,7 +209,7 @@ def viterbi_algo(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std
 
 
 def forward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.1):
-    """Compute the forward algorithm for a scenario with sibling embryos."""
+    """Compute the forward algorithm for sibling embryo HMM."""
     cdef int i,j,n,m;
     assert len(bafs) == 2
     assert bafs[1].size == bafs[0].size
@@ -249,8 +250,8 @@ def forward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
     return alphas, scaler, states, None, sum(scaler)
 
 
-def backward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.1, double eps=1e-6):
-    """Helper function for backward algorithm loop-optimization."""
+def backward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.1):
+    """Compute the backward algorithm for the sibling embryo HMM."""
     cdef int i,j,n,m;
     assert len(bafs) == 2
     assert bafs[1].size == bafs[0].size
@@ -290,7 +291,8 @@ def backward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doub
 
 
 
-def viterbi_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.1, double eps=1e-6):
+def viterbi_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.1):
+    """Viterbi algorithm and path tracing through sibling embryos."""
     cdef int i,j,n,m;
     assert len(bafs) == 2
     assert bafs[1].size == bafs[0].size

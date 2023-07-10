@@ -17,7 +17,7 @@ class AneuploidyHMM:
         self.aploid = None
 
     def get_state_str(self, state):
-        """NOTE: this might have to be slightly revised ..."""
+        """Obtain the state-string from the HMM."""
         t = []
         for i, s in enumerate(state):
             if s != -1:
@@ -30,21 +30,16 @@ class AneuploidyHMM:
         return "".join(t)
 
     def est_sigma_pi0(self, bafs, mat_haps, pat_haps, **kwargs):
-        """Estimate sigma and pi0 using the forward algorithm for the HMM."""
-
-        def f(x):
-            loglik = -self.forward_algorithm(
+        """Estimate sigma and pi0 using numerical optimization of forward algorithm likelihood."""
+        opt_res = minimize(
+            lambda x: -self.forward_algorithm(
                 bafs=bafs,
                 mat_haps=mat_haps,
                 pat_haps=pat_haps,
                 pi0=x[0],
                 std_dev=x[1],
                 **kwargs,
-            )[4]
-            return loglik
-
-        opt_res = minimize(
-            f,
+            )[4],
             x0=[0.5, 0.2],
             method="L-BFGS-B",
             bounds=[(0.3, 0.99), (0.05, 0.25)],
@@ -57,7 +52,7 @@ class AneuploidyHMM:
 
 
 class MetaHMM(AneuploidyHMM):
-    """A meta-HMM that attempts to evaluate all possible ploidy states at once."""
+    """A meta-HMM that evaluates all possible ploidy states for allele intensity data."""
 
     def __init__(self):
         """Initialize the MetaHMM class."""

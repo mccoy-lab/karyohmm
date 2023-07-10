@@ -66,7 +66,7 @@ def test_fwd_bwd_algorithm(data):
     assert np.isclose(sum([post_dict[k] for k in post_dict]), 1.0)
 
 
-@pytest.mark.parametrize("data", [data_disomy, data_trisomy])
+@pytest.mark.parametrize("data", [data_disomy, data_trisomy, data_monosomy])
 def test_est_pi0_sigma(data):
     """Test the optimization routine on the forward-algorithm likelihood."""
     hmm = MetaHMM()
