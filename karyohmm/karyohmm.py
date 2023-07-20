@@ -380,6 +380,14 @@ class QuadHMM(AneuploidyHMM):
         )
         return path, states, deltas, psi
 
+    def viterbi_path(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15):
+        """Obtain the restricted viterbi path for traceback."""
+        path, _, _, _ = self.viterbi_algorithm(
+            bafs, mat_haps, pat_haps, pi0=pi0, std_dev=std_dev, r=r
+        )
+        res_path = self.restrict_path(path)
+        return res_path
+
     def map_path(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15):
         """Obtain the Maximum A-Posteriori Path across restricted states."""
         gammas, _, _ = self.forward_backward(
