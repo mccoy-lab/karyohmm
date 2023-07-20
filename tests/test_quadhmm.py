@@ -54,19 +54,17 @@ def test_viterbi_algorithm(data):
 def test_recomb_isolation(data):
     """Test the viterbi algorithm in the QuadHMM."""
     hmm = QuadHMM()
-    path01, _, _, _ = hmm.viterbi_algorithm(
+    res_path01 = hmm.map_path(
         bafs=[data["baf_embryo0"], data["baf_embryo1"]],
         mat_haps=data["mat_haps_true"],
         pat_haps=data["pat_haps_true"],
     )
-    res_path01 = hmm.restrict_path(path01)
-    path02, _, _, _ = hmm.viterbi_algorithm(
+    res_path02 = hmm.map_path(
         bafs=[data["baf_embryo0"], data["baf_embryo2"]],
         mat_haps=data["mat_haps_true"],
         pat_haps=data["pat_haps_true"],
     )
-    res_path02 = hmm.restrict_path(path02)
-    mat_rec, pat_rec = hmm.isolate_recomb(res_path01, res_path02)
+    mat_rec, pat_rec = hmm.isolate_recomb(res_path01, [res_path02])
     # True recombination events ...
     zs_maternal0 = data["zs_maternal0"]
     zs_paternal0 = data["zs_paternal0"]

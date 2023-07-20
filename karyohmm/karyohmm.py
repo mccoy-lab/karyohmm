@@ -396,7 +396,8 @@ class QuadHMM(AneuploidyHMM):
         red_gammas[1, :] = np.exp(gammas)[paternal_haploidentical, :].sum(axis=0)
         red_gammas[2, :] = np.exp(gammas)[identical, :].sum(axis=0)
         red_gammas[3, :] = np.exp(gammas)[non_identical, :].sum(axis=0)
-        return np.log(red_gammas)
+        red_gammas = np.log(red_gammas)
+        return np.argmax(red_gammas, axis=0)
 
     def restrict_states(self):
         """Break down states into the same categories as Roach et al for determining recombinations."""
