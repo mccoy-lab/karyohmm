@@ -29,8 +29,9 @@ class AneuploidyHMM:
             t.append("0")
         return "".join(t)
 
-    def est_sigma_pi0(self, bafs, mat_haps, pat_haps, **kwargs):
+    def est_sigma_pi0(self, bafs, mat_haps, pat_haps, algo="Nelder-Mead", **kwargs):
         """Estimate sigma and pi0 using numerical optimization of forward algorithm likelihood."""
+        assert algo in ["Nelder-Mead", "L-BFGS-B"]
         opt_res = minimize(
             lambda x: -self.forward_algorithm(
                 bafs=bafs,
@@ -40,11 +41,11 @@ class AneuploidyHMM:
                 std_dev=x[1],
                 **kwargs,
             )[4],
-            x0=[0.5, 0.2],
-            method="L-BFGS-B",
-            bounds=[(0.3, 0.99), (0.05, 0.25)],
+            x0=[0.6, 0.2],
+            method=algo,
+            bounds=[(0.1, 0.99), (0.05, 0.4)],
             tol=1e-6,
-            options={"disp": False},
+            options={"disp": True},
         )
         pi0_est = opt_res.x[0]
         sigma_est = opt_res.x[1]
@@ -379,6 +380,33 @@ class QuadHMM(AneuploidyHMM):
         )
         return path, states, deltas, psi
 
+    def viterbi_path(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15):
+        """Obtain the restricted viterbi path for traceback."""
+        path, _, _, _ = self.viterbi_algorithm(
+            bafs, mat_haps, pat_haps, pi0=pi0, std_dev=std_dev, r=r
+        )
+        res_path = self.restrict_path(path)
+        return res_path
+
+    def map_path(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15):
+        """Obtain the Maximum A-Posteriori Path across restricted states."""
+        gammas, _, _ = self.forward_backward(
+            bafs, mat_haps, pat_haps, pi0=pi0, std_dev=std_dev, r=r
+        )
+        (
+            maternal_haploidentical,
+            paternal_haploidentical,
+            identical,
+            non_identical,
+        ) = self.restrict_states()
+        red_gammas = np.zeros(shape=(4, gammas.shape[1]))
+        red_gammas[0, :] = np.exp(gammas)[maternal_haploidentical, :].sum(axis=0)
+        red_gammas[1, :] = np.exp(gammas)[paternal_haploidentical, :].sum(axis=0)
+        red_gammas[2, :] = np.exp(gammas)[identical, :].sum(axis=0)
+        red_gammas[3, :] = np.exp(gammas)[non_identical, :].sum(axis=0)
+        red_gammas = np.log(red_gammas)
+        return np.argmax(red_gammas, axis=0)
+
     def restrict_states(self):
         """Break down states into the same categories as Roach et al for determining recombinations."""
         maternal_haploidentical = []
@@ -464,29 +492,43 @@ class QuadHMM(AneuploidyHMM):
             m = 1
         return m
 
-    def isolate_recomb(self, path_xy, path_xz, window=100):
+    def isolate_recomb(self, path_xy, path_xzs, window=100):
         """Isolate key recombination events from a pair of refined viterbi paths.
 
-        NOTE: we will be comparing the viterbi path to the nearest recombinaton event
+        Args:
+        - path_xy: numpy array of path through specific focal pair of individuals
+        - path_xzs: list of numpy arrays of
+        - window: number of SNPs that the closest transition must be in (e.g. minimum resolution)
+
         """
-        assert path_xy.size == path_xz.size
-        transitions_01 = np.where(path_xy[:-1] != path_xy[1:])[0]
-        transitions_02 = np.where(path_xz[:-1] != path_xz[1:])[0]
-        mat_recomb = []
-        pat_recomb = []
-        for r in transitions_01:
-            # This is the targetted transition that we want to assign to maternal or paternal position.
-            i0, j0 = path_xy[r], path_xy[r + 1]
-            dists = np.sqrt((transitions_02 - r) ** 2)
-            if np.any(dists < window):
-                min_dist = np.min(dists)
-                r2 = transitions_02[np.argmin(dists)]
-                i1, j1 = path_xz[r2], path_xz[r2 + 1]
-                m = self.det_recomb_sex(i0, j0)
-                m2 = self.det_recomb_sex(i1, j1)
-                if m == 1 and (m2 == 1 or m2 == -1):
-                    pat_recomb.append((r, min_dist))
-                elif m == 0 and (m2 == 0 or m2 == -1):
-                    mat_recomb.append((r, min_dist))
+        mat_recomb = {}
+        pat_recomb = {}
+        for path_xz in path_xzs:
+            assert path_xy.size == path_xz.size
+            transitions_01 = np.where(path_xy[:-1] != path_xy[1:])[0]
+            transitions_02 = np.where(path_xz[:-1] != path_xz[1:])[0]
+            for r in transitions_01:
+                # This is the targetted transition that we want to assign to maternal or paternal position.
+                i0, j0 = path_xy[r], path_xy[r + 1]
+                dists = np.sqrt((transitions_02 - r) ** 2)
+                if np.any(dists < window):
+                    # This gets the closest matching one
+                    r2 = transitions_02[np.argmin(dists)]
+                    i1, j1 = path_xz[r2], path_xz[r2 + 1]
+                    m = self.det_recomb_sex(i0, j0)
+                    m2 = self.det_recomb_sex(i1, j1)
+                    if m == 0 and m2 == 0:
+                        if r not in mat_recomb:
+                            mat_recomb[r] = 1
+                        else:
+                            mat_recomb[r] = mat_recomb[r] + 1
+                    if m == 1 and m2 == 1:
+                        if r not in pat_recomb:
+                            pat_recomb[r] = 1
+                        else:
+                            pat_recomb[r] = pat_recomb[r] + 1
+        # NOTE: here we just get positions, but not the minimum distances
+        mat_recomb = [k for k in mat_recomb if mat_recomb[k] == len(path_xzs)]
+        pat_recomb = [k for k in pat_recomb if pat_recomb[k] == len(path_xzs)]
         # This returns the list of tuples on the recombination positions and minimum distances across the traces.
         return mat_recomb, pat_recomb
