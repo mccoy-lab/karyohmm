@@ -64,7 +64,7 @@ def test_recomb_isolation_map(data):
         mat_haps=data["mat_haps_true"],
         pat_haps=data["pat_haps_true"],
     )
-    mat_rec, pat_rec = hmm.isolate_recomb(res_path01, [res_path02])
+    mat_rec, pat_rec, _, _ = hmm.isolate_recomb(res_path01, [res_path02])
     # True recombination events ...
     zs_maternal0 = data["zs_maternal0"]
     zs_paternal0 = data["zs_paternal0"]
@@ -90,7 +90,7 @@ def test_recomb_isolation_viterbi(data):
         mat_haps=data["mat_haps_true"],
         pat_haps=data["pat_haps_true"],
     )
-    mat_rec, pat_rec = hmm.isolate_recomb(res_path01, [res_path02])
+    mat_rec, pat_rec, _, _ = hmm.isolate_recomb(res_path01, [res_path02])
     # True recombination events ...
     zs_maternal0 = data["zs_maternal0"]
     zs_paternal0 = data["zs_paternal0"]

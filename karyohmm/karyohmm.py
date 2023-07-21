@@ -314,7 +314,7 @@ class QuadHMM(AneuploidyHMM):
             for j in self.single_states:
                 self.states.append((i, j))
 
-    def create_transition_matrix(self, r=1e-4):
+    def create_transition_matrix(self, r=1e-16):
         """Create the transition matrix here."""
         m = len(self.states)
         A = np.zeros(shape=(m, m))
@@ -324,9 +324,7 @@ class QuadHMM(AneuploidyHMM):
             A[i, i] = 1.0 - np.sum(A[i, :])
         return np.log(A)
 
-    def forward_algorithm(
-        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15
-    ):
+    def forward_algorithm(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16):
         """Implement the forward algorithm for QuadHMM model."""
         A = self.create_transition_matrix(r=r)
         alphas, scaler, states, karyotypes, loglik = forward_algo_sibs(
@@ -340,7 +338,7 @@ class QuadHMM(AneuploidyHMM):
         )
         return alphas, scaler, states, karyotypes, loglik
 
-    def forward_backward(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15):
+    def forward_backward(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16):
         """Implement the forward-backward algorithm for the QuadHMM model."""
         A = self.create_transition_matrix(r=r)
         alphas, _, states, _, _ = forward_algo_sibs(
@@ -364,9 +362,7 @@ class QuadHMM(AneuploidyHMM):
         gammas = (alphas + betas) - logsumexp_sp(alphas + betas, axis=0)
         return gammas, states, None
 
-    def viterbi_algorithm(
-        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15
-    ):
+    def viterbi_algorithm(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16):
         """Viterbi algorithm definition in a quad-context."""
         A = self.create_transition_matrix(r=r)
         path, states, deltas, psi = viterbi_algo_sibs(
@@ -380,7 +376,7 @@ class QuadHMM(AneuploidyHMM):
         )
         return path, states, deltas, psi
 
-    def viterbi_path(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15):
+    def viterbi_path(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16):
         """Obtain the restricted viterbi path for traceback."""
         path, _, _, _ = self.viterbi_algorithm(
             bafs, mat_haps, pat_haps, pi0=pi0, std_dev=std_dev, r=r
@@ -388,7 +384,7 @@ class QuadHMM(AneuploidyHMM):
         res_path = self.restrict_path(path)
         return res_path
 
-    def map_path(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15):
+    def map_path(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16):
         """Obtain the Maximum A-Posteriori Path across restricted states."""
         gammas, _, _ = self.forward_backward(
             bafs, mat_haps, pat_haps, pi0=pi0, std_dev=std_dev, r=r
@@ -492,7 +488,7 @@ class QuadHMM(AneuploidyHMM):
             m = 1
         return m
 
-    def isolate_recomb(self, path_xy, path_xzs, window=100):
+    def isolate_recomb(self, path_xy, path_xzs, window=20):
         """Isolate key recombination events from a pair of refined viterbi paths.
 
         Args:
@@ -527,8 +523,9 @@ class QuadHMM(AneuploidyHMM):
                             pat_recomb[r] = 1
                         else:
                             pat_recomb[r] = pat_recomb[r] + 1
-        # NOTE: here we just get positions, but not the minimum distances
-        mat_recomb = [k for k in mat_recomb if mat_recomb[k] == len(path_xzs)]
-        pat_recomb = [k for k in pat_recomb if pat_recomb[k] == len(path_xzs)]
+
+        # NOTE: here we just get positions, and if they are supported by the majority rule ...
+        mat_recomb_lst = [k for k in mat_recomb if mat_recomb[k] >= len(path_xzs) / 2]
+        pat_recomb_lst = [k for k in pat_recomb if pat_recomb[k] >= len(path_xzs) / 2]
         # This returns the list of tuples on the recombination positions and minimum distances across the traces.
-        return mat_recomb, pat_recomb
+        return mat_recomb_lst, pat_recomb_lst, mat_recomb, pat_recomb
