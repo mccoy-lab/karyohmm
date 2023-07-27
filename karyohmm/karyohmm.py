@@ -1,8 +1,9 @@
 """Main implementation of karyohmm classes."""
 
 import numpy as np
-from karyohmm_utils import (backward_algo, backward_algo_sibs, forward_algo,
-                            forward_algo_sibs, viterbi_algo, viterbi_algo_sibs)
+from karyohmm_utils import (backward_algo, backward_algo_sibs, emission_baf,
+                            forward_algo, forward_algo_sibs, viterbi_algo,
+                            viterbi_algo_sibs)
 from scipy.optimize import minimize
 from scipy.special import logsumexp as logsumexp_sp
 from tqdm import tqdm
@@ -324,7 +325,9 @@ class QuadHMM(AneuploidyHMM):
             A[i, i] = 1.0 - np.sum(A[i, :])
         return np.log(A)
 
-    def forward_algorithm(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16):
+    def forward_algorithm(
+        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16
+    ):
         """Implement the forward algorithm for QuadHMM model."""
         A = self.create_transition_matrix(r=r)
         alphas, scaler, states, karyotypes, loglik = forward_algo_sibs(
@@ -362,7 +365,9 @@ class QuadHMM(AneuploidyHMM):
         gammas = (alphas + betas) - logsumexp_sp(alphas + betas, axis=0)
         return gammas, states, None
 
-    def viterbi_algorithm(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16):
+    def viterbi_algorithm(
+        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16
+    ):
         """Viterbi algorithm definition in a quad-context."""
         A = self.create_transition_matrix(r=r)
         path, states, deltas, psi = viterbi_algo_sibs(
@@ -529,3 +534,138 @@ class QuadHMM(AneuploidyHMM):
         pat_recomb_lst = [k for k in pat_recomb if pat_recomb[k] >= len(path_xzs) / 2]
         # This returns the list of tuples on the recombination positions and minimum distances across the traces.
         return mat_recomb_lst, pat_recomb_lst, mat_recomb, pat_recomb
+
+
+class PhaseCorrect:
+    """Module for implementing Mendelian phase correction using BAF data."""
+
+    def __init__(self, mat_haps, pat_haps):
+        """Intialize the class for phase correction."""
+        assert mat_haps.shape[0] == pat_haps.shape[0]
+        assert mat_haps.shape[1] == pat_haps.shape[1]
+        assert np.all(np.isin(mat_haps, [0, 1]))
+        assert np.all(np.isin(mat_haps, [0, 1]))
+        self.mat_haps = mat_haps
+        self.pat_haps = pat_haps
+        self.mat_haps_true = None
+        self.pat_haps_true = None
+        self.embryo_bafs = None
+
+    def add_true_haps(self, true_mat_haps, true_pat_haps):
+        """Add in true haplotypes if available from a simulation."""
+        assert true_mat_haps.shape[0] == self.mat_haps.shape[0]
+        assert true_mat_haps.shape[1] == self.mat_haps.shape[1]
+        assert true_pat_haps.shape[0] == self.pat_haps.shape[0]
+        assert true_pat_haps.shape[1] == self.pat_haps.shape[1]
+        self.mat_haps_true = true_mat_haps
+        self.pat_haps_true = true_pat_haps
+
+    def add_baf(self, embryo_bafs):
+        """Add in BAF estimates for each embryo."""
+        pass
+
+    def estimate_switch_err(self, maternal=True):
+        """Estimate the switch error from true and inferred haplotypes.
+
+        The switch error is defined as consecutive heterozygotes that are
+        in the incorrect orientation.
+
+        Returns:
+            - `n_switches`: number of switches between consecutive heterozygotes
+            - `n_consecutive_hets`: number of consecutive heterozygotes
+            - `switch_err_rate`: number of switches per consecutive heterozygote
+        """
+        assert self.mat_hap_true is not None
+        assert self.pat_hap_true is not None
+        if maternal:
+            true_haps = self.mat_haps_true
+            inf_haps = self.mat_haps
+        else:
+            true_haps = self.pat_haps_true
+            inf_haps = self.pat_haps
+        geno = true_haps.sum(axis=0)
+        het_idxs = np.where(geno == 1)[0]
+        n_switches = 0
+        n_consecutive_hets = 0
+        for (i, j) in zip(het_idxs[:-1], het_idxs[1:]):
+            n_consecutive_hets += 1
+            true_hap = true_haps[:, [i, j]]
+            inf_hap = inf_haps[:, [i, j]]
+            # Check if the heterozygotes are oriented appropriately
+            if np.any(true_hap[0, :] != inf_hap[0, :]) and np.any(
+                (true_hap[0, :] != inf_hap[1, :])
+            ):
+                n_switches += 1
+        return n_switches, n_consecutive_hets, n_switches / n_consecutive_hets
+
+    def calculate_logll(self, mat_haps, pat_haps, baf, **kwargs):
+        """Helper function for calculating the log-likelihood of being in phase or anti-phase orientation."""
+        assert mat_haps.shape[1] == 2
+        assert mat_haps.shape[0] == 2
+        assert pat_haps.shape[1] == 2
+        assert pat_haps.shape[0] == 2
+        assert baf.size == 2
+        # Calculate the likelihood of this embryo BAF in the phase orientation
+        phase_orientation1 = emission_baf(
+            baf=baf[0], m=mat_haps[0, 0], p=pat_haps[0, 0], **kwargs
+        ) + emission_baf(baf=baf[1], m=mat_haps[0, 1], p=pat_haps[0, 1], **kwargs)
+        phase_orientation2 = emission_baf(
+            baf=baf[0], m=mat_haps[1, 0], p=pat_haps[0, 0], **kwargs
+        ) + emission_baf(baf=baf[1], m=mat_haps[1, 1], p=pat_haps[0, 1], **kwargs)
+        # Calculate the likelihood of this embryo BAF in the `antiphase` orientation
+        antiphase_orientation1 = emission_baf(
+            baf=baf[0], m=mat_haps[0, 0], p=pat_haps[0, 0], **kwargs
+        ) + emission_baf(baf=baf[1], m=mat_haps[1, 1], p=pat_haps[0, 1], **kwargs)
+        antiphase_orientation2 = emission_baf(
+            baf=baf[0], m=mat_haps[1, 0], p=pat_haps[0, 0], **kwargs
+        ) + emission_baf(baf=baf[1], m=mat_haps[0, 1], p=pat_haps[0, 1], **kwargs)
+        # This gets the maximum likelihood out of the phase and antiphase configurations ...
+        phase_orientation = logsumexp([phase_orientation1, phase_orientation2])
+        antiphase_orientation = logsumexp(
+            [antiphase_orientation1, antiphase_orientation2]
+        )
+        return phase_orientation, antiphase_orientation
+
+    def phase_correct(self, lod_score=-0.5, **kwargs):
+        """Implement a phase correction for both maternal and paternal haplotypes."""
+        assert self.embryo_bafs is not None
+        mat_geno = self.mat_haps.sum(axis=0)
+        pat_geno = self.pat_haps.sum(axis=0)
+        # 1. Identify the switch points for the maternal switches
+        idx_het_mat = np.where((mat_geno == 1) & (pat_geno != 1))[0]
+        idx_het_pat = np.where((pat_geno == 1) & (mat_geno != 1))[0]
+        mat_switch_inf = []
+        pat_switch_inf = []
+        for i, j in tqdm(zip(idx_het_mat[:-1], idx_het_mat[1:])):
+            phase = []
+            antiphase = []
+            for baf in sibling_bafs:
+                cur_baf = baf[[i, j]]
+                cur_phase, cur_antiphase = self.calculate_logll(
+                    mat_haps[:, [i, j]], pat_haps[:, [i, j]], baf=cur_baf, **kwargs
+                )
+                phase.append(cur_phase)
+                antiphase.append(cur_antiphase)
+            tot_phase = logsumexp_sp(phase)
+            tot_antiphase = logsumexp_sp(antiphase)
+            scalar = logsumexp_sp([tot_phase, tot_antiphase])
+            mat_switch_inf.append([i, j, tot_phase - scalar])
+        # 2. Infer the switch-points for the putative paternal switches
+        pat_switch_inf = []
+        for i, j in tqdm(zip(idx_het_pat[:-1], idx_het_pat[1:])):
+            phase = []
+            antiphase = []
+            for baf in sibling_bafs:
+                cur_baf = baf[[i, j]]
+                cur_phase, cur_antiphase = self.calculate_logll(
+                    pat_haps[:, [i, j]], mat_haps[:, [i, j]], baf=cur_baf, **kwargs
+                )
+                phase.append(cur_phase)
+                antiphase.append(cur_antiphase)
+            tot_phase = logsumexp_sp(phase)
+            tot_antiphase = logsumexp_sp(antiphase)
+            scalar = logsumexp_sp([tot_phase, tot_antiphase])
+            pat_switch_inf.append([i, j, tot_phase - scalar])
+        mat_switch_inf = np.array(mat_switch_inf)
+        pat_switch_inf = np.array(pat_switch_inf)
+        return mat_switch_inf, pat_switch_inf
