@@ -626,12 +626,12 @@ class PhaseCorrect:
         )
         return phase_orientation, antiphase_orientation
 
-    def phase_correct(self, lod_score=-0.5, **kwargs):
-        """Implement a phase correction for both maternal and paternal haplotypes."""
+    def estimate_switch_pos(self, **kwargs):
+        """Estimate switch-error positioning based on """
         assert self.embryo_bafs is not None
         mat_geno = self.mat_haps.sum(axis=0)
         pat_geno = self.pat_haps.sum(axis=0)
-        # 1. Identify the switch points for the maternal switches
+        # 1. Identify switch points for the maternal switches
         idx_het_mat = np.where((mat_geno == 1) & (pat_geno != 1))[0]
         idx_het_pat = np.where((pat_geno == 1) & (mat_geno != 1))[0]
         mat_switch_inf = []
@@ -639,7 +639,7 @@ class PhaseCorrect:
         for i, j in tqdm(zip(idx_het_mat[:-1], idx_het_mat[1:])):
             phase = []
             antiphase = []
-            for baf in sibling_bafs:
+            for baf in self.embryo_bafs:
                 cur_baf = baf[[i, j]]
                 cur_phase, cur_antiphase = self.calculate_logll(
                     mat_haps[:, [i, j]], pat_haps[:, [i, j]], baf=cur_baf, **kwargs
@@ -650,12 +650,12 @@ class PhaseCorrect:
             tot_antiphase = logsumexp_sp(antiphase)
             scalar = logsumexp_sp([tot_phase, tot_antiphase])
             mat_switch_inf.append([i, j, tot_phase - scalar])
-        # 2. Infer the switch-points for the putative paternal switches
+        # 2. Infer switch-points for putative paternal switches
         pat_switch_inf = []
         for i, j in tqdm(zip(idx_het_pat[:-1], idx_het_pat[1:])):
             phase = []
             antiphase = []
-            for baf in sibling_bafs:
+            for baf in self.embryo_bafs:
                 cur_baf = baf[[i, j]]
                 cur_phase, cur_antiphase = self.calculate_logll(
                     pat_haps[:, [i, j]], mat_haps[:, [i, j]], baf=cur_baf, **kwargs
@@ -669,3 +669,26 @@ class PhaseCorrect:
         mat_switch_inf = np.array(mat_switch_inf)
         pat_switch_inf = np.array(pat_switch_inf)
         return mat_switch_inf, pat_switch_inf
+
+    def phase_correct(self):
+        """Apply a phase correction for the samples.
+
+        NOTE: instead should consider the `path` that each parental haplotype should be based on ...
+        """
+        fixed_mat_haps = self.mat_haps.copy()
+        fixed_pat_haps = self.pat_haps.copy()
+        mat_switch_inf, pat_switch_inf = self.estimate_switch_pos()
+        for (a,b,l) in zip(mat_switch_inf[:,0], mat_switch_inf[:,1], mat_switch_inf[:,2]):
+            a = int(a)
+            b = int(b)
+            if l <= lod_score:
+                first_hap = self.mat_haps[0,a:b]
+                second_hap = self.mat_haps[1,a:b]
+                # This is where we actually flip the haplotypes
+                fixed_mat_haps[0,a:b] = second_hap
+                fixed_mat_haps[1,a:b] = first_hap
+        for (a,b,l) in zip(pat_switch_inf[:,0], pat_switch_inf[:,1], pat_switch_inf[:,2]): 
+            pass
+        #4. Now run through and flip the positions for the paternal
+
+        return fixed_mat_haps, fixed_pat_haps
