@@ -548,6 +548,8 @@ class PhaseCorrect:
         self.pat_haps = pat_haps
         self.mat_haps_true = None
         self.pat_haps_true = None
+        self.mat_haps_fixed = None
+        self.pat_haps_fixed = None
         self.embryo_bafs = None
 
     def add_true_haps(self, true_mat_haps, true_pat_haps):
@@ -569,7 +571,7 @@ class PhaseCorrect:
             assert baf.size == self.mat_haps.shape[1]
             self.embryo_bafs.append(baf)
 
-    def estimate_switch_err(self, maternal=True):
+    def estimate_switch_err(self, maternal=True, fixed=False):
         """Estimate the switch error from true and inferred haplotypes.
 
         The switch error is defined as consecutive heterozygotes that are
@@ -586,10 +588,18 @@ class PhaseCorrect:
         assert self.pat_haps_true is not None
         if maternal:
             true_haps = self.mat_haps_true
-            inf_haps = self.mat_haps
+            if fixed:
+                assert self.mat_haps_fixed is not None
+                inf_haps = self.mat_haps_fixed
+            else:
+                inf_haps = self.mat_haps
         else:
             true_haps = self.pat_haps_true
-            inf_haps = self.pat_haps
+            if fixed:
+                assert self.pat_haps_fixed is not None
+                inf_haps = self.pat_haps_fixed
+            else:
+                inf_haps = self.pat_haps
         geno = true_haps.sum(axis=0)
         het_idxs = np.where(geno == 1)[0]
         n_switches = 0
@@ -735,6 +745,6 @@ class PhaseCorrect:
         assert fixed_haps.shape[1] == haps1.shape[1]
         assert fixed_haps.shape[0] == 2
         if maternal:
-            self.mat_fixed_haps = fixed_haps
+            self.mat_haps_fixed = fixed_haps
         else:
-            self.pat_fixed_haps = fixed_haps
+            self.pat_haps_fixed = fixed_haps
