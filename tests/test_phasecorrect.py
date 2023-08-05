@@ -35,12 +35,12 @@ def test_switch_err_est(data):
     phase_correct.add_true_haps(
         true_mat_haps=data["mat_haps_true"], true_pat_haps=data["pat_haps_true"]
     )
-    n_switch, _, switch_err_rate, _ = phase_correct.estimate_switch_err()
+    n_switch, _, switch_err_rate, _ = phase_correct.estimate_switch_err_true()
     if data["mat_switch"].size > 0:
         assert switch_err_rate > 0
     else:
         assert switch_err_rate == 0
-    n_switch, _, switch_err_rate, _ = phase_correct.estimate_switch_err(maternal=False)
+    n_switch, _, switch_err_rate, _ = phase_correct.estimate_switch_err_true(maternal=False)
     if data["pat_switch"].size > 0:
         assert switch_err_rate > 0
     else:
@@ -68,6 +68,6 @@ def test_phase_correct(data):
         embryo_bafs=[data[f"baf_embryo{i}"] for i in range(data["nsibs"])]
     )
     phase_correct.phase_correct(pi0=0.6, std_dev=0.1)
-    _, _, switch_err_rate_raw, _ = phase_correct.estimate_switch_err()
-    _, _, switch_err_rate_fixed, _ = phase_correct.estimate_switch_err(fixed=True)
+    _, _, switch_err_rate_raw, _ = phase_correct.estimate_switch_err_true()
+    _, _, switch_err_rate_fixed, _ = phase_correct.estimate_switch_err_true(fixed=True)
     assert switch_err_rate_fixed <= switch_err_rate_raw
