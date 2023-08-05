@@ -40,7 +40,9 @@ def test_switch_err_est(data):
         assert switch_err_rate > 0
     else:
         assert switch_err_rate == 0
-    n_switch, _, switch_err_rate, _ = phase_correct.estimate_switch_err_true(maternal=False)
+    n_switch, _, switch_err_rate, _ = phase_correct.estimate_switch_err_true(
+        maternal=False
+    )
     if data["pat_switch"].size > 0:
         assert switch_err_rate > 0
     else:
@@ -55,7 +57,7 @@ def test_switch_err_est(data):
         data_disomy_sibs_test_3percent,
     ],
 )
-def test_phase_correct(data):
+def test_phase_correct_true(data):
     """Test the phase-correction routine."""
     phase_correct = PhaseCorrect(
         mat_haps=data["mat_haps_real"], pat_haps=data["pat_haps_real"]
@@ -70,4 +72,33 @@ def test_phase_correct(data):
     phase_correct.phase_correct(pi0=0.6, std_dev=0.1)
     _, _, switch_err_rate_raw, _ = phase_correct.estimate_switch_err_true()
     _, _, switch_err_rate_fixed, _ = phase_correct.estimate_switch_err_true(fixed=True)
+    assert switch_err_rate_fixed <= switch_err_rate_raw
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        data_disomy_sibs_null,
+        data_disomy_sibs_test_1percent,
+        data_disomy_sibs_test_3percent,
+    ],
+)
+def test_phase_correct_empirical(data):
+    """Test the phase-correction routine."""
+    phase_correct = PhaseCorrect(
+        mat_haps=data["mat_haps_real"], pat_haps=data["pat_haps_real"]
+    )
+    phase_correct.add_true_haps(
+        true_mat_haps=data["mat_haps_true"], true_pat_haps=data["pat_haps_true"]
+    )
+    # 1. Apply phase correction for the maternal haplotypes
+    phase_correct.add_baf(
+        embryo_bafs=[data[f"baf_embryo{i}"] for i in range(data["nsibs"])]
+    )
+    phase_correct.phase_correct(pi0=0.6, std_dev=0.1)
+    # 2. Estimate empirical switch error rates
+    _, _, switch_err_rate_raw, _ = phase_correct.estimate_switch_err_empirical()
+    _, _, switch_err_rate_fixed, _ = phase_correct.estimate_switch_err_empirical(
+        fixed=True
+    )
     assert switch_err_rate_fixed <= switch_err_rate_raw

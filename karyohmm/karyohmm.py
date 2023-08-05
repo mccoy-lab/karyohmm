@@ -704,23 +704,22 @@ class PhaseCorrect:
     ):
         """Use the empirical embryo BAF data to determine the switch-error rate."""
         assert self.embryo_bafs is not None
-        if fixed:
-            assert self.mat_haps_fixed is not None
-            assert self.pat_haps_fixed is not None
         # haps1 is the individual that we are evaluating the switch errors for
         haps1 = None
         haps2 = None
         if maternal:
             if fixed:
+                assert self.mat_haps_fixed is not None
                 haps1 = self.mat_haps_fixed
-                haps2 = self.pat_haps_fixed
+                haps2 = self.pat_haps
             else:
                 haps1 = self.mat_haps
                 haps2 = self.pat_haps
         else:
             if fixed:
+                assert self.pat_haps_fixed is not None
                 haps1 = self.pat_haps_fixed
-                haps2 = self.mat_haps_fixed
+                haps2 = self.mat_haps
             else:
                 haps1 = self.pat_haps
                 haps2 = self.mat_haps
