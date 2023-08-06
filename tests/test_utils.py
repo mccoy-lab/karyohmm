@@ -7,6 +7,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from karyohmm_utils import emission_baf, mat_dosage, pat_dosage
 from scipy.integrate import trapezoid
+from utils import sim_joint_het
 
 
 @pytest.mark.parametrize(
@@ -61,3 +62,31 @@ def test_emission_disomy(pi0, sigma, m, p, k):
     e = [np.exp(emission_baf(b, m=m, p=p, k=k, pi0=pi0, std_dev=sigma)) for b in bs]
     integrand = trapezoid(e, bs)
     assert np.isclose(integrand, 1, atol=1e-03)
+
+
+@given(
+    pi0=st.floats(
+        min_value=0, max_value=1, exclude_min=True, exclude_max=True, allow_nan=False
+    ),
+    sigma=st.floats(
+        min_value=1e-2,
+        max_value=0.5,
+        exclude_min=True,
+        exclude_max=True,
+        allow_nan=False,
+    ),
+    nsibs=st.integers(min_value=1, max_value=10),
+    switch=st.booleans(),
+)
+def test_sim_joint_het(switch, pi0, sigma, nsibs):
+    """Test the simulation of the joint heterozygotes."""
+    true_haps1, true_haps2, haps1, haps2, bafs = sim_joint_het(
+        switch=switch, mix_prop=pi0, std_dev=sigma, nsibs=nsibs
+    )
+    assert true_haps1.ndim == 2
+    assert true_haps2.ndim == 2
+    assert len(bafs) == nsibs
+    if not switch:
+        assert np.all(true_haps1 == haps1)
+    else:
+        assert ~np.all(true_haps1 == haps1)

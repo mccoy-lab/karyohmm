@@ -2,7 +2,9 @@
 
 import numpy as np
 import pytest
-from utils import sibling_euploid_sim
+from hypothesis import given, settings
+from hypothesis import strategies as st
+from utils import sibling_euploid_sim, sim_joint_het
 
 from karyohmm import PhaseCorrect
 
@@ -102,3 +104,43 @@ def test_phase_correct_empirical(data):
         fixed=True
     )
     assert switch_err_rate_fixed <= switch_err_rate_raw
+
+
+@given(
+    pi0=st.floats(
+        min_value=0.3, max_value=1, exclude_min=True, exclude_max=True, allow_nan=False
+    ),
+    sigma=st.floats(
+        min_value=1e-2,
+        max_value=0.3,
+        exclude_min=True,
+        exclude_max=False,
+        allow_nan=False,
+    ),
+    nsibs=st.integers(min_value=3, max_value=10),
+    switch=st.booleans(),
+)
+def test_phase_correct_simple(switch, pi0, sigma, nsibs):
+    """Implement a more simple assessment of phase correction."""
+    # 1. Simulate a switched setup ...
+    true_haps1, true_haps2, haps1, haps2, bafs = sim_joint_het(
+        switch=switch,
+        mix_prop=pi0,
+        std_dev=sigma,
+        nsibs=nsibs,
+    )
+    # 2. Implement the phase correction setup ...
+    phase_correct = PhaseCorrect(mat_haps=haps1, pat_haps=haps2)
+    phase_correct.add_true_haps(true_mat_haps=true_haps1, true_pat_haps=true_haps2)
+    phase_correct.add_baf(embryo_bafs=bafs)
+    phase_correct.phase_correct(pi0=pi0, std_dev=sigma)
+    n_switches_real, _, _, _ = phase_correct.estimate_switch_err_true(fixed=False)
+    n_switches_fixed, _, _, _ = phase_correct.estimate_switch_err_true(fixed=True)
+    if switch:
+        # If there was a switch, we should fix it now...
+        assert n_switches_real > 0
+        assert n_switches_fixed == 0
+    else:
+        # If there was not a switch, we should not need to fix it...
+        assert n_switches_real == 0
+        assert n_switches_fixed == 0
