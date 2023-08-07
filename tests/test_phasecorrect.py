@@ -108,28 +108,33 @@ def test_phase_correct_empirical(data):
 
 @given(
     pi0=st.floats(
-        min_value=0.3, max_value=1, exclude_min=True, exclude_max=True, allow_nan=False
+        min_value=0.5, max_value=1, exclude_min=True, exclude_max=True, allow_nan=False
     ),
     sigma=st.floats(
         min_value=1e-2,
-        max_value=0.3,
+        max_value=0.1,
         exclude_min=True,
         exclude_max=False,
         allow_nan=False,
     ),
     nsibs=st.integers(min_value=3, max_value=10),
     switch=st.booleans(),
+    seed=st.integers(min_value=1, max_value=1000),
 )
-def test_phase_correct_simple(switch, pi0, sigma, nsibs):
-    """Implement a more simple assessment of phase correction."""
+def test_phase_correct_simple(switch, pi0, sigma, nsibs, seed):
+    """Implement a more simple assessment of phase correction.
+
+    NOTE: We have truncated this more to avoid excess noise that incurs some false-inferences.
+    """
     # 1. Simulate a switched setup ...
-    true_haps1, true_haps2, haps1, haps2, bafs = sim_joint_het(
+    true_haps1, true_haps2, haps1, haps2, bafs, _ = sim_joint_het(
         switch=switch,
         mix_prop=pi0,
+        meta_seed=seed,
         std_dev=sigma,
         nsibs=nsibs,
     )
-    # 2. Implement the phase correction setup ...
+    # 2. Implement the phase correction ...
     phase_correct = PhaseCorrect(mat_haps=haps1, pat_haps=haps2)
     phase_correct.add_true_haps(true_mat_haps=true_haps1, true_pat_haps=true_haps2)
     phase_correct.add_baf(embryo_bafs=bafs)

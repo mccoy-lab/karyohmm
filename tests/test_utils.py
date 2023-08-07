@@ -75,12 +75,55 @@ def test_emission_disomy(pi0, sigma, m, p, k):
         exclude_max=True,
         allow_nan=False,
     ),
+    m=st.integers(min_value=0, max_value=1),
+)
+def test_emission_monosomy(pi0, sigma, m):
+    """Test that the emission under disomy integrates to 1."""
+    bs = np.linspace(0, 1, 1000)
+    e = [np.exp(emission_baf(b, m=m, p=0, k=1, pi0=pi0, std_dev=sigma)) for b in bs]
+    integrand = trapezoid(e, bs)
+    assert np.isclose(integrand, 1, atol=1e-03)
+
+
+@given(
+    pi0=st.floats(
+        min_value=0, max_value=1, exclude_min=True, exclude_max=True, allow_nan=False
+    ),
+    sigma=st.floats(
+        min_value=1e-2,
+        max_value=0.5,
+        exclude_min=True,
+        exclude_max=True,
+        allow_nan=False,
+    ),
+    m=st.integers(min_value=0, max_value=2),
+    p=st.integers(min_value=0, max_value=1),
+)
+def test_emission_trisomy(pi0, sigma, m, p):
+    """Test that the emission under disomy integrates to 1."""
+    bs = np.linspace(0, 1, 1000)
+    e = [np.exp(emission_baf(b, m=m, p=p, k=3, pi0=pi0, std_dev=sigma)) for b in bs]
+    integrand = trapezoid(e, bs)
+    assert np.isclose(integrand, 1, atol=1e-03)
+
+
+@given(
+    pi0=st.floats(
+        min_value=0, max_value=1, exclude_min=True, exclude_max=True, allow_nan=False
+    ),
+    sigma=st.floats(
+        min_value=1e-2,
+        max_value=0.5,
+        exclude_min=True,
+        exclude_max=True,
+        allow_nan=False,
+    ),
     nsibs=st.integers(min_value=1, max_value=10),
     switch=st.booleans(),
 )
 def test_sim_joint_het(switch, pi0, sigma, nsibs):
     """Test the simulation of the joint heterozygotes."""
-    true_haps1, true_haps2, haps1, haps2, bafs = sim_joint_het(
+    true_haps1, true_haps2, haps1, haps2, bafs, genos = sim_joint_het(
         switch=switch, mix_prop=pi0, std_dev=sigma, nsibs=nsibs
     )
     assert true_haps1.ndim == 2

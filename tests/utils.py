@@ -350,7 +350,6 @@ def sibling_euploid_sim(
             rec_prob=rec_prob,
             seed=seed + i,
         )
-        # print(ploidy, aploid, mat_hap1, pat_hap1)
         geno, baf = sim_b_allele_freq(
             mat_hap1,
             pat_hap1,
@@ -368,9 +367,10 @@ def sibling_euploid_sim(
     return res_table
 
 
-def sim_joint_het(switch=False, nsibs=1, **kwargs):
+def sim_joint_het(switch=False, nsibs=1, meta_seed=42, **kwargs):
     """Simulate a joint heterozygote and potential switch error."""
     assert nsibs > 0
+    assert meta_seed > 0
     true_haps1 = np.array([[1, 1], [0, 0]])
     if switch:
         haps1 = np.array([[1, 0], [0, 1]])
@@ -379,10 +379,12 @@ def sim_joint_het(switch=False, nsibs=1, **kwargs):
     true_haps2 = np.array([[0, 0], [0, 0]])
     haps2 = true_haps2
     bafs = []
+    genos = []
     for i in range(nsibs):
         x = binom.rvs(1, 0.5)
         geno, b = sim_b_allele_freq(
-            true_haps1[x, :], haps2[0, :], seed=(i + 1), **kwargs
+            true_haps1[x, :], haps2[0, :], seed=(i + 1) + meta_seed, **kwargs
         )
         bafs.append(b)
-    return true_haps1, true_haps2, haps1, haps2, bafs
+        genos.append(geno)
+    return true_haps1, true_haps2, haps1, haps2, bafs, genos

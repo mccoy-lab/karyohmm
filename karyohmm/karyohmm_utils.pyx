@@ -4,6 +4,7 @@ import numpy as np
 
 cdef double sqrt2 = sqrt(2.);
 cdef double sqrt2pi = sqrt(2*pi);
+cdef double logsqrt2pi = log(1/sqrt2pi)
 
 cdef double logsumexp(double[:] x):
     """Cython implementation of the logsumexp trick"""
@@ -71,17 +72,17 @@ cpdef double pat_dosage(pat_hap, state):
 cdef double psi(double x):
     """CDF for a normal distribution function in log-space."""
     if x < -4:
-        return log(1/(sqrt2pi))- 0.5*(x**2) - log(-x)
+        return logsqrt2pi - 0.5*(x**2) - log(-x)
     else:
         return log((1.0 + erf(x / sqrt2))) - log(2.0)
 
 cdef double norm_pdf(double x):
     """PDF for the normal distribution function in log-space."""
-    return log(1/sqrt2pi) -  0.5*(x**2)
+    return logsqrt2pi -  0.5*(x**2)
 
 cdef double logdiffexp(double a, double b):
     """Log-sum-exp trick but for differences."""
-    return log(exp(a) - exp(b) + 1e-323)
+    return log(exp(a) - exp(b) + 1e-124)
 
 cdef double logaddexp(double a, double b):
     cdef double m = -1e32;

@@ -648,9 +648,7 @@ class PhaseCorrect:
         antiphase_orientation = logsumexp_sp(
             [antiphase_orientation1, antiphase_orientation2]
         )
-        # NOTE: we scale the output log-density here at least internally for a provided BAF
-        scale = logsumexp_sp([phase_orientation, antiphase_orientation])
-        return (phase_orientation - scale), (antiphase_orientation - scale)
+        return phase_orientation, antiphase_orientation
 
     def phase_correct(self, maternal=True, lod_thresh=np.log(0.5), **kwargs):
         """Apply a phase correction for the specified parental haplotype."""
@@ -683,12 +681,15 @@ class PhaseCorrect:
                 )
                 phase.append(cur_phase)
                 antiphase.append(cur_antiphase)
-            tot_phase = logsumexp_sp(phase)
-            tot_antiphase = logsumexp_sp(antiphase)
+            # Density takes the product across all siblings ...
+            tot_phase = np.sum(phase)
+            tot_antiphase = np.sum(antiphase)
             scalar = logsumexp_sp([tot_phase, tot_antiphase])
+            # If we are below the log-probability threshold ...
             if tot_phase - scalar < lod_thresh:
                 hap_idx1[j:] = 1 - hap_idx1[i]
                 hap_idx2[j:] = 1 - hap_idx2[i]
+        # Getting each index sequentially
         fixed_hap1 = [haps1[x, i] for i, x in enumerate(hap_idx1)]
         fixed_hap2 = [haps1[x, i] for i, x in enumerate(hap_idx2)]
         fixed_haps = np.vstack([fixed_hap1, fixed_hap2])
