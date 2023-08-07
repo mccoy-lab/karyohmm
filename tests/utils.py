@@ -41,35 +41,43 @@ def draw_parental_genotypes(afs=None, m=100, seed=42):
     return [np.vstack([mat_h1, mat_h2]), np.vstack([pat_h1, pat_h2])]
 
 
+def create_switch_errors_help(haps, err_rate=1e-3, seed=42):
+    """Revised method to create switch errors."""
+    np.random.seed(seed)
+    m = haps.shape[1]
+    geno = haps.sum(axis=0)
+    n_hets = np.sum(geno == 1)
+    us = np.random.uniform(size=n_hets)
+    haps_prime = np.zeros(shape=haps.shape, dtype=int)
+    switches = []
+    i0, i1 = 0, 1
+    j = 0
+    for i in range(m):
+        # We only create switches between heterozygotes ...
+        if geno[i] == 1:
+            if us[j] < err_rate:
+                i0 = 1 - i0
+                i1 = 1 - i1
+                switches.append(i)
+            j += 1
+        haps_prime[0, i] = haps[i0, i]
+        haps_prime[1, i] = haps[i1, i]
+    return haps_prime, np.array(switches)
+
+
 def create_switch_errors(mat_haps, pat_haps, err_rate=1e-3, seed=42):
     """Create switch errors to evaluate impact of poor phasing."""
     assert mat_haps.size == pat_haps.size
     assert mat_haps.ndim == 2
     assert mat_haps.ndim == 2
-    assert (err_rate > 0) and (err_rate < 1)
+    assert (err_rate >= 0) and (err_rate < 1)
     assert seed > 0
-    # Create the shuffled maternal haplotypes
-    m = mat_haps.shape[1]
-    mat_haps_prime = np.zeros(shape=mat_haps.shape, dtype=int)
-    pat_haps_prime = np.zeros(shape=mat_haps.shape, dtype=int)
-    mi0, mi1 = 0, 1
-    pi0, pi1 = 0, 1
-    us1 = np.random.uniform(size=m)
-    us2 = np.random.uniform(size=m)
-    m_switch = np.where(us1 < err_rate)[0]
-    p_switch = np.where(us2 < err_rate)[0]
-    for i in range(m):
-        if us1[i] < err_rate:
-            mi0 = 1 - mi0
-            mi1 = 1 - mi1
-        mat_haps_prime[0, i] = mat_haps[mi0, i]
-        mat_haps_prime[1, i] = mat_haps[mi1, i]
-        if us2[i] < err_rate:
-            pi0 = 1 - pi0
-            pi1 = 1 - pi1
-        pat_haps_prime[0, i] = pat_haps[pi0, i]
-        pat_haps_prime[1, i] = pat_haps[pi1, i]
-    # Create the shuffled paternal haplotypes
+    mat_haps_prime, m_switch = create_switch_errors_help(
+        mat_haps, err_rate=err_rate, seed=seed
+    )
+    pat_haps_prime, p_switch = create_switch_errors_help(
+        pat_haps, err_rate=err_rate, seed=seed
+    )
     return mat_haps_prime, pat_haps_prime, m_switch, p_switch
 
 
@@ -342,7 +350,6 @@ def sibling_euploid_sim(
             rec_prob=rec_prob,
             seed=seed + i,
         )
-        # print(ploidy, aploid, mat_hap1, pat_hap1)
         geno, baf = sim_b_allele_freq(
             mat_hap1,
             pat_hap1,
@@ -358,3 +365,26 @@ def sibling_euploid_sim(
         res_table[f"zs_maternal{i}"] = zs_maternal
         res_table[f"zs_paternal{i}"] = zs_paternal
     return res_table
+
+
+def sim_joint_het(switch=False, nsibs=1, meta_seed=42, **kwargs):
+    """Simulate a joint heterozygote and potential switch error."""
+    assert nsibs > 0
+    assert meta_seed > 0
+    true_haps1 = np.array([[1, 1], [0, 0]])
+    if switch:
+        haps1 = np.array([[1, 0], [0, 1]])
+    else:
+        haps1 = true_haps1
+    true_haps2 = np.array([[0, 0], [0, 0]])
+    haps2 = true_haps2
+    bafs = []
+    genos = []
+    for i in range(nsibs):
+        x = binom.rvs(1, 0.5)
+        geno, b = sim_b_allele_freq(
+            true_haps1[x, :], haps2[0, :], seed=(i + 1) + meta_seed, **kwargs
+        )
+        bafs.append(b)
+        genos.append(geno)
+    return true_haps1, true_haps2, haps1, haps2, bafs, genos
