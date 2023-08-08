@@ -31,7 +31,7 @@ class AneuploidyHMM:
 
     def est_sigma_pi0(self, bafs, mat_haps, pat_haps, algo="Nelder-Mead", **kwargs):
         """Estimate sigma and pi0 using numerical optimization of forward algorithm likelihood."""
-        assert algo in ["Nelder-Mead", "L-BFGS-B"]
+        assert algo in ["Nelder-Mead", "L-BFGS-B", "Powell"]
         opt_res = minimize(
             lambda x: -self.forward_algorithm(
                 bafs=bafs,
@@ -44,8 +44,8 @@ class AneuploidyHMM:
             x0=[0.7, 0.2],
             method=algo,
             bounds=[(0.1, 0.99), (0.05, 0.4)],
-            tol=1e-3,
-            options={"disp": True},
+            tol=1e-4,
+            options={"disp": True, "ftol": 1e-4, "xtol": 1e-4},
         )
         pi0_est = opt_res.x[0]
         sigma_est = opt_res.x[1]
