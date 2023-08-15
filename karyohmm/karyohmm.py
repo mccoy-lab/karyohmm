@@ -31,7 +31,7 @@ class AneuploidyHMM:
 
     def est_sigma_pi0(self, bafs, mat_haps, pat_haps, algo="Nelder-Mead", **kwargs):
         """Estimate sigma and pi0 using numerical optimization of forward algorithm likelihood."""
-        assert algo in ["Nelder-Mead", "L-BFGS-B"]
+        assert algo in ["Nelder-Mead", "L-BFGS-B", "Powell"]
         opt_res = minimize(
             lambda x: -self.forward_algorithm(
                 bafs=bafs,
@@ -41,11 +41,11 @@ class AneuploidyHMM:
                 std_dev=x[1],
                 **kwargs,
             )[4],
-            x0=[0.6, 0.2],
+            x0=[0.7, 0.2],
             method=algo,
             bounds=[(0.1, 0.99), (0.05, 0.4)],
-            tol=1e-6,
-            options={"disp": True},
+            tol=1e-4,
+            options={"disp": True, "ftol": 1e-4, "xtol": 1e-4},
         )
         pi0_est = opt_res.x[0]
         sigma_est = opt_res.x[1]
@@ -55,7 +55,7 @@ class AneuploidyHMM:
 class MetaHMM(AneuploidyHMM):
     """A meta-HMM that evaluates all possible ploidy states for allele intensity data."""
 
-    def __init__(self):
+    def __init__(self, disomy=False):
         """Initialize the MetaHMM class."""
         super().__init__()
         self.ploidy = 0
@@ -64,7 +64,7 @@ class MetaHMM(AneuploidyHMM):
         self.p_monosomy_states = [(-1, -1, 1, -1), (-1, -1, 0, -1)]
         self.m_monosomy_states = [(0, -1, -1, -1), (1, -1, -1, -1)]
         self.isodisomy_states = [(0, 1, -1, -1), (-1, -1, 0, 1)]
-        self.euploid_states = [
+        self.disomy_states = [
             (0, -1, 0, -1),
             (0, -1, 1, -1),
             (1, -1, 0, -1),
@@ -87,40 +87,45 @@ class MetaHMM(AneuploidyHMM):
             (1, -1, 0, 1),
             (1, -1, 1, 1),
         ]
-        self.states = (
-            self.nullisomy_state
-            + self.m_monosomy_states
-            + self.p_monosomy_states
-            + self.euploid_states
-            + self.m_trisomy_states
-            + self.p_trisomy_states
-        )
-        self.karyotypes = np.array(
-            [
-                "0",
-                "1m",
-                "1m",
-                "1p",
-                "1p",
-                "2",
-                "2",
-                "2",
-                "2",
-                "3m",
-                "3m",
-                "3m",
-                "3m",
-                "3m",
-                "3m",
-                "3p",
-                "3p",
-                "3p",
-                "3p",
-                "3p",
-                "3p",
-            ],
-            dtype=str,
-        )
+        if disomy:
+            self.aploid = "disomy"
+            self.states = self.disomy_states
+            self.karyotypes = np.array(["2", "2", "2", "2"], dtype=str)
+        else:
+            self.states = (
+                self.nullisomy_state
+                + self.m_monosomy_states
+                + self.p_monosomy_states
+                + self.disomy_states
+                + self.m_trisomy_states
+                + self.p_trisomy_states
+            )
+            self.karyotypes = np.array(
+                [
+                    "0",
+                    "1m",
+                    "1m",
+                    "1p",
+                    "1p",
+                    "2",
+                    "2",
+                    "2",
+                    "2",
+                    "3m",
+                    "3m",
+                    "3m",
+                    "3m",
+                    "3m",
+                    "3m",
+                    "3p",
+                    "3p",
+                    "3p",
+                    "3p",
+                    "3p",
+                    "3p",
+                ],
+                dtype=str,
+            )
 
     def create_transition_matrix(self, karyotypes, r=1e-4, a=1e-7, unphased=False):
         """Create an inter-karyotype transition matrix."""
@@ -529,8 +534,8 @@ class QuadHMM(AneuploidyHMM):
                             pat_recomb[r] = pat_recomb[r] + 1
 
         # NOTE: here we just get positions, and if they are supported by the majority rule ...
-        mat_recomb_lst = [k for k in mat_recomb if mat_recomb[k] >= len(path_xzs) / 2]
-        pat_recomb_lst = [k for k in pat_recomb if pat_recomb[k] >= len(path_xzs) / 2]
+        mat_recomb_lst = [k for k in mat_recomb if mat_recomb[k] > len(path_xzs) / 2]
+        pat_recomb_lst = [k for k in pat_recomb if pat_recomb[k] > len(path_xzs) / 2]
         # This returns the list of tuples on the recombination positions and minimum distances across the traces.
         return mat_recomb_lst, pat_recomb_lst, mat_recomb, pat_recomb
 
