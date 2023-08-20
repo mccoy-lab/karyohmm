@@ -103,14 +103,13 @@ cpdef double truncnorm_pdf(double x, double a, double b, double mu=0.5, double s
 
 cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double std_dev=0.2, int k=2):
     """Emission distribution function for B-allele frequency in the sample."""
-    cdef double mu_i, x, x0, x1, x_s;
+    cdef double mu_i, x, x0, x1;
     if (m == -1) & (p == -1):
         return 1.0
     mu_i = (m + p) / k
     x = truncnorm_pdf(baf, 0.0, 1.0, mu=mu_i, sigma=std_dev)
-    # NOTE: should we have something a little more sophisticated for the middle points?
-    x0 = truncnorm_pdf(baf, 0.0, 1.0, mu=0.0, sigma=5e-3)
-    x1 = truncnorm_pdf(baf, 0.0, 1.0, mu=1.0, sigma=5e-3)
+    x0 = truncnorm_pdf(baf, 0.0, 1.0, mu=0.0, sigma=2e-3)
+    x1 = truncnorm_pdf(baf, 0.0, 1.0, mu=1.0, sigma=2e-3)
     if mu_i == 0.0:
         return logaddexp(log(pi0) + x0, log((1 - pi0)) + x)
     if mu_i == 1.0:

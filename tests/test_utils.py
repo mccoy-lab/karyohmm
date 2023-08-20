@@ -129,6 +129,11 @@ def test_sim_joint_het(switch, pi0, sigma, nsibs):
     assert true_haps1.ndim == 2
     assert true_haps2.ndim == 2
     assert len(bafs) == nsibs
+    # Make sure that the first ones are hets and second are homozyg
+    assert np.all(np.sum(true_haps1, axis=0) == 1)
+    assert np.all(np.sum(haps1, axis=0) == 1)
+    assert np.all(np.sum(true_haps2, axis=0) != 1)
+    assert np.all(np.sum(haps2, axis=0) != 1)
     if not switch:
         assert np.all(true_haps1 == haps1)
     else:

@@ -318,7 +318,6 @@ def sibling_euploid_sim(
     rec_prob=1e-4,
     std_dev=0.2,
     mix_prop=0.3,
-    alpha=1.0,
     switch_err_rate=1e-2,
     seed=42,
 ):

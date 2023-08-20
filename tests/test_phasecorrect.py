@@ -112,7 +112,7 @@ def test_phase_correct_empirical(data):
     ),
     sigma=st.floats(
         min_value=1e-2,
-        max_value=0.1,
+        max_value=0.2,
         exclude_min=True,
         exclude_max=False,
         allow_nan=False,

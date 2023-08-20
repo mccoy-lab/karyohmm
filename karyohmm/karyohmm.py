@@ -1,9 +1,15 @@
 """Main implementation of karyohmm classes."""
 
 import numpy as np
-from karyohmm_utils import (backward_algo, backward_algo_sibs, emission_baf,
-                            forward_algo, forward_algo_sibs, viterbi_algo,
-                            viterbi_algo_sibs)
+from karyohmm_utils import (
+    backward_algo,
+    backward_algo_sibs,
+    emission_baf,
+    forward_algo,
+    forward_algo_sibs,
+    viterbi_algo,
+    viterbi_algo_sibs,
+)
 from scipy.optimize import minimize
 from scipy.special import logsumexp as logsumexp_sp
 
@@ -648,7 +654,7 @@ class PhaseCorrect:
         antiphase_orientation2 = emission_baf(
             baf=baf[0], m=haps1[1, 0], p=haps2[0, 0], **kwargs
         ) + emission_baf(baf=baf[1], m=haps1[0, 1], p=haps2[0, 1], **kwargs)
-        # This gets the log-density of being in the phase or antiphase orientation
+        # Returns log-probability-density of being in the phase or antiphase orientation
         phase_orientation = logsumexp_sp([phase_orientation1, phase_orientation2])
         antiphase_orientation = logsumexp_sp(
             [antiphase_orientation1, antiphase_orientation2]
@@ -679,19 +685,17 @@ class PhaseCorrect:
                 [haps1[hap_idx1[i], [i, j]], haps1[hap_idx2[i], [i, j]]]
             )
             for baf in self.embryo_bafs:
-                cur_baf = baf[[i, j]]
                 # now we have to use the current phasing approach ...
                 cur_phase, cur_antiphase = self.lod_phase(
-                    haps1=cur_hap, haps2=haps2[:, [i, j]], baf=cur_baf, **kwargs
+                    haps1=cur_hap, haps2=haps2[:, [i, j]], baf=baf[[i, j]], **kwargs
                 )
                 phase.append(cur_phase)
                 antiphase.append(cur_antiphase)
             # Density takes the product across all siblings ...
             tot_phase = np.sum(phase)
             tot_antiphase = np.sum(antiphase)
-            scalar = logsumexp_sp([tot_phase, tot_antiphase])
-            # If we are below the log-probability threshold ...
-            if tot_phase - scalar < lod_thresh:
+            # If we are below the log-odds threshold then we create a switch
+            if tot_phase - tot_antiphase < lod_thresh:
                 hap_idx1[j:] = 1 - hap_idx1[i]
                 hap_idx2[j:] = 1 - hap_idx2[i]
         # Getting each index sequentially
@@ -753,8 +757,8 @@ class PhaseCorrect:
                 antiphase.append(cur_antiphase)
             tot_phase = logsumexp_sp(phase)
             tot_antiphase = logsumexp_sp(antiphase)
-            scalar = logsumexp_sp([tot_phase, tot_antiphase])
-            if tot_phase - scalar < lod_thresh:
+            # This is like the ratio between the two probability densities
+            if tot_phase - tot_antiphase < lod_thresh:
                 n_switches += 1
                 switch_idxs.append((i, j))
         return (

@@ -101,6 +101,23 @@ def test_est_pi0_sigma(data):
     assert (sigma_est > 0) and (sigma_est < 1.0)
 
 
+@pytest.mark.parametrize(
+    "data,algo",
+    [(data_disomy, "Powell"), (data_disomy, "L-BFGS-B"), (data_disomy, "Nelder-Mead")],
+)
+def test_est_pi0_sigma_algos(data, algo):
+    """Test optimization of parameter estimates using different algorithms."""
+    hmm = MetaHMM()
+    pi0_est, sigma_est = hmm.est_sigma_pi0(
+        bafs=data["baf_embryo"],
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+        algo=algo,
+    )
+    assert (pi0_est > 0) and (pi0_est < 1.0)
+    assert (sigma_est > 0) and (sigma_est < 1.0)
+
+
 def test_string_rep():
     """Test that the string representation of states makes sense."""
     hmm = MetaHMM()
