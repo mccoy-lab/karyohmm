@@ -7,6 +7,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from karyohmm_utils import emission_baf, mat_dosage, pat_dosage
 from scipy.integrate import trapezoid
+from scipy.stats import truncnorm
 from utils import sim_joint_het
 
 
@@ -105,6 +106,30 @@ def test_emission_trisomy(pi0, sigma, m, p):
     e = [np.exp(emission_baf(b, m=m, p=p, k=3, pi0=pi0, std_dev=sigma)) for b in bs]
     integrand = trapezoid(e, bs)
     assert np.isclose(integrand, 1, atol=1e-03)
+
+
+@given(
+    baf=st.floats(min_value=0, max_value=0, allow_nan=False),
+    m=st.integers(min_value=0, max_value=1),
+    p=st.integers(min_value=0, max_value=1),
+    sigma=st.floats(
+        min_value=1e-2,
+        max_value=0.5,
+        exclude_min=True,
+        exclude_max=True,
+        allow_nan=False,
+    ),
+    k=st.integers(min_value=2, max_value=3),
+)
+def test_emission_overall(baf, m, p, k, sigma):
+    """Test the overall admissions distribution."""
+    mu = (m + p) / k
+    a, b = 0, 1
+    true_logpdf = truncnorm.logpdf(
+        baf, (a - mu) / sigma, (b - mu) / sigma, loc=mu, scale=sigma
+    )
+    baf_log_pdf = emission_baf(baf, m=m, p=p, k=k, pi0=1e-12, std_dev=sigma)
+    assert np.isclose(baf_log_pdf, true_logpdf)
 
 
 @given(

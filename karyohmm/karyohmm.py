@@ -592,7 +592,9 @@ class PhaseCorrect:
             - `n_switches`: number of switches between consecutive heterozygotes
             - `n_consecutive_hets`: number of consecutive heterozygotes
             - `switch_err_rate`: number of switches per consecutive heterozygote
-            - `switch_idx`: intervals
+            - `switch_idx`: snps where the variant is out of phase with its predecessor
+            - `het_idx`: locations/indexs of the heterozygotes
+            - `lods` :
 
         """
         assert self.mat_haps_true is not None
@@ -633,12 +635,16 @@ class PhaseCorrect:
             n_consecutive_hets,
             n_switches / n_consecutive_hets,
             switch_idxs,
+            het_idxs,
+            None,
         )
 
     def lod_phase(self, haps1, haps2, baf, **kwargs):
         """Calculate the log-odds of being in the phase or antiphase orientation at a pair of hets."""
         assert (haps1.shape[0] == 2) and (haps1.shape[1] == 2)
         assert (haps2.shape[0] == 2) and (haps2.shape[1] == 2)
+        assert np.all(np.sum(haps1, axis=0) == 1)
+        assert np.all(np.sum(haps2, axis=0) != 1)
         assert baf.size == 2
         # Calculate the likelihood of this embryo BAF in the phase orientation
         phase_orientation1 = emission_baf(
@@ -737,6 +743,7 @@ class PhaseCorrect:
         n_switches = 0
         n_consecutive_hets = 0
         switch_idxs = []
+        lods = []
         geno1 = haps1[0, :] + haps1[1, :]
         geno2 = haps2[0, :] + haps2[1, :]
         het_idx = np.where((geno1 == 1) & (geno2 != 1))[0]
@@ -745,25 +752,29 @@ class PhaseCorrect:
             phase = []
             antiphase = []
             for baf in self.embryo_bafs:
-                cur_baf = baf[[i, j]]
                 # now we have to use the current phasing approach ...
                 cur_phase, cur_antiphase = self.lod_phase(
                     haps1=haps1[:, [i, j]],
                     haps2=haps2[:, [i, j]],
-                    baf=cur_baf,
+                    baf=baf[[i, j]],
                     **kwargs,
                 )
                 phase.append(cur_phase)
                 antiphase.append(cur_antiphase)
-            tot_phase = logsumexp_sp(phase)
-            tot_antiphase = logsumexp_sp(antiphase)
-            # This is like the ratio between the two probability densities
+            # Take the full sum (product across embryos...)
+            tot_phase = np.sum(phase)
+            tot_antiphase = np.sum(antiphase)
+            lods.append(tot_phase - tot_antiphase)
+            # This is the ratio between the two probability densities
             if tot_phase - tot_antiphase < lod_thresh:
                 n_switches += 1
                 switch_idxs.append((i, j))
+        lods = np.array(lods)
         return (
             n_switches,
             n_consecutive_hets,
             n_switches / n_consecutive_hets,
             switch_idxs,
+            het_idx,
+            lods,
         )
