@@ -753,6 +753,57 @@ class PhaseCorrect:
         else:
             self.pat_haps_fixed = fixed_haps
 
+    def phase_correct_alt(self, maternal=True, lod_thresh=np.log(0.5), **kwargs):
+        """Apply a phase correction for the specified parental haplotype.
+
+        NOTE: this uses the newer alternative model that marginalizes
+        over the phase for other haplotypes ...
+        """
+        assert self.embryo_bafs is not None
+        if maternal:
+            haps1 = self.mat_haps
+            haps2 = self.pat_haps
+        else:
+            haps1 = self.pat_haps
+            haps2 = self.mat_haps
+        assert (haps1.ndim == 2) and (haps2.ndim == 2)
+        assert (haps1.shape[0] == 2) and (haps2.shape[0] == 2)
+        assert haps1.shape[1] == haps2.shape[1]
+        geno1 = haps1.sum(axis=0)
+        idx_het1 = np.where(geno1 == 1)[0]
+        hap_idx1 = np.zeros(haps1.shape[1], dtype=np.uint16)
+        hap_idx2 = np.ones(haps1.shape[1], dtype=np.uint16)
+        for i, j in zip(idx_het1[:-1], idx_het1[1:]):
+            phase = []
+            antiphase = []
+            cur_hap = np.vstack(
+                [haps1[hap_idx1[i], [i, j]], haps1[hap_idx2[i], [i, j]]]
+            )
+            for baf in self.embryo_bafs:
+                # now we have to use the current phasing approach ...
+                cur_phase, cur_antiphase = self.lod_phase(
+                    haps1=cur_hap, haps2=haps2[:, [i, j]], baf=baf[[i, j]], **kwargs
+                )
+                phase.append(cur_phase)
+                antiphase.append(cur_antiphase)
+            # Density takes the product across all siblings ...
+            tot_phase = np.sum(phase)
+            tot_antiphase = np.sum(antiphase)
+            # If we are below the log-odds threshold then we create a switch
+            if tot_phase - tot_antiphase < lod_thresh:
+                hap_idx1[j:] = 1 - hap_idx1[i]
+                hap_idx2[j:] = 1 - hap_idx2[i]
+        # Getting each index sequentially
+        fixed_hap1 = [haps1[x, i] for i, x in enumerate(hap_idx1)]
+        fixed_hap2 = [haps1[x, i] for i, x in enumerate(hap_idx2)]
+        fixed_haps = np.vstack([fixed_hap1, fixed_hap2])
+        assert fixed_haps.shape[1] == haps1.shape[1]
+        assert fixed_haps.shape[0] == 2
+        if maternal:
+            self.mat_haps_fixed = fixed_haps
+        else:
+            self.pat_haps_fixed = fixed_haps
+
     def estimate_switch_err_empirical(
         self, maternal=True, fixed=False, lod_thresh=np.log(0.5), **kwargs
     ):
