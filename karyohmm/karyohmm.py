@@ -613,6 +613,7 @@ class PhaseCorrect:
                 inf_haps = self.pat_haps_fixed
             else:
                 inf_haps = self.pat_haps
+        # NOTE: this is just between all consecutive hets, not
         geno = true_haps.sum(axis=0)
         het_idxs = np.where(geno == 1)[0]
         n_switches = 0
@@ -625,11 +626,12 @@ class PhaseCorrect:
             true_hap = true_haps[:, [i, j]]
             inf_hap = inf_haps[:, [i, j]]
             # Check if the heterozygotes are oriented appropriately
-            if np.any(true_hap[0, :] != inf_hap[0, :]) and np.any(
-                (true_hap[0, :] != inf_hap[1, :])
+            if ~(
+                np.all(true_hap[0, :] == inf_hap[0, :])
+                or np.all(true_hap[0, :] == inf_hap[1, :])
             ):
                 n_switches += 1
-                switch_idxs.append(j)
+                switch_idxs.append((i, j))
         return (
             n_switches,
             n_consecutive_hets,
@@ -640,7 +642,7 @@ class PhaseCorrect:
         )
 
     def lod_phase(self, haps1, haps2, baf, **kwargs):
-        """Calculate the log-odds of being in the phase or antiphase orientation at a pair of hets."""
+        """Calculate the log-odds of being in the phase or antiphase orientation at a pair of phaseable-hets."""
         assert (haps1.shape[0] == 2) and (haps1.shape[1] == 2)
         assert (haps2.shape[0] == 2) and (haps2.shape[1] == 2)
         assert np.all(np.sum(haps1, axis=0) == 1)
@@ -665,6 +667,42 @@ class PhaseCorrect:
         antiphase_orientation = logsumexp_sp(
             [antiphase_orientation1, antiphase_orientation2]
         )
+        return phase_orientation, antiphase_orientation
+
+    def lod_phase_alt(self, haps1, haps2, baf, **kwargs):
+        """Compute the log-likelihood of being in the phase orientation.
+
+        NOTE: this marginalizes over all the
+        """
+        assert (haps1.shape[0] == 2) and (haps1.shape[1] == 2)
+        assert (haps2.shape[0] == 2) and (haps2.shape[1] == 2)
+        assert np.all(np.sum(haps1, axis=0) == 1)
+        phase_orientation = []
+        antiphase_orientation = []
+        # Marginalize over all phase
+        for i in [0, 1]:
+            for j in [0, 1]:
+                # Compute the phase orientations
+                phase0 = emission_baf(
+                    baf=baf[0], m=haps1[0, 0], p=haps2[i, 0], **kwargs
+                ) + emission_baf(baf=baf[1], m=haps1[0, 1], p=haps2[j, 1], **kwargs)
+                phase1 = emission_baf(
+                    baf=baf[0], m=haps1[1, 0], p=haps2[i, 0], **kwargs
+                ) + emission_baf(baf=baf[1], m=haps1[1, 1], p=haps2[j, 1], **kwargs)
+                # Compute the antiphase orientations
+                antiphase0 = emission_baf(
+                    baf=baf[0], m=haps1[0, 0], p=haps2[i, 0], **kwargs
+                ) + emission_baf(baf=baf[1], m=haps1[1, 1], p=haps2[j, 1], **kwargs)
+                antiphase1 = emission_baf(
+                    baf=baf[0], m=haps1[1, 0], p=haps2[i, 0], **kwargs
+                ) + emission_baf(baf=baf[1], m=haps1[0, 1], p=haps2[j, 1], **kwargs)
+                phase_orientation.append(phase0)
+                phase_orientation.append(phase1)
+                antiphase_orientation.append(antiphase0)
+                antiphase_orientation.append(antiphase1)
+        # Integrate these using logsumexp for log-density of phase/antiphase
+        phase_orientation = logsumexp_sp(phase_orientation)
+        antiphase_orientation = logsumexp_sp(antiphase_orientation)
         return phase_orientation, antiphase_orientation
 
     def phase_correct(self, maternal=True, lod_thresh=np.log(0.5), **kwargs):
@@ -744,6 +782,7 @@ class PhaseCorrect:
         n_consecutive_hets = 0
         switch_idxs = []
         lods = []
+        # NOTE: here we restrict to "phase-informative" switches ...
         geno1 = haps1[0, :] + haps1[1, :]
         geno2 = haps2[0, :] + haps2[1, :]
         het_idx = np.where((geno1 == 1) & (geno2 != 1))[0]
