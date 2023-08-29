@@ -117,6 +117,36 @@ cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double
     else:
         return x
 
+def lod_phase(haps1, haps2, baf, **kwargs):
+    """Estimate the log-likelihood of being the phase vs. antiphase orientation for heterozygotes."""
+    cdef int i,j;
+    cdef float phase_orientation, antiphase_orientation;
+    phase_orientation = 0.0
+    antiphase_orientation = 0.0
+    # Marginalize over all phase
+    # NOTE: for speed include this as a helper function in the utils
+    for i in range(2):
+        for j in range(2):
+            # Compute the phase orientations
+            phase0 = emission_baf(
+                baf=baf[0], m=haps1[0, 0], p=haps2[i, 0], **kwargs
+            ) + emission_baf(baf=baf[1], m=haps1[0, 1], p=haps2[j, 1], **kwargs)
+            phase1 = emission_baf(
+                baf=baf[0], m=haps1[1, 0], p=haps2[i, 0], **kwargs
+            ) + emission_baf(baf=baf[1], m=haps1[1, 1], p=haps2[j, 1], **kwargs)
+            # Compute the antiphase orientations
+            antiphase0 = emission_baf(
+                baf=baf[0], m=haps1[0, 0], p=haps2[i, 0], **kwargs
+            ) + emission_baf(baf=baf[1], m=haps1[1, 1], p=haps2[j, 1], **kwargs)
+            antiphase1 = emission_baf(
+                baf=baf[0], m=haps1[1, 0], p=haps2[i, 0], **kwargs
+            ) + emission_baf(baf=baf[1], m=haps1[0, 1], p=haps2[j, 1], **kwargs)
+            phase_orientation = logaddexp(phase_orientation, phase0)
+            phase_orientation = logaddexp(phase_orientation, phase1)
+            antiphase_orientation = logaddexp(antiphase_orientation, antiphase0)
+            antiphase_orientation = logaddexp(antiphase_orientation, antiphase1)
+    return phase_orientation, antiphase_orientation
+
 def forward_algo(bafs,  mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.25):
     """Helper function for forward algorithm loop-optimization."""
     cdef int i,j,n,m;
