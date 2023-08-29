@@ -9,15 +9,15 @@ from utils import sibling_euploid_sim, sim_joint_het
 from karyohmm import PhaseCorrect
 
 data_disomy_sibs_null = sibling_euploid_sim(
-    m=4000, nsibs=3, std_dev=0.1, switch_err_rate=0.0, seed=42
+    m=4000, nsibs=3, std_dev=0.1, mix_prop=0.6, switch_err_rate=0.0, seed=42
 )
 
 data_disomy_sibs_test_1percent = sibling_euploid_sim(
-    m=4000, nsibs=3, std_dev=0.1, switch_err_rate=1e-2, seed=42
+    m=4000, nsibs=3, std_dev=0.1, mix_prop=0.6, switch_err_rate=1e-2, seed=42
 )
 
 data_disomy_sibs_test_3percent = sibling_euploid_sim(
-    m=4000, nsibs=3, std_dev=0.1, switch_err_rate=3e-2, seed=42
+    m=4000, nsibs=3, std_dev=0.1, mix_prop=0.6, switch_err_rate=3e-2, seed=42
 )
 
 
@@ -119,7 +119,7 @@ def test_phase_correct_empirical(data):
     ),
     nsibs=st.integers(min_value=3, max_value=10),
     switch=st.booleans(),
-    seed=st.integers(min_value=1, max_value=1000),
+    seed=st.integers(min_value=1, max_value=100000),
 )
 def test_phase_correct_simple(switch, pi0, sigma, nsibs, seed):
     """Implement a more simple assessment of phase correction.
