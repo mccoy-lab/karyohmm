@@ -38,6 +38,28 @@ def test_forward_algorithm(data):
     )
 
 
+@pytest.mark.parametrize("data", [data_disomy])
+def test_disomy_model(data):
+    """Test implementation under a pure-disomy model."""
+    hmm = MetaHMM(disomy=True)
+    _, _, _, karyotypes, loglik = hmm.forward_algorithm(
+        bafs=data["baf_embryo"],
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+    )
+    _, _, _, karyotypes, loglik = hmm.backward_algorithm(
+        bafs=data["baf_embryo"],
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+    )
+    gammas, _, karyotypes = hmm.forward_backward(
+        bafs=data["baf_embryo"],
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+    )
+    assert np.all(np.isclose(np.sum(np.exp(gammas), axis=0), 1.0))
+
+
 @pytest.mark.parametrize("data", [data_disomy, data_trisomy, data_monosomy])
 def test_backward_algorithm(data):
     """Test the implementation of the backward algorithm."""
@@ -74,6 +96,23 @@ def test_est_pi0_sigma(data):
         bafs=data["baf_embryo"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
+    )
+    assert (pi0_est > 0) and (pi0_est < 1.0)
+    assert (sigma_est > 0) and (sigma_est < 1.0)
+
+
+@pytest.mark.parametrize(
+    "data,algo",
+    [(data_disomy, "Powell"), (data_disomy, "L-BFGS-B"), (data_disomy, "Nelder-Mead")],
+)
+def test_est_pi0_sigma_algos(data, algo):
+    """Test optimization of parameter estimates using different algorithms."""
+    hmm = MetaHMM()
+    pi0_est, sigma_est = hmm.est_sigma_pi0(
+        bafs=data["baf_embryo"],
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+        algo=algo,
     )
     assert (pi0_est > 0) and (pi0_est < 1.0)
     assert (sigma_est > 0) and (sigma_est < 1.0)

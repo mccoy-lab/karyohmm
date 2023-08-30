@@ -4,6 +4,7 @@ import numpy as np
 
 cdef double sqrt2 = sqrt(2.);
 cdef double sqrt2pi = sqrt(2*pi);
+cdef double logsqrt2pi = log(1/sqrt2pi)
 
 cdef double logsumexp(double[:] x):
     """Cython implementation of the logsumexp trick"""
@@ -71,17 +72,17 @@ cpdef double pat_dosage(pat_hap, state):
 cdef double psi(double x):
     """CDF for a normal distribution function in log-space."""
     if x < -4:
-        return log(1/(sqrt2pi))- 0.5*(x**2) - log(-x)
+        return logsqrt2pi - 0.5*(x**2) - log(-x)
     else:
         return log((1.0 + erf(x / sqrt2))) - log(2.0)
 
 cdef double norm_pdf(double x):
     """PDF for the normal distribution function in log-space."""
-    return log(1/sqrt2pi) -  0.5*(x**2)
+    return logsqrt2pi -  0.5*(x**2)
 
 cdef double logdiffexp(double a, double b):
     """Log-sum-exp trick but for differences."""
-    return log(exp(a) - exp(b) + 1e-323)
+    return log(exp(a) - exp(b) + 1e-124)
 
 cdef double logaddexp(double a, double b):
     cdef double m = -1e32;
@@ -102,20 +103,49 @@ cpdef double truncnorm_pdf(double x, double a, double b, double mu=0.5, double s
 
 cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double std_dev=0.2, int k=2):
     """Emission distribution function for B-allele frequency in the sample."""
-    cdef double mu_i, x, x0, x1, x_s;
+    cdef double mu_i, x, x0, x1;
     if (m == -1) & (p == -1):
         return 1.0
     mu_i = (m + p) / k
     x = truncnorm_pdf(baf, 0.0, 1.0, mu=mu_i, sigma=std_dev)
-    # NOTE: should we have something a little more sophisticated for the middle points?
-    x0 = truncnorm_pdf(baf, 0.0, 1.0, mu=0.0, sigma=5e-3)
-    x1 = truncnorm_pdf(baf, 0.0, 1.0, mu=1.0, sigma=5e-3)
+    x0 = truncnorm_pdf(baf, 0.0, 1.0, mu=0.0, sigma=2e-3)
+    x1 = truncnorm_pdf(baf, 0.0, 1.0, mu=1.0, sigma=2e-3)
     if mu_i == 0.0:
         return logaddexp(log(pi0) + x0, log((1 - pi0)) + x)
     if mu_i == 1.0:
         return logaddexp(log(pi0) + x1, log((1 - pi0)) + x)
     else:
         return x
+
+def lod_phase(haps1, haps2, baf, **kwargs):
+    """Estimate the log-likelihood of being the phase vs. antiphase orientation for heterozygotes."""
+    cdef int i,j;
+    cdef float phase_orientation, antiphase_orientation;
+    phase_orientation = 0.0
+    antiphase_orientation = 0.0
+    # Marginalize over all phase
+    # NOTE: for speed include this as a helper function in the utils
+    for i in range(2):
+        for j in range(2):
+            # Compute the phase orientations
+            phase0 = emission_baf(
+                baf=baf[0], m=haps1[0, 0], p=haps2[i, 0], **kwargs
+            ) + emission_baf(baf=baf[1], m=haps1[0, 1], p=haps2[j, 1], **kwargs)
+            phase1 = emission_baf(
+                baf=baf[0], m=haps1[1, 0], p=haps2[i, 0], **kwargs
+            ) + emission_baf(baf=baf[1], m=haps1[1, 1], p=haps2[j, 1], **kwargs)
+            # Compute the antiphase orientations
+            antiphase0 = emission_baf(
+                baf=baf[0], m=haps1[0, 0], p=haps2[i, 0], **kwargs
+            ) + emission_baf(baf=baf[1], m=haps1[1, 1], p=haps2[j, 1], **kwargs)
+            antiphase1 = emission_baf(
+                baf=baf[0], m=haps1[1, 0], p=haps2[i, 0], **kwargs
+            ) + emission_baf(baf=baf[1], m=haps1[0, 1], p=haps2[j, 1], **kwargs)
+            phase_orientation = logaddexp(phase_orientation, phase0)
+            phase_orientation = logaddexp(phase_orientation, phase1)
+            antiphase_orientation = logaddexp(antiphase_orientation, antiphase0)
+            antiphase_orientation = logaddexp(antiphase_orientation, antiphase1)
+    return phase_orientation, antiphase_orientation
 
 def forward_algo(bafs,  mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.25):
     """Helper function for forward algorithm loop-optimization."""

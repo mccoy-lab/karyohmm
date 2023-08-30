@@ -1,11 +1,18 @@
 """Main implementation of karyohmm classes."""
 
 import numpy as np
-from karyohmm_utils import (backward_algo, backward_algo_sibs, forward_algo,
-                            forward_algo_sibs, viterbi_algo, viterbi_algo_sibs)
+from karyohmm_utils import (
+    backward_algo,
+    backward_algo_sibs,
+    emission_baf,
+    forward_algo,
+    forward_algo_sibs,
+    lod_phase,
+    viterbi_algo,
+    viterbi_algo_sibs,
+)
 from scipy.optimize import minimize
 from scipy.special import logsumexp as logsumexp_sp
-from tqdm import tqdm
 
 
 class AneuploidyHMM:
@@ -29,8 +36,9 @@ class AneuploidyHMM:
             t.append("0")
         return "".join(t)
 
-    def est_sigma_pi0(self, bafs, mat_haps, pat_haps, **kwargs):
+    def est_sigma_pi0(self, bafs, mat_haps, pat_haps, algo="Nelder-Mead", **kwargs):
         """Estimate sigma and pi0 using numerical optimization of forward algorithm likelihood."""
+        assert algo in ["Nelder-Mead", "L-BFGS-B", "Powell"]
         opt_res = minimize(
             lambda x: -self.forward_algorithm(
                 bafs=bafs,
@@ -40,11 +48,11 @@ class AneuploidyHMM:
                 std_dev=x[1],
                 **kwargs,
             )[4],
-            x0=[0.5, 0.2],
-            method="L-BFGS-B",
-            bounds=[(0.3, 0.99), (0.05, 0.25)],
-            tol=1e-6,
-            options={"disp": False},
+            x0=[0.7, 0.2],
+            method=algo,
+            bounds=[(0.1, 0.99), (0.05, 0.4)],
+            tol=1e-4,
+            options={"disp": True, "ftol": 1e-4, "xtol": 1e-4},
         )
         pi0_est = opt_res.x[0]
         sigma_est = opt_res.x[1]
@@ -54,7 +62,7 @@ class AneuploidyHMM:
 class MetaHMM(AneuploidyHMM):
     """A meta-HMM that evaluates all possible ploidy states for allele intensity data."""
 
-    def __init__(self):
+    def __init__(self, disomy=False):
         """Initialize the MetaHMM class."""
         super().__init__()
         self.ploidy = 0
@@ -63,7 +71,7 @@ class MetaHMM(AneuploidyHMM):
         self.p_monosomy_states = [(-1, -1, 1, -1), (-1, -1, 0, -1)]
         self.m_monosomy_states = [(0, -1, -1, -1), (1, -1, -1, -1)]
         self.isodisomy_states = [(0, 1, -1, -1), (-1, -1, 0, 1)]
-        self.euploid_states = [
+        self.disomy_states = [
             (0, -1, 0, -1),
             (0, -1, 1, -1),
             (1, -1, 0, -1),
@@ -86,40 +94,45 @@ class MetaHMM(AneuploidyHMM):
             (1, -1, 0, 1),
             (1, -1, 1, 1),
         ]
-        self.states = (
-            self.nullisomy_state
-            + self.m_monosomy_states
-            + self.p_monosomy_states
-            + self.euploid_states
-            + self.m_trisomy_states
-            + self.p_trisomy_states
-        )
-        self.karyotypes = np.array(
-            [
-                "0",
-                "1m",
-                "1m",
-                "1p",
-                "1p",
-                "2",
-                "2",
-                "2",
-                "2",
-                "3m",
-                "3m",
-                "3m",
-                "3m",
-                "3m",
-                "3m",
-                "3p",
-                "3p",
-                "3p",
-                "3p",
-                "3p",
-                "3p",
-            ],
-            dtype=str,
-        )
+        if disomy:
+            self.aploid = "disomy"
+            self.states = self.disomy_states
+            self.karyotypes = np.array(["2", "2", "2", "2"], dtype=str)
+        else:
+            self.states = (
+                self.nullisomy_state
+                + self.m_monosomy_states
+                + self.p_monosomy_states
+                + self.disomy_states
+                + self.m_trisomy_states
+                + self.p_trisomy_states
+            )
+            self.karyotypes = np.array(
+                [
+                    "0",
+                    "1m",
+                    "1m",
+                    "1p",
+                    "1p",
+                    "2",
+                    "2",
+                    "2",
+                    "2",
+                    "3m",
+                    "3m",
+                    "3m",
+                    "3m",
+                    "3m",
+                    "3m",
+                    "3p",
+                    "3p",
+                    "3p",
+                    "3p",
+                    "3p",
+                    "3p",
+                ],
+                dtype=str,
+            )
 
     def create_transition_matrix(self, karyotypes, r=1e-4, a=1e-7, unphased=False):
         """Create an inter-karyotype transition matrix."""
@@ -313,7 +326,7 @@ class QuadHMM(AneuploidyHMM):
             for j in self.single_states:
                 self.states.append((i, j))
 
-    def create_transition_matrix(self, r=1e-4):
+    def create_transition_matrix(self, r=1e-16):
         """Create the transition matrix here."""
         m = len(self.states)
         A = np.zeros(shape=(m, m))
@@ -324,7 +337,7 @@ class QuadHMM(AneuploidyHMM):
         return np.log(A)
 
     def forward_algorithm(
-        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15
+        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16
     ):
         """Implement the forward algorithm for QuadHMM model."""
         A = self.create_transition_matrix(r=r)
@@ -339,7 +352,7 @@ class QuadHMM(AneuploidyHMM):
         )
         return alphas, scaler, states, karyotypes, loglik
 
-    def forward_backward(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15):
+    def forward_backward(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16):
         """Implement the forward-backward algorithm for the QuadHMM model."""
         A = self.create_transition_matrix(r=r)
         alphas, _, states, _, _ = forward_algo_sibs(
@@ -364,7 +377,7 @@ class QuadHMM(AneuploidyHMM):
         return gammas, states, None
 
     def viterbi_algorithm(
-        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-15
+        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16
     ):
         """Viterbi algorithm definition in a quad-context."""
         A = self.create_transition_matrix(r=r)
@@ -378,6 +391,33 @@ class QuadHMM(AneuploidyHMM):
             std_dev=std_dev,
         )
         return path, states, deltas, psi
+
+    def viterbi_path(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16):
+        """Obtain the restricted viterbi path for traceback."""
+        path, _, _, _ = self.viterbi_algorithm(
+            bafs, mat_haps, pat_haps, pi0=pi0, std_dev=std_dev, r=r
+        )
+        res_path = self.restrict_path(path)
+        return res_path
+
+    def map_path(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16):
+        """Obtain the Maximum A-Posteriori Path across restricted states."""
+        gammas, _, _ = self.forward_backward(
+            bafs, mat_haps, pat_haps, pi0=pi0, std_dev=std_dev, r=r
+        )
+        (
+            maternal_haploidentical,
+            paternal_haploidentical,
+            identical,
+            non_identical,
+        ) = self.restrict_states()
+        red_gammas = np.zeros(shape=(4, gammas.shape[1]))
+        red_gammas[0, :] = np.exp(gammas)[maternal_haploidentical, :].sum(axis=0)
+        red_gammas[1, :] = np.exp(gammas)[paternal_haploidentical, :].sum(axis=0)
+        red_gammas[2, :] = np.exp(gammas)[identical, :].sum(axis=0)
+        red_gammas[3, :] = np.exp(gammas)[non_identical, :].sum(axis=0)
+        red_gammas = np.log(red_gammas)
+        return np.argmax(red_gammas, axis=0)
 
     def restrict_states(self):
         """Break down states into the same categories as Roach et al for determining recombinations."""
@@ -464,29 +504,272 @@ class QuadHMM(AneuploidyHMM):
             m = 1
         return m
 
-    def isolate_recomb(self, path_xy, path_xz, window=100):
+    def isolate_recomb(self, path_xy, path_xzs, window=20):
         """Isolate key recombination events from a pair of refined viterbi paths.
 
-        NOTE: we will be comparing the viterbi path to the nearest recombinaton event
+        Args:
+        - path_xy: numpy array of path through specific focal pair of individuals
+        - path_xzs: list of numpy arrays of
+        - window: number of SNPs that the closest transition must be in (e.g. minimum resolution)
+
         """
-        assert path_xy.size == path_xz.size
-        transitions_01 = np.where(path_xy[:-1] != path_xy[1:])[0]
-        transitions_02 = np.where(path_xz[:-1] != path_xz[1:])[0]
-        mat_recomb = []
-        pat_recomb = []
-        for r in transitions_01:
-            # This is the targetted transition that we want to assign to maternal or paternal position.
-            i0, j0 = path_xy[r], path_xy[r + 1]
-            dists = np.sqrt((transitions_02 - r) ** 2)
-            if np.any(dists < window):
-                min_dist = np.min(dists)
-                r2 = transitions_02[np.argmin(dists)]
-                i1, j1 = path_xz[r2], path_xz[r2 + 1]
-                m = self.det_recomb_sex(i0, j0)
-                m2 = self.det_recomb_sex(i1, j1)
-                if m == 1 and (m2 == 1 or m2 == -1):
-                    pat_recomb.append((r, min_dist))
-                elif m == 0 and (m2 == 0 or m2 == -1):
-                    mat_recomb.append((r, min_dist))
+        mat_recomb = {}
+        pat_recomb = {}
+        for path_xz in path_xzs:
+            assert path_xy.size == path_xz.size
+            transitions_01 = np.where(path_xy[:-1] != path_xy[1:])[0]
+            transitions_02 = np.where(path_xz[:-1] != path_xz[1:])[0]
+            for r in transitions_01:
+                # This is the targetted transition that we want to assign to maternal or paternal position.
+                i0, j0 = path_xy[r], path_xy[r + 1]
+                dists = np.sqrt((transitions_02 - r) ** 2)
+                if np.any(dists < window):
+                    # This gets the closest matching one
+                    r2 = transitions_02[np.argmin(dists)]
+                    i1, j1 = path_xz[r2], path_xz[r2 + 1]
+                    m = self.det_recomb_sex(i0, j0)
+                    m2 = self.det_recomb_sex(i1, j1)
+                    if m == 0 and m2 == 0:
+                        if r not in mat_recomb:
+                            mat_recomb[r] = 1
+                        else:
+                            mat_recomb[r] = mat_recomb[r] + 1
+                    if m == 1 and m2 == 1:
+                        if r not in pat_recomb:
+                            pat_recomb[r] = 1
+                        else:
+                            pat_recomb[r] = pat_recomb[r] + 1
+
+        # NOTE: here we just get positions, and if they are supported by the majority rule ...
+        mat_recomb_lst = [k for k in mat_recomb if mat_recomb[k] > len(path_xzs) / 2]
+        pat_recomb_lst = [k for k in pat_recomb if pat_recomb[k] > len(path_xzs) / 2]
         # This returns the list of tuples on the recombination positions and minimum distances across the traces.
-        return mat_recomb, pat_recomb
+        return mat_recomb_lst, pat_recomb_lst, mat_recomb, pat_recomb
+
+
+class PhaseCorrect:
+    """Module for implementing Mendelian phase correction using BAF data."""
+
+    def __init__(self, mat_haps, pat_haps):
+        """Intialize the class for phase correction."""
+        assert mat_haps.shape[0] == pat_haps.shape[0]
+        assert mat_haps.shape[1] == pat_haps.shape[1]
+        assert np.all(np.isin(mat_haps, [0, 1]))
+        assert np.all(np.isin(mat_haps, [0, 1]))
+        self.mat_haps = mat_haps
+        self.pat_haps = pat_haps
+        self.mat_haps_true = None
+        self.pat_haps_true = None
+        self.mat_haps_fixed = None
+        self.pat_haps_fixed = None
+        self.embryo_bafs = None
+
+    def add_true_haps(self, true_mat_haps, true_pat_haps):
+        """Add in true haplotypes if available from a simulation."""
+        assert true_mat_haps.ndim == 2
+        assert true_pat_haps.ndim == 2
+        assert true_mat_haps.shape[0] == self.mat_haps.shape[0]
+        assert true_mat_haps.shape[1] == self.mat_haps.shape[1]
+        assert true_pat_haps.shape[0] == self.pat_haps.shape[0]
+        assert true_pat_haps.shape[1] == self.pat_haps.shape[1]
+        self.mat_haps_true = true_mat_haps
+        self.pat_haps_true = true_pat_haps
+
+    def add_baf(self, embryo_bafs=[]):
+        """Add in BAF estimates for each embryo."""
+        assert len(embryo_bafs) > 0
+        self.embryo_bafs = []
+        for baf in embryo_bafs:
+            assert baf.size == self.mat_haps.shape[1]
+            self.embryo_bafs.append(baf)
+
+    def estimate_switch_err_true(self, maternal=True, fixed=False):
+        """Estimate the switch error from true and inferred haplotypes.
+
+        The switch error is defined as consecutive heterozygotes that are
+        in the incorrect orientation.
+
+        Returns:
+            - `n_switches`: number of switches between consecutive heterozygotes
+            - `n_consecutive_hets`: number of consecutive heterozygotes
+            - `switch_err_rate`: number of switches per consecutive heterozygote
+            - `switch_idx`: snps where the variant is out of phase with its predecessor
+            - `het_idx`: locations/indexs of the heterozygotes
+            - `lods` :
+
+        """
+        assert self.mat_haps_true is not None
+        assert self.pat_haps_true is not None
+        if maternal:
+            true_haps = self.mat_haps_true
+            if fixed:
+                assert self.mat_haps_fixed is not None
+                inf_haps = self.mat_haps_fixed
+            else:
+                inf_haps = self.mat_haps
+        else:
+            true_haps = self.pat_haps_true
+            if fixed:
+                assert self.pat_haps_fixed is not None
+                inf_haps = self.pat_haps_fixed
+            else:
+                inf_haps = self.pat_haps
+        # NOTE: this is just between all consecutive hets, not
+        geno = true_haps.sum(axis=0)
+        het_idxs = np.where(geno == 1)[0]
+        n_switches = 0
+        n_consecutive_hets = 0
+        switch_idxs = []
+        for (i, j) in zip(het_idxs[:-1], het_idxs[1:]):
+            assert inf_haps[:, i].sum() == 1
+            assert inf_haps[:, j].sum() == 1
+            n_consecutive_hets += 1
+            true_hap = true_haps[:, [i, j]]
+            inf_hap = inf_haps[:, [i, j]]
+            # Check if the heterozygotes are oriented appropriately
+            if ~(
+                np.all(true_hap[0, :] == inf_hap[0, :])
+                or np.all(true_hap[0, :] == inf_hap[1, :])
+            ):
+                n_switches += 1
+                switch_idxs.append((i, j))
+        return (
+            n_switches,
+            n_consecutive_hets,
+            n_switches / n_consecutive_hets,
+            switch_idxs,
+            het_idxs,
+            None,
+        )
+
+    def lod_phase(self, haps1, haps2, baf, **kwargs):
+        """Compute the log-likelihood of being in the phase orientation.
+
+        NOTE: this marginalizes over all the possible phases
+        """
+        assert (haps1.shape[0] == 2) and (haps1.shape[1] == 2)
+        assert (haps2.shape[0] == 2) and (haps2.shape[1] == 2)
+        assert np.all(np.sum(haps1, axis=0) == 1)
+        phase_orientation, antiphase_orientation = lod_phase(
+            haps1, haps2, baf, **kwargs
+        )
+        return phase_orientation, antiphase_orientation
+
+    def phase_correct(self, maternal=True, lod_thresh=-1, **kwargs):
+        """Apply a phase correction for the specified parental haplotype.
+
+        NOTE: this uses the newer alternative model that marginalizes
+        over the phase for other haplotypes ...
+        """
+        assert self.embryo_bafs is not None
+        if maternal:
+            haps1 = self.mat_haps
+            haps2 = self.pat_haps
+        else:
+            haps1 = self.pat_haps
+            haps2 = self.mat_haps
+        assert (haps1.ndim == 2) and (haps2.ndim == 2)
+        assert (haps1.shape[0] == 2) and (haps2.shape[0] == 2)
+        assert haps1.shape[1] == haps2.shape[1]
+        geno1 = haps1.sum(axis=0)
+        idx_het1 = np.where(geno1 == 1)[0]
+        hap_idx1 = np.zeros(haps1.shape[1], dtype=np.uint16)
+        hap_idx2 = np.ones(haps1.shape[1], dtype=np.uint16)
+        for i, j in zip(idx_het1[:-1], idx_het1[1:]):
+            tot_phase = 0.0
+            tot_antiphase = 0.0
+            cur_hap = np.vstack(
+                [haps1[hap_idx1[i], [i, j]], haps1[hap_idx2[i], [i, j]]]
+            )
+            for baf in self.embryo_bafs:
+                # now we have to use the current phasing approach ...
+                cur_phase, cur_antiphase = self.lod_phase(
+                    haps1=cur_hap, haps2=haps2[:, [i, j]], baf=baf[[i, j]], **kwargs
+                )
+                tot_phase += cur_phase
+                tot_antiphase += cur_antiphase
+            # If we are below the log-odds threshold then we create a switch
+            if tot_phase - tot_antiphase < lod_thresh:
+                hap_idx1[j:] = 1 - hap_idx1[i]
+                hap_idx2[j:] = 1 - hap_idx2[i]
+        # Getting each index sequentially
+        fixed_hap1 = [haps1[x, i] for i, x in enumerate(hap_idx1)]
+        fixed_hap2 = [haps1[x, i] for i, x in enumerate(hap_idx2)]
+        fixed_haps = np.vstack([fixed_hap1, fixed_hap2])
+        assert fixed_haps.shape[1] == haps1.shape[1]
+        assert fixed_haps.shape[0] == 2
+        if maternal:
+            self.mat_haps_fixed = fixed_haps
+        else:
+            self.pat_haps_fixed = fixed_haps
+
+    def estimate_switch_err_empirical(
+        self, maternal=True, fixed=False, truth=False, lod_thresh=np.log(0.5), **kwargs
+    ):
+        """Use the empirical embryo BAF data to determine the switch-error rate."""
+        assert self.embryo_bafs is not None
+        # haps1 is the individual that we are evaluating the switch errors for
+        haps1 = None
+        haps2 = None
+        # Make sure that only one of fixed or truth are available
+        assert (not fixed) or (not truth)
+        if maternal:
+            if fixed:
+                assert self.mat_haps_fixed is not None
+                haps1 = self.mat_haps_fixed
+                haps2 = self.pat_haps
+            elif truth:
+                assert self.mat_haps_true is not None
+                haps1 = self.mat_haps_true
+                haps2 = self.pat_haps_true
+            else:
+                haps1 = self.mat_haps
+                haps2 = self.pat_haps
+        else:
+            if fixed:
+                assert self.pat_haps_fixed is not None
+                haps1 = self.pat_haps_fixed
+                haps2 = self.mat_haps
+            elif truth:
+                assert self.pat_haps_true is not None
+                haps1 = self.pat_haps_true
+                haps2 = self.mat_haps_true
+            else:
+                haps1 = self.pat_haps
+                haps2 = self.mat_haps
+        # The variables where we store the switch information
+        n_switches = 0
+        n_consecutive_hets = 0
+        switch_idxs = []
+        lods = []
+        # NOTE: here we restrict to "phase-informative" switches ...
+        geno1 = haps1[0, :] + haps1[1, :]
+        het_idx = np.where(geno1 == 1)[0]
+        for i, j in zip(het_idx[:-1], het_idx[1:]):
+            n_consecutive_hets += 1
+            tot_phase = 0.0
+            tot_antiphase = 0.0
+            for baf in self.embryo_bafs:
+                # now we have to use the current phasing approach ...
+                cur_phase, cur_antiphase = self.lod_phase(
+                    haps1=haps1[:, [i, j]],
+                    haps2=haps2[:, [i, j]],
+                    baf=baf[[i, j]],
+                    **kwargs,
+                )
+                tot_phase += cur_phase
+                tot_antiphase += cur_antiphase
+            lods.append(tot_phase - tot_antiphase)
+            # This is the ratio between the two probability densities
+            if tot_phase - tot_antiphase < lod_thresh:
+                n_switches += 1
+                switch_idxs.append((i, j))
+        lods = np.array(lods)
+        return (
+            n_switches,
+            n_consecutive_hets,
+            n_switches / n_consecutive_hets,
+            switch_idxs,
+            het_idx,
+            lods,
+        )
