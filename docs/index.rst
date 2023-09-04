@@ -6,6 +6,13 @@
 Welcome to karyohmm's documentation!
 ====================================
 
+Karyohmm is an HMM-based model for aneuploidy detection.
+
+Karyohmm implements methods for haplotype based analyses
+of copy number changes, crossover recombination, and phasing
+from array intensity data when parental genotypes are available.
+
+
 .. toctree::
    :maxdepth: 4
    :caption: Contents:
