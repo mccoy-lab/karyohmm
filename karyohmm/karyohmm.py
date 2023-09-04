@@ -467,7 +467,15 @@ class QuadHMM(AneuploidyHMM):
                 self.states.append((i, j))
 
     def create_transition_matrix(self, r=1e-16):
-        """Create the transition matrix here."""
+        """Create the transition matrix.
+
+        Arguments:
+            - r (`float`): rate parameter sibling copying model...
+
+        Returns:
+            - A (`np.array`): state x state matrix of log-transition rates
+
+        """
         m = len(self.states)
         A = np.zeros(shape=(m, m))
         A[:, :] = r / m
@@ -479,7 +487,24 @@ class QuadHMM(AneuploidyHMM):
     def forward_algorithm(
         self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16
     ):
-        """Implement the forward algorithm for QuadHMM model."""
+        """Implement the forward algorithm for QuadHMM model.
+
+        Arguments:
+            - bafs (`list`): list of two arrays of B-allele frequencies across m sites for two siblings
+            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
+            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
+            - pi0 (`float`): sparsity parameter for B-allele emission model
+            - std_dev (`float`): standard deviation for B-allele emission model
+            - r (`float`): inter-state transition rate
+
+        Returns:
+            - alphas (`np.array`): forward variable from hmm across 4 sibling states
+            - scaler (`np.array`): m-length array of scale parameters
+            - states (`list`): tuple representation of the 4 states
+            - karyotypes (`np.array`):  array of karyotypes (default: None)
+            - loglik (`float`): total log-likelihood of joint sibling B-allele frequencies
+
+        """
         A = self.create_transition_matrix(r=r)
         alphas, scaler, states, karyotypes, loglik = forward_algo_sibs(
             bafs,
@@ -493,7 +518,22 @@ class QuadHMM(AneuploidyHMM):
         return alphas, scaler, states, karyotypes, loglik
 
     def forward_backward(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16):
-        """Implement the forward-backward algorithm for the QuadHMM model."""
+        """Implement the forward-backward algorithm for the QuadHMM model.
+
+        Arguments:
+            - bafs (`list`): list of two arrays of B-allele frequencies across m sites for two siblings
+            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
+            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
+            - pi0 (`float`): sparsity parameter for B-allele emission model
+            - std_dev (`float`): standard deviation for B-allele emission model
+            - r (`float`): inter-state transition rate
+
+        Returns:
+            - gammas (`np.array`): log posterior density of being in each of 4 hidden states
+            - states (`list`): tuple representation of the states
+            - karyotypes (`np.array`): None
+
+        """
         A = self.create_transition_matrix(r=r)
         alphas, _, states, _, _ = forward_algo_sibs(
             bafs,
@@ -519,7 +559,23 @@ class QuadHMM(AneuploidyHMM):
     def viterbi_algorithm(
         self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16
     ):
-        """Viterbi algorithm definition in a quad-context."""
+        """Viterbi algorithm definition in a QuadHMM-context.
+
+        Arguments:
+            - bafs (`list`): list of two arrays of B-allele frequencies across m sites for two siblings
+            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
+            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
+            - pi0 (`float`): sparsity parameter for B-allele emission model
+            - std_dev (`float`): standard deviation for B-allele emission model
+            - r (`float`): inter-state transition rate
+
+        Returns:
+            - path (`np.array`): most likely copying path through k states in the model
+            - states (`list`): tuple representation of states
+            - deltas (`np.array`): delta variable (maximum path probability at step m)
+            - psi (`np.array`): storage vector for psi variable
+
+        """
         A = self.create_transition_matrix(r=r)
         path, states, deltas, psi = viterbi_algo_sibs(
             bafs,
@@ -532,57 +588,22 @@ class QuadHMM(AneuploidyHMM):
         )
         return path, states, deltas, psi
 
-    def viterbi_path(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16):
-        """Obtain the restricted viterbi path for traceback."""
-        path, _, _, _ = self.viterbi_algorithm(
-            bafs, mat_haps, pat_haps, pi0=pi0, std_dev=std_dev, r=r
-        )
-        res_path = self.restrict_path(path)
-        return res_path
-
-    def map_path(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16):
-        """Obtain the Maximum A-Posteriori Path across restricted states."""
-        gammas, _, _ = self.forward_backward(
-            bafs, mat_haps, pat_haps, pi0=pi0, std_dev=std_dev, r=r
-        )
-        (
-            maternal_haploidentical,
-            paternal_haploidentical,
-            identical,
-            non_identical,
-        ) = self.restrict_states()
-        red_gammas = np.zeros(shape=(4, gammas.shape[1]))
-        red_gammas[0, :] = np.exp(gammas)[maternal_haploidentical, :].sum(axis=0)
-        red_gammas[1, :] = np.exp(gammas)[paternal_haploidentical, :].sum(axis=0)
-        red_gammas[2, :] = np.exp(gammas)[identical, :].sum(axis=0)
-        red_gammas[3, :] = np.exp(gammas)[non_identical, :].sum(axis=0)
-        red_gammas = np.log(red_gammas)
-        return np.argmax(red_gammas, axis=0)
-
-    def restrict_states(self):
-        """Break down states into the same categories as Roach et al for determining recombinations."""
-        maternal_haploidentical = []
-        paternal_haploidentical = []
-        identical = []
-        non_identical = []
-        for i, (x, y) in enumerate(self.states):
-            if x == y:
-                identical.append(i)
-            elif (x[0] == y[0]) and (x[2] != y[2]):
-                maternal_haploidentical.append(i)
-            elif (x[2] == y[2]) and (x[0] != y[0]):
-                paternal_haploidentical.append(i)
-            else:
-                non_identical.append(i)
-        return (
-            maternal_haploidentical,
-            paternal_haploidentical,
-            identical,
-            non_identical,
-        )
-
     def restrict_path(self, path):
-        """Break down states into the same categories as Roach et al for determining recombinations."""
+        """Break down states into the same categories as Roach et al for determining recombinations.
+
+        The state definitions used for tracing sibling haplotypes are:
+            - (0) maternal-haploidentical
+            - (1) paternal-haploidentical
+            - (2) identical
+            - (3) non-identical
+
+        Arguments:
+            - path (`np.array`): a sequence of states output from the viterbi algorithm (16 possible states)
+
+        Returns:
+            - refined_path (`np.array`): a sequence of m states in 0,1,2,3 indicating states from Roach et al.
+
+        """
         maternal_haploidentical = []
         paternal_haploidentical = []
         identical = []
@@ -611,8 +632,101 @@ class QuadHMM(AneuploidyHMM):
                 raise ValueError("Incorrect path estimate!")
         return refined_path
 
+    def restrict_states(self):
+        """Break down states into the same categories as Roach et al for determining recombinations.
+
+        Returns:
+            - maternal_haploidentical (`list`): indexes of maternally haploidentical states
+            - paternal_haploidentical (`list`): indexes of paternally haploidentical states
+            - identical (`list`): indexes of identical states (siblings share same haplotypes)
+            - non-identical (`list`): indexes of non-identical states
+
+        """
+        maternal_haploidentical = []
+        paternal_haploidentical = []
+        identical = []
+        non_identical = []
+        for i, (x, y) in enumerate(self.states):
+            if x == y:
+                identical.append(i)
+            elif (x[0] == y[0]) and (x[2] != y[2]):
+                maternal_haploidentical.append(i)
+            elif (x[2] == y[2]) and (x[0] != y[0]):
+                paternal_haploidentical.append(i)
+            else:
+                non_identical.append(i)
+        return (
+            maternal_haploidentical,
+            paternal_haploidentical,
+            identical,
+            non_identical,
+        )
+
+    def viterbi_path(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16):
+        """Obtain the restricted Viterbi path for traceback.
+
+        Arguments:
+            - bafs (`list`): list of two arrays of B-allele frequencies across m sites for two siblings
+            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
+            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
+            - pi0 (`float`): sparsity parameter for B-allele emission model
+            - std_dev (`float`): standard deviation for B-allele emission model
+            - r (`float`): inter-state transition rate
+
+        Returns:
+            - res_path (`np.array`): most likely copying path through 4 states in from Roach et al.
+
+        """
+        path, _, _, _ = self.viterbi_algorithm(
+            bafs, mat_haps, pat_haps, pi0=pi0, std_dev=std_dev, r=r
+        )
+        res_path = self.restrict_path(path)
+        return res_path
+
+    def map_path(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16):
+        """Obtain the Maximum A-Posteriori Path across restricted states.
+
+        Arguments:
+            - bafs (`list`): list of two arrays of B-allele frequencies across m sites for two siblings
+            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
+            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
+            - pi0 (`float`): sparsity parameter for B-allele emission model
+            - std_dev (`float`): standard deviation for B-allele emission model
+            - r (`float`): inter-state transition rate
+
+        Returns:
+            - map_path (`np.array`): max-a-posteriori copying path through 4 sibling copying states
+
+        """
+        gammas, _, _ = self.forward_backward(
+            bafs, mat_haps, pat_haps, pi0=pi0, std_dev=std_dev, r=r
+        )
+        (
+            maternal_haploidentical,
+            paternal_haploidentical,
+            identical,
+            non_identical,
+        ) = self.restrict_states()
+        red_gammas = np.zeros(shape=(4, gammas.shape[1]))
+        red_gammas[0, :] = np.exp(gammas)[maternal_haploidentical, :].sum(axis=0)
+        red_gammas[1, :] = np.exp(gammas)[paternal_haploidentical, :].sum(axis=0)
+        red_gammas[2, :] = np.exp(gammas)[identical, :].sum(axis=0)
+        red_gammas[3, :] = np.exp(gammas)[non_identical, :].sum(axis=0)
+        red_gammas = np.log(red_gammas)
+        map_path = np.argmax(red_gammas, axis=0)
+        return map_path
+
     def det_recomb_sex(self, i, j):
-        """Determine the parental origin of the recombination event."""
+        """Determine the parental origin of the recombination event.
+
+        Arguments:
+            - i (`int`): state index for previous state
+            - j (`int`): state index for current state
+
+        Returns:
+            - m (`int`): sex of haplotype on which transition occurred (0: maternal, 1: paternal)
+
+        """
         assert i != j
         m = -1
         if i == 0 and j == 1:
@@ -647,10 +761,16 @@ class QuadHMM(AneuploidyHMM):
     def isolate_recomb(self, path_xy, path_xzs, window=20):
         """Isolate key recombination events from a pair of refined viterbi paths.
 
-        Args:
-        - path_xy: numpy array of path through specific focal pair of individuals
-        - path_xzs: list of numpy arrays of
-        - window: number of SNPs that the closest transition must be in (e.g. minimum resolution)
+        Arguments:
+            - path_xy (`np.array`): numpy array of path for focal pair of siblings
+            - path_xzs (`list`): list of sibling paths
+            - window: number of SNPs that the closest transition must be in (e.g. minimum resolution)
+
+        Returns:
+            - mat_recomb_lst (`list`): list of maternal recombination snp indexes
+            - pat_recomb_lst (`list`): list of paternal recombination snp indexes
+            - mat_recomb (`dict`): dictionary of snp-index x sibling counts for maternal recombinations
+            - pat_recomb (`dict`): dictionary of snp-index x sibling counts for paternal recombinations
 
         """
         mat_recomb = {}
