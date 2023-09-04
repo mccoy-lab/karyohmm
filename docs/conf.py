@@ -7,8 +7,8 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'karyohmm'
-copyright = '2023, Author'
-author = 'Author'
+copyright = '2023, Arjun Biddanda'
+author = 'Arjun Biddanda'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -17,7 +17,6 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.viewcode',
     'sphinx.ext.todo',
-    'sphinx_autodoc_typehints'
 ]
 
 templates_path = ['_templates']

@@ -759,7 +759,7 @@ class QuadHMM(AneuploidyHMM):
         return m
 
     def isolate_recomb(self, path_xy, path_xzs, window=20):
-        """Isolate key recombination events from a pair of refined viterbi paths.
+        """Isolate key recombination events from a pair of refined paths.
 
         Arguments:
             - path_xy (`np.array`): numpy array of path for focal pair of siblings
@@ -810,13 +810,21 @@ class QuadHMM(AneuploidyHMM):
 class PhaseCorrect:
     """Module for implementing Mendelian phase correction using BAF data.
 
-    Implements the key methods
-
+    Implements the key methods for phasing parental haplotypes using Mendelian phasing via a LOD-score
 
     """
 
     def __init__(self, mat_haps, pat_haps):
-        """Intialize the class for phase correction."""
+        """Intialize the class for phase correction.
+
+        Arguments:
+            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
+            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
+
+        Returns:
+            - PhaseCorrect Object
+
+        """
         assert mat_haps.shape[0] == pat_haps.shape[0]
         assert mat_haps.shape[1] == pat_haps.shape[1]
         assert np.all(np.isin(mat_haps, [0, 1]))
@@ -830,7 +838,13 @@ class PhaseCorrect:
         self.embryo_bafs = None
 
     def add_true_haps(self, true_mat_haps, true_pat_haps):
-        """Add in true haplotypes if available from a simulation."""
+        """Add in true haplotypes if available from a simulation.
+
+        Arguments:
+            - true_mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
+            - true_pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
+
+        """
         assert true_mat_haps.ndim == 2
         assert true_pat_haps.ndim == 2
         assert true_mat_haps.shape[0] == self.mat_haps.shape[0]
@@ -841,17 +855,33 @@ class PhaseCorrect:
         self.pat_haps_true = true_pat_haps
 
     def add_baf(self, embryo_bafs=[]):
-        """Add in BAF estimates for each embryo."""
+        """Add in BAF estimates for each embryo.
+
+        Arguments:
+            - embryo_bafs (`list`): a list of embryo BAF from the same parental individuals
+
+        """
         assert len(embryo_bafs) > 0
         self.embryo_bafs = []
         for baf in embryo_bafs:
             assert baf.size == self.mat_haps.shape[1]
+            assert baf.size == self.pat_haps.shape[1]
             self.embryo_bafs.append(baf)
 
     def lod_phase(self, haps1, haps2, baf, **kwargs):
         """Compute the log-likelihood of being in the phase orientation.
 
         NOTE: this marginalizes over all the possible phases
+
+        Arguments:
+            - haps1 (`np.array`): focal haplotypes to be mendelian-phased
+            - haps2 (`np.array`): ancillary haplotypes from other parent (to be marginalized over)
+            - baf (`list`): list of BAF values for embryos
+
+        Returns:
+            - phase_orientation (`float`): log-density of haps1 being in the correct phase
+            - antiphase_orientation (`float`): log-density of haps1 being in the opposite phase
+
         """
         assert (haps1.shape[0] == 2) and (haps1.shape[1] == 2)
         assert (haps2.shape[0] == 2) and (haps2.shape[1] == 2)
@@ -861,8 +891,14 @@ class PhaseCorrect:
         )
         return phase_orientation, antiphase_orientation
 
-    def phase_correct(self, maternal=True, lod_thresh=-1, **kwargs):
-        """Apply a phase correction for the specified parental haplotype."""
+    def phase_correct(self, maternal=True, lod_thresh=-1.0, **kwargs):
+        """Apply a phase correction for the specified parental haplotype.
+
+        Arguments:
+            - maternal (`bool`): apply phase correction on the maternal haplotypes
+            - lod_thresh (`float`): Log-odds threshold on the phase/antiphase ratio between SNPs to flip snps
+
+        """
         assert self.embryo_bafs is not None
         if maternal:
             haps1 = self.mat_haps
@@ -912,16 +948,16 @@ class PhaseCorrect:
         in the incorrect orientation.
 
         Arguments:
-            maternal (`bool`): apply the function to the maternal chromosome (default: True)
-            fixed (`bool`): apply the function to the fixed chromosome (default: False)
+            - maternal (`bool`): apply the function to the maternal chromosome (default: True)
+            - fixed (`bool`): apply the function to the fixed chromosome (default: False)
 
         Returns:
-            `n_switches`: number of switches between consecutive heterozygotes
-            `n_consecutive_hets`: number of consecutive heterozygotes
-            `switch_err_rate`: number of switches per consecutive heterozygote
-            `switch_idx`: snps where the variant is out of phase with its predecessor
-            `het_idx`: locations/indexs of the heterozygotes
-            `lods` : lod-scores for the estimated switches (default: None)
+            - n_switches (`int`): number of switches between consecutive heterozygotes
+            - n_consecutive_hets (`int`): number of consecutive heterozygotes
+            - switch_err_rate (`float`): number of switches per consecutive heterozygote
+            - switch_idx (`np.array`): snps where the variant is out of phase with its predecessor
+            - het_idx (`np.array`): locations/indexs of the heterozygotes
+            - lods (`np.array`) : lod-scores for the estimated switches (default: None)
 
         """
         assert self.mat_haps_true is not None
@@ -969,9 +1005,25 @@ class PhaseCorrect:
         )
 
     def estimate_switch_err_empirical(
-        self, maternal=True, fixed=False, truth=False, lod_thresh=np.log(0.5), **kwargs
+        self, maternal=True, fixed=False, truth=False, lod_thresh=-1, **kwargs
     ):
-        """Use the empirical embryo BAF data to determine the switch-error rate."""
+        """Use the empirical embryo BAF data to determine the switch-error rate via LOD score for B-allele Frequency.
+
+        Arguments:
+            - maternal (`bool`): estimate switch-errors from the maternal haplotypes
+            - fixed (`bool`): estimate switch-errors from the fixed haplotypes
+            - truth (`bool`): use the true haplotypes if available
+            - lod_thresh (`float`): any log-density ratio below this value will be called as a switch
+
+        Returns:
+            - n_switches (`int`): number of switches between consecutive heterozygotes
+            - n_consecutive_hets (`int`): number of consecutive heterozygotes
+            - switch_err_rate (`float`): number of switches per consecutive heterozygote
+            - switch_idx (`np.array`): snps where the variant is out of phase with its predecessor
+            - het_idx (`np.array`): locations/indexs of the heterozygotes
+            - lods (`np.array`) : lod-scores for the estimated switches (default: None)
+
+        """
         assert self.embryo_bafs is not None
         # haps1 is the individual that we are evaluating the switch errors for
         haps1 = None
@@ -1038,6 +1090,3 @@ class PhaseCorrect:
             het_idx,
             lods,
         )
-
-
-# NOTE: should we implement the simulator class in here as well?
