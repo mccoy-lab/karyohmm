@@ -8,7 +8,8 @@ from hypothesis import strategies as st
 from karyohmm_utils import emission_baf, mat_dosage, pat_dosage
 from scipy.integrate import trapezoid
 from scipy.stats import truncnorm
-from utils import sim_joint_het
+
+from karyohmm.simulator import sim_joint_het
 
 
 @pytest.mark.parametrize(
