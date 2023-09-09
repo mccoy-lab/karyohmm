@@ -6,12 +6,13 @@
 Welcome to karyohmm's documentation!
 ====================================
 
-Karyohmm is an HMM-based model for aneuploidy detection.
+Karyohmm is an HMM-based model for aneuploidy detection in PGT-A datasets.
 
 Karyohmm implements methods for haplotype based analyses
 of copy number changes, crossover recombination, and phasing
 from array intensity data when parental genotypes are available.
 
+Implementation of read-based methods to support NGS-based PGT-A is a work in progress.
 
 .. toctree::
    :maxdepth: 4
