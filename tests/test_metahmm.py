@@ -71,6 +71,23 @@ def test_backward_algorithm(data):
     )
 
 
+def test_forward_vs_backward_loglik(data):
+    """Test that the log-likelihood from forward algorithm is equal to the backward."""
+    hmm = MetaHMM()
+
+    _, _, _, _, fwd_loglik = hmm.backward_algorithm(
+        bafs=data["baf_embryo"],
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+    )
+    _, _, _, _, bwd_loglik = hmm.backward_algorithm(
+        bafs=data["baf_embryo"],
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+    )
+    assert np.isclose(fwd_loglik, bwd_loglik)
+
+
 @pytest.mark.parametrize("data", [data_disomy, data_trisomy, data_monosomy])
 def test_fwd_bwd_algorithm(data):
     """Test the properties of the output from the fwd-bwd algorithm."""

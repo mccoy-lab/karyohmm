@@ -183,7 +183,7 @@ def backward_algo(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double st
     m = len(states)
     ks = [sum([s >= 0 for s in state]) for state in states]
     betas = np.zeros(shape=(m, n))
-    betas[:,-1] = 1.0
+    betas[:,-1] = 0.0
     scaler = np.zeros(n)
     scaler[-1] = logsumexp(betas[:, -1])
     betas[:, -1] -= scaler[-1]
@@ -204,7 +204,22 @@ def backward_algo(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double st
             betas[j,i] = logsumexp(A[j, :] + cur_emission + betas[:, (i + 1)])
         # Do the rescaling here ...
         scaler[i] = logsumexp(betas[:, i])
+        if i == 0:
+            for j in range(m):
+                m_ij = mat_dosage(mat_haps[:, i], states[j])
+                p_ij = pat_dosage(pat_haps[:, i], states[j])
+                # This is in log-space as well ...
+                cur_emission = emission_baf(
+                        bafs[i],
+                        m_ij,
+                        p_ij,
+                        pi0=pi0,
+                        std_dev=std_dev,
+                        k=ks[j],
+                    )
+                betas[j,i] += log(1/m) + cur_emission
         betas[:, i] -= scaler[i]
+
     return betas, scaler, states, None, sum(scaler)
 
 def viterbi_algo(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.25):
