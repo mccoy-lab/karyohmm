@@ -2,19 +2,19 @@
 
 import numpy as np
 import pytest
-from utils import sibling_euploid_sim
 
-from karyohmm import QuadHMM
+from karyohmm import PGTSim, QuadHMM
 
 # --- Generating test data for applications --- #
-data_disomy_sibs = sibling_euploid_sim(
+pgt_sim = PGTSim()
+data_disomy_sibs = pgt_sim.sibling_euploid_sim(
     m=4000, nsibs=3, std_dev=0.15, switch_err_rate=1e-2, seed=42
 )
-data_disomy_sibs_v2 = sibling_euploid_sim(
+data_disomy_sibs_v2 = pgt_sim.sibling_euploid_sim(
     m=4000, nsibs=3, std_dev=0.2, switch_err_rate=1e-2, seed=24
 )
 
-data_disomy_sibs_v3 = sibling_euploid_sim(
+data_disomy_sibs_v3 = pgt_sim.sibling_euploid_sim(
     m=8000, nsibs=3, std_dev=0.25, switch_err_rate=2e-2, seed=18
 )
 

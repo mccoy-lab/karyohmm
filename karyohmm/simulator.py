@@ -379,7 +379,7 @@ class PGTSim(PGTSimBase):
         switch_err_rate=1e-2,
         seed=42,
     ):
-        """Simulate euploid embryos that are siblings."""
+        """Simulate euploid sibling embryos."""
         assert ploidy == 2
         assert m > 0
         assert seed > 0

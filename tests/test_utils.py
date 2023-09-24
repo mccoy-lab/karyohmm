@@ -9,7 +9,7 @@ from karyohmm_utils import emission_baf, mat_dosage, pat_dosage
 from scipy.integrate import trapezoid
 from scipy.stats import truncnorm
 
-from karyohmm.simulator import sim_joint_het
+from karyohmm import PGTSim
 
 
 @pytest.mark.parametrize(
@@ -149,7 +149,7 @@ def test_emission_overall(baf, m, p, k, sigma):
 )
 def test_sim_joint_het(switch, pi0, sigma, nsibs):
     """Test the simulation of the joint heterozygotes."""
-    true_haps1, true_haps2, haps1, haps2, bafs, genos = sim_joint_het(
+    true_haps1, true_haps2, haps1, haps2, bafs, genos = PGTSim().sim_joint_het(
         switch=switch, mix_prop=pi0, std_dev=sigma, nsibs=nsibs
     )
     assert true_haps1.ndim == 2

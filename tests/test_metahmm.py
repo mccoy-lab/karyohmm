@@ -1,15 +1,15 @@
 """Test suite for karyoHMM MetaHMM."""
 import numpy as np
 import pytest
-from utils import full_ploidy_sim
 
-from karyohmm import MetaHMM
+from karyohmm import MetaHMM, PGTSim
 
 # --- Generating test data for applications --- #
-data_disomy = full_ploidy_sim(m=2000, seed=42)
-data_trisomy = full_ploidy_sim(m=2000, ploidy=3, mat_skew=0, seed=42)
-data_monosomy = full_ploidy_sim(m=2000, ploidy=1, mat_skew=0, seed=42)
-data_nullisomy = full_ploidy_sim(m=2000, ploidy=0, mat_skew=0, seed=42)
+pgt_sim = PGTSim()
+data_disomy = pgt_sim.full_ploidy_sim(m=2000, seed=42)
+data_trisomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=3, mat_skew=0, seed=42)
+data_monosomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=1, mat_skew=0, seed=42)
+data_nullisomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=0, mat_skew=0, seed=42)
 
 
 def test_data_integrity(data=data_disomy):
@@ -71,11 +71,12 @@ def test_backward_algorithm(data):
     )
 
 
+@pytest.mark.parametrize("data", [data_disomy])
 def test_forward_vs_backward_loglik(data):
     """Test that the log-likelihood from forward algorithm is equal to the backward."""
     hmm = MetaHMM()
 
-    _, _, _, _, fwd_loglik = hmm.backward_algorithm(
+    _, _, _, _, fwd_loglik = hmm.forward_algorithm(
         bafs=data["baf_embryo"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
