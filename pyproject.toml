@@ -8,4 +8,4 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "karyohmm"
-version = "0.1.7b"
+version = "0.1.8"
