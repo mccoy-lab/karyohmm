@@ -8,3 +8,5 @@ build/
 *.coverage*
 .hypothesis/
 htmlcov/
+docs/_static/
+docs/_templates/

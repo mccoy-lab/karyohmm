@@ -4,19 +4,19 @@ import numpy as np
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from utils import sibling_euploid_sim, sim_joint_het
 
-from karyohmm import PhaseCorrect
+from karyohmm import PGTSim, PhaseCorrect
 
-data_disomy_sibs_null = sibling_euploid_sim(
+pgt_sim = PGTSim()
+data_disomy_sibs_null = pgt_sim.sibling_euploid_sim(
     m=4000, nsibs=3, std_dev=0.1, mix_prop=0.6, switch_err_rate=0.0, seed=42
 )
 
-data_disomy_sibs_test_1percent = sibling_euploid_sim(
+data_disomy_sibs_test_1percent = pgt_sim.sibling_euploid_sim(
     m=4000, nsibs=3, std_dev=0.1, mix_prop=0.6, switch_err_rate=1e-2, seed=42
 )
 
-data_disomy_sibs_test_3percent = sibling_euploid_sim(
+data_disomy_sibs_test_3percent = pgt_sim.sibling_euploid_sim(
     m=4000, nsibs=3, std_dev=0.1, mix_prop=0.6, switch_err_rate=3e-2, seed=42
 )
 
@@ -127,7 +127,7 @@ def test_phase_correct_simple(switch, pi0, sigma, nsibs, seed):
     NOTE: We have truncated this more to avoid excess noise that incurs some false-inferences.
     """
     # 1. Simulate a switched setup ...
-    true_haps1, true_haps2, haps1, haps2, bafs, _ = sim_joint_het(
+    true_haps1, true_haps2, haps1, haps2, bafs, _ = pgt_sim.sim_joint_het(
         switch=switch,
         mix_prop=pi0,
         meta_seed=seed,
