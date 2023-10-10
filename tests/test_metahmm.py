@@ -86,7 +86,7 @@ def test_forward_vs_backward_loglik(data):
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
     )
-    assert np.isclose(fwd_loglik, bwd_loglik, atol=1e-3)
+    assert np.isclose(fwd_loglik, bwd_loglik, atol=1e-6)
 
 
 @pytest.mark.parametrize("data", [data_disomy, data_trisomy, data_monosomy])

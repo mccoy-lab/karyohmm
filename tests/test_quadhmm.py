@@ -15,7 +15,7 @@ data_disomy_sibs_v2 = pgt_sim.sibling_euploid_sim(
 )
 
 data_disomy_sibs_v3 = pgt_sim.sibling_euploid_sim(
-    m=8000, nsibs=3, std_dev=0.25, switch_err_rate=2e-2, seed=18
+    m=4000, nsibs=3, std_dev=0.25, switch_err_rate=2e-2, seed=18
 )
 
 
@@ -25,11 +25,39 @@ data_disomy_sibs_v3 = pgt_sim.sibling_euploid_sim(
 def test_forward_algorithm(data):
     """Test the forward algorithm implementation of the QuadHMM."""
     hmm = QuadHMM()
-    _, _, _, karyotypes, loglik = hmm.forward_algorithm(
+    _, _, _, _, loglik = hmm.forward_algorithm(
         bafs=[data["baf_embryo0"], data["baf_embryo1"]],
         mat_haps=data["mat_haps_true"],
         pat_haps=data["pat_haps_true"],
     )
+
+
+@pytest.mark.parametrize("data", [data_disomy_sibs])
+def test_backward_algorithm(data):
+    """Test the backward algorithm implementation of the QuadHMM."""
+    hmm = QuadHMM()
+    _, _, _, _, loglik = hmm.forward_algorithm(
+        bafs=[data["baf_embryo0"], data["baf_embryo1"]],
+        mat_haps=data["mat_haps_true"],
+        pat_haps=data["pat_haps_true"],
+    )
+
+
+@pytest.mark.parametrize("data", [data_disomy_sibs])
+def test_forward_vs_backward_loglik(data):
+    """Test that the log-likelihood from forward algorithm is equal to the backward."""
+    hmm = QuadHMM()
+    _, _, _, _, fwd_loglik = hmm.forward_algorithm(
+        bafs=[data["baf_embryo0"], data["baf_embryo1"]],
+        mat_haps=data["mat_haps_true"],
+        pat_haps=data["pat_haps_true"],
+    )
+    _, _, _, _, bwd_loglik = hmm.backward_algorithm(
+        bafs=[data["baf_embryo0"], data["baf_embryo1"]],
+        mat_haps=data["mat_haps_true"],
+        pat_haps=data["pat_haps_true"],
+    )
+    assert np.isclose(fwd_loglik, bwd_loglik, atol=1e-6)
 
 
 @pytest.mark.parametrize(

@@ -485,7 +485,7 @@ class QuadHMM(AneuploidyHMM):
         return np.log(A)
 
     def forward_algorithm(
-        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16
+        self, bafs, mat_haps, pat_haps, pi0=0.7, std_dev=0.15, r=1e-16
     ):
         """Implement the forward algorithm for QuadHMM model.
 
@@ -517,7 +517,42 @@ class QuadHMM(AneuploidyHMM):
         )
         return alphas, scaler, states, karyotypes, loglik
 
-    def forward_backward(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16):
+    def backward_algorithm(
+        self, bafs, mat_haps, pat_haps, pi0=0.7, std_dev=0.15, r=1e-16
+    ):
+        """Implement the forward algorithm for QuadHMM model.
+
+        Arguments:
+            - bafs (`list`): list of two arrays of B-allele frequencies across m sites for two siblings
+            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
+            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
+            - pi0 (`float`): sparsity parameter for B-allele emission model
+            - std_dev (`float`): standard deviation for B-allele emission model
+            - r (`float`): inter-state transition rate
+
+        Returns:
+            - alphas (`np.array`): forward variable from hmm across 4 sibling states
+            - scaler (`np.array`): m-length array of scale parameters
+            - states (`list`): tuple representation of the 4 states
+            - karyotypes (`np.array`):  array of karyotypes (default: None)
+            - loglik (`float`): total log-likelihood of joint sibling B-allele frequencies
+
+        """
+        A = self.create_transition_matrix(r=r)
+        alphas, scaler, states, karyotypes, loglik = backward_algo_sibs(
+            bafs,
+            mat_haps,
+            pat_haps,
+            states=self.states,
+            A=A,
+            pi0=pi0,
+            std_dev=std_dev,
+        )
+        return alphas, scaler, states, karyotypes, loglik
+
+    def forward_backward(
+        self, bafs, mat_haps, pat_haps, pi0=0.7, std_dev=0.15, r=1e-16
+    ):
         """Implement the forward-backward algorithm for the QuadHMM model.
 
         Arguments:
@@ -557,7 +592,7 @@ class QuadHMM(AneuploidyHMM):
         return gammas, states, None
 
     def viterbi_algorithm(
-        self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16
+        self, bafs, mat_haps, pat_haps, pi0=0.7, std_dev=0.15, r=1e-16
     ):
         """Viterbi algorithm definition in a QuadHMM-context.
 
@@ -662,7 +697,7 @@ class QuadHMM(AneuploidyHMM):
             non_identical,
         )
 
-    def viterbi_path(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16):
+    def viterbi_path(self, bafs, mat_haps, pat_haps, pi0=0.7, std_dev=0.15, r=1e-16):
         """Obtain the restricted Viterbi path for traceback.
 
         Arguments:
@@ -683,7 +718,7 @@ class QuadHMM(AneuploidyHMM):
         res_path = self.restrict_path(path)
         return res_path
 
-    def map_path(self, bafs, mat_haps, pat_haps, pi0=0.2, std_dev=0.1, r=1e-16):
+    def map_path(self, bafs, mat_haps, pat_haps, pi0=0.7, std_dev=0.15, r=1e-16):
         """Obtain the Maximum A-Posteriori Path across restricted states.
 
         Arguments:
