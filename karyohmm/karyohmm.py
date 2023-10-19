@@ -57,7 +57,16 @@ class AneuploidyHMM:
             t.append("0")
         return "".join(t)
 
-    def est_sigma_pi0(self, bafs, mat_haps, pat_haps, algo="Nelder-Mead", **kwargs):
+    def est_sigma_pi0(
+        self,
+        bafs,
+        mat_haps,
+        pat_haps,
+        algo="Nelder-Mead",
+        pi0_bounds=(0.01, 0.99),
+        sigma_bounds=(1e-2, 1.0),
+        **kwargs,
+    ):
         """Estimate sigma and pi0 under the B-Allele Frequency model using optimization of forward algorithm likelihood.
 
         Arguments:
@@ -72,6 +81,14 @@ class AneuploidyHMM:
 
         """
         assert algo in ["Nelder-Mead", "L-BFGS-B", "Powell"]
+        assert (len(pi0_bounds) == 2) and (len(sigma_bounds) == 2)
+        assert (pi0_bounds[0] > 0) and (pi0_bounds[1] > 0)
+        assert (pi0_bounds[0] < 1) and (pi0_bounds[1] < 1)
+        assert pi0_bounds[0] < pi0_bounds[1]
+        assert (sigma_bounds[0] > 0) and (sigma_bounds[1] > 0)
+        assert sigma_bounds[0] < sigma_bounds[1]
+        mid_pi0 = np.mean(pi0_bounds)
+        mid_sigma = np.mean(sigma_bounds)
         opt_res = minimize(
             lambda x: -self.forward_algorithm(
                 bafs=bafs,
@@ -81,9 +98,9 @@ class AneuploidyHMM:
                 std_dev=x[1],
                 **kwargs,
             )[4],
-            x0=[0.7, 0.2],
+            x0=[mid_pi0, mid_sigma],
             method=algo,
-            bounds=[(0.1, 0.99), (0.05, 0.4)],
+            bounds=[pi0_bounds, sigma_bounds],
             tol=1e-4,
             options={"disp": True, "ftol": 1e-4, "xtol": 1e-4},
         )

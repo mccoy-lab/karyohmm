@@ -49,7 +49,7 @@ def test_pat_dosage(hap, state, expected):
     ),
     sigma=st.floats(
         min_value=1e-2,
-        max_value=0.5,
+        max_value=1.0,
         exclude_min=True,
         exclude_max=True,
         allow_nan=False,
@@ -72,7 +72,7 @@ def test_emission_disomy(pi0, sigma, m, p, k):
     ),
     sigma=st.floats(
         min_value=1e-2,
-        max_value=0.5,
+        max_value=1.0,
         exclude_min=True,
         exclude_max=True,
         allow_nan=False,
@@ -93,7 +93,7 @@ def test_emission_monosomy(pi0, sigma, m):
     ),
     sigma=st.floats(
         min_value=1e-2,
-        max_value=0.5,
+        max_value=1.0,
         exclude_min=True,
         exclude_max=True,
         allow_nan=False,
@@ -115,7 +115,7 @@ def test_emission_trisomy(pi0, sigma, m, p):
     p=st.integers(min_value=0, max_value=1),
     sigma=st.floats(
         min_value=1e-2,
-        max_value=0.5,
+        max_value=1.0,
         exclude_min=True,
         exclude_max=True,
         allow_nan=False,
