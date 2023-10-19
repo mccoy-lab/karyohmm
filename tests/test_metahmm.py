@@ -120,6 +120,43 @@ def test_est_pi0_sigma(data):
 
 
 @pytest.mark.parametrize(
+    "data,pi0_bounds",
+    [
+        (data_disomy, (0, 1)),
+        (data_disomy, 0.1),
+        (data_disomy, (0.1, 0.5, 0.9)),
+        (data_disomy, (0.99, 0.01)),
+    ],
+)
+def test_est_pi0_sigma_bad_pi0_bounds(data, pi0_bounds):
+    """Test the pi0 bounds as input to the MLE estimation."""
+    with pytest.raises(Exception):
+        hmm = MetaHMM()
+        pi0_est, sigma_est = hmm.est_sigma_pi0(
+            bafs=data["baf_embryo"],
+            mat_haps=data["mat_haps"],
+            pat_haps=data["pat_haps"],
+            pi0_bounds=pi0_bounds,
+        )
+
+
+@pytest.mark.parametrize(
+    "data,sigma_bounds",
+    [(data_disomy, (0, 1)), (data_disomy, 0.1), (data_disomy, (0.99, 0.01))],
+)
+def test_est_pi0_sigma_bad_sigma_bounds(data, sigma_bounds):
+    """Test the sigma bounds as input to the MLE estimation."""
+    with pytest.raises(Exception):
+        hmm = MetaHMM()
+        pi0_est, sigma_est = hmm.est_sigma_pi0(
+            bafs=data["baf_embryo"],
+            mat_haps=data["mat_haps"],
+            pat_haps=data["pat_haps"],
+            sigma_bounds=sigma_bounds,
+        )
+
+
+@pytest.mark.parametrize(
     "data,algo",
     [(data_disomy, "Powell"), (data_disomy, "L-BFGS-B"), (data_disomy, "Nelder-Mead")],
 )
