@@ -8,7 +8,8 @@ from hypothesis import strategies as st
 from karyohmm_utils import emission_baf, mat_dosage, pat_dosage
 from scipy.integrate import trapezoid
 from scipy.stats import truncnorm
-from utils import sim_joint_het
+
+from karyohmm import PGTSim
 
 
 @pytest.mark.parametrize(
@@ -48,7 +49,7 @@ def test_pat_dosage(hap, state, expected):
     ),
     sigma=st.floats(
         min_value=1e-2,
-        max_value=0.5,
+        max_value=1.0,
         exclude_min=True,
         exclude_max=True,
         allow_nan=False,
@@ -71,7 +72,7 @@ def test_emission_disomy(pi0, sigma, m, p, k):
     ),
     sigma=st.floats(
         min_value=1e-2,
-        max_value=0.5,
+        max_value=1.0,
         exclude_min=True,
         exclude_max=True,
         allow_nan=False,
@@ -92,7 +93,7 @@ def test_emission_monosomy(pi0, sigma, m):
     ),
     sigma=st.floats(
         min_value=1e-2,
-        max_value=0.5,
+        max_value=1.0,
         exclude_min=True,
         exclude_max=True,
         allow_nan=False,
@@ -114,7 +115,7 @@ def test_emission_trisomy(pi0, sigma, m, p):
     p=st.integers(min_value=0, max_value=1),
     sigma=st.floats(
         min_value=1e-2,
-        max_value=0.5,
+        max_value=1.0,
         exclude_min=True,
         exclude_max=True,
         allow_nan=False,
@@ -148,7 +149,7 @@ def test_emission_overall(baf, m, p, k, sigma):
 )
 def test_sim_joint_het(switch, pi0, sigma, nsibs):
     """Test the simulation of the joint heterozygotes."""
-    true_haps1, true_haps2, haps1, haps2, bafs, genos = sim_joint_het(
+    true_haps1, true_haps2, haps1, haps2, bafs, genos = PGTSim().sim_joint_het(
         switch=switch, mix_prop=pi0, std_dev=sigma, nsibs=nsibs
     )
     assert true_haps1.ndim == 2

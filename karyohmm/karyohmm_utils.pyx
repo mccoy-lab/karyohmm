@@ -105,7 +105,8 @@ cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double
     """Emission distribution function for B-allele frequency in the sample."""
     cdef double mu_i, x, x0, x1;
     if (m == -1) & (p == -1):
-        return 1.0
+        x = truncnorm_pdf(baf, 0.0, 1.0, mu=0.5, sigma=std_dev)
+        return x
     mu_i = (m + p) / k
     x = truncnorm_pdf(baf, 0.0, 1.0, mu=mu_i, sigma=std_dev)
     x0 = truncnorm_pdf(baf, 0.0, 1.0, mu=0.0, sigma=2e-3)
@@ -154,7 +155,20 @@ def forward_algo(bafs,  mat_haps, pat_haps, states, A, double pi0=0.2, double st
     m = len(states)
     ks = [sum([s >= 0 for s in state]) for state in states]
     alphas = np.zeros(shape=(m, n))
-    alphas[:, 0] = 1.0 / m
+    alphas[:, 0] = log(1.0 / m)
+    for j in range(m):
+        m_ij = mat_dosage(mat_haps[:, 0], states[j])
+        p_ij = pat_dosage(pat_haps[:, 0], states[j])
+        # This is in log-space ...
+        cur_emission = emission_baf(
+                bafs[0],
+                m_ij,
+                p_ij,
+                pi0=pi0,
+                std_dev=std_dev,
+                k=ks[j],
+            )
+        alphas[j,0] += cur_emission
     scaler = np.zeros(n)
     scaler[0] = logsumexp(alphas[:, 0])
     alphas[:, 0] -= scaler[0]
@@ -171,7 +185,7 @@ def forward_algo(bafs,  mat_haps, pat_haps, states, A, double pi0=0.2, double st
                     std_dev=std_dev,
                     k=ks[j],
                 )
-            alphas[j, i] = cur_emission + logsumexp(A[j, :] + alphas[:, i - 1])
+            alphas[j, i] = cur_emission + logsumexp(A[:, j] + alphas[:, (i - 1)])
         scaler[i] = logsumexp(alphas[:, i])
         alphas[:, i] -= scaler[i]
     return alphas, scaler, states, None, sum(scaler)
@@ -183,17 +197,18 @@ def backward_algo(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double st
     m = len(states)
     ks = [sum([s >= 0 for s in state]) for state in states]
     betas = np.zeros(shape=(m, n))
-    betas[:,-1] = 1.0
+    betas[:,-1] = log(1)
     scaler = np.zeros(n)
     scaler[-1] = logsumexp(betas[:, -1])
     betas[:, -1] -= scaler[-1]
     for i in range(n - 2, -1, -1):
         # Calculate the full set of emissions
+        cur_emissions = np.zeros(m)
         for j in range(m):
             m_ij = mat_dosage(mat_haps[:, i+1], states[j])
             p_ij = pat_dosage(pat_haps[:, i+1], states[j])
             # This is in log-space as well ...
-            cur_emission = emission_baf(
+            cur_emissions[j] = emission_baf(
                     bafs[i + 1],
                     m_ij,
                     p_ij,
@@ -201,7 +216,24 @@ def backward_algo(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double st
                     std_dev=std_dev,
                     k=ks[j],
                 )
-            betas[j,i] = logsumexp(A[j, :] + cur_emission + betas[:, (i + 1)])
+        for j in range(m):
+            # This should be the correct version here ...
+            betas[j,i] = logsumexp(A[:, j] + cur_emissions + betas[:, (i + 1)])
+        if i == 0:
+            for j in range(m):
+                m_ij = mat_dosage(mat_haps[:, i], states[j])
+                p_ij = pat_dosage(pat_haps[:, i], states[j])
+                # This is in log-space as well ...
+                cur_emission = emission_baf(
+                        bafs[i],
+                        m_ij,
+                        p_ij,
+                        pi0=pi0,
+                        std_dev=std_dev,
+                        k=ks[j],
+                    )
+                # Add in the initialization + first emission?
+                betas[j,i] += log(1/m) + cur_emission
         # Do the rescaling here ...
         scaler[i] = logsumexp(betas[:, i])
         betas[:, i] -= scaler[i]
@@ -246,7 +278,31 @@ def forward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
     n = bafs[0].size
     m = len(states)
     alphas = np.zeros(shape=(m, n))
-    alphas[:, 0] = 1.0 / m
+    alphas[:, 0] = log(1.0 / m)
+    for j in range(m):
+        # First sibling embryo
+        m_ij0 = mat_dosage(mat_haps[:, i], states[j][0])
+        p_ij0 = pat_dosage(pat_haps[:, i], states[j][0])
+        # Second sibling embryo
+        m_ij1 = mat_dosage(mat_haps[:, i], states[j][1])
+        p_ij1 = pat_dosage(pat_haps[:, i], states[j][1])
+        # This is in log-space ...
+        cur_emission = emission_baf(
+                bafs[0][0],
+                m_ij0,
+                p_ij0,
+                pi0=pi0,
+                std_dev=std_dev,
+                k=2,
+            ) + emission_baf(
+                bafs[1][0],
+                m_ij1,
+                p_ij1,
+                pi0=pi0,
+                std_dev=std_dev,
+                k=2,
+            )
+        alphas[j,0] += cur_emission
     scaler = np.zeros(n)
     scaler[0] = logsumexp(alphas[:, 0])
     alphas[:, 0] -= scaler[0]
@@ -274,7 +330,7 @@ def forward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
                     std_dev=std_dev,
                     k=2,
                 )
-            alphas[j, i] = cur_emission + logsumexp(A[j, :] + alphas[:, i - 1])
+            alphas[j, i] = cur_emission + logsumexp(A[:, j] + alphas[:, i - 1])
         scaler[i] = logsumexp(alphas[:, i])
         alphas[:, i] -= scaler[i]
     return alphas, scaler, states, None, sum(scaler)
@@ -288,18 +344,19 @@ def backward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doub
     n = bafs[0].size
     m = len(states)
     betas = np.zeros(shape=(m, n))
-    betas[:,-1] = 1.0
+    betas[:,-1] = log(1.0)
     scaler = np.zeros(n)
     scaler[-1] = logsumexp(betas[:, -1])
     betas[:, -1] -= scaler[-1]
     for i in range(n - 2, -1, -1):
+        cur_emissions = np.zeros(m)
         for j in range(m):
             m_ij0 = mat_dosage(mat_haps[:, i+1], states[j][0])
             p_ij0 = pat_dosage(pat_haps[:, i+1], states[j][0])
             m_ij1 = mat_dosage(mat_haps[:, i+1], states[j][1])
             p_ij1 = pat_dosage(pat_haps[:, i+1], states[j][1])
             # This is in log-space as well
-            cur_emission = emission_baf(
+            cur_emissions[j] = emission_baf(
                     bafs[0][i + 1],
                     m_ij0,
                     p_ij0,
@@ -314,7 +371,32 @@ def backward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doub
                     std_dev=std_dev,
                     k=2,
                 )
-            betas[j,i] = logsumexp(A[j, :] + cur_emission + betas[:, (i + 1)])
+        for j in range(m):
+            betas[j,i] = logsumexp(A[:, j] + cur_emissions + betas[:, (i + 1)])
+        if i == 0:
+            for j in range(m):
+                m_ij0 = mat_dosage(mat_haps[:, i], states[j][0])
+                p_ij0 = pat_dosage(pat_haps[:, i], states[j][0])
+                m_ij1 = mat_dosage(mat_haps[:, i], states[j][1])
+                p_ij1 = pat_dosage(pat_haps[:, i], states[j][1])
+                # This is in log-space as well
+                cur_emission  = emission_baf(
+                        bafs[0][i],
+                        m_ij0,
+                        p_ij0,
+                        pi0=pi0,
+                        std_dev=std_dev,
+                        k=2,
+                    ) + emission_baf(
+                        bafs[1][i],
+                        m_ij1,
+                        p_ij1,
+                        pi0=pi0,
+                        std_dev=std_dev,
+                        k=2,
+                    )
+                # Add in the initialization + first emission?
+                betas[j,i] += log(1/m) + cur_emission
         scaler[i] = logsumexp(betas[:, i])
         betas[:, i] -= scaler[i]
     return betas, scaler, states, None, sum(scaler)
