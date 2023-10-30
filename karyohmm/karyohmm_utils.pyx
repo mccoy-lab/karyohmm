@@ -270,7 +270,7 @@ def viterbi_algo(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std
     return path, states, deltas, psi
 
 
-def forward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.1):
+def forward_algo_sibs(bafs, mat_haps, pat_haps, states, A, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
     """Compute the forward algorithm for sibling embryo HMM."""
     cdef int i,j,n,m;
     assert len(bafs) == 2
@@ -291,15 +291,15 @@ def forward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
                 bafs[0][0],
                 m_ij0,
                 p_ij0,
-                pi0=pi0,
-                std_dev=std_dev,
+                pi0=pi0[0],
+                std_dev=std_dev[0],
                 k=2,
             ) + emission_baf(
                 bafs[1][0],
                 m_ij1,
                 p_ij1,
-                pi0=pi0,
-                std_dev=std_dev,
+                pi0=pi0[1],
+                std_dev=std_dev[1],
                 k=2,
             )
         alphas[j,0] += cur_emission
@@ -319,15 +319,15 @@ def forward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
                     bafs[0][i],
                     m_ij0,
                     p_ij0,
-                    pi0=pi0,
-                    std_dev=std_dev,
+                    pi0=pi0[0],
+                    std_dev=std_dev[0],
                     k=2,
                 ) + emission_baf(
                     bafs[1][i],
                     m_ij1,
                     p_ij1,
-                    pi0=pi0,
-                    std_dev=std_dev,
+                    pi0=pi0[1],
+                    std_dev=std_dev[1],
                     k=2,
                 )
             alphas[j, i] = cur_emission + logsumexp(A[:, j] + alphas[:, i - 1])
@@ -336,7 +336,7 @@ def forward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
     return alphas, scaler, states, None, sum(scaler)
 
 
-def backward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.1):
+def backward_algo_sibs(bafs, mat_haps, pat_haps, states, A, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
     """Compute the backward algorithm for the sibling embryo HMM."""
     cdef int i,j,n,m;
     assert len(bafs) == 2
@@ -360,15 +360,15 @@ def backward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doub
                     bafs[0][i + 1],
                     m_ij0,
                     p_ij0,
-                    pi0=pi0,
-                    std_dev=std_dev,
+                    pi0=pi0[0],
+                    std_dev=std_dev[0],
                     k=2,
                 ) + emission_baf(
                     bafs[1][i + 1],
                     m_ij1,
                     p_ij1,
-                    pi0=pi0,
-                    std_dev=std_dev,
+                    pi0=pi0[1],
+                    std_dev=std_dev[1],
                     k=2,
                 )
         for j in range(m):
@@ -384,15 +384,15 @@ def backward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doub
                         bafs[0][i],
                         m_ij0,
                         p_ij0,
-                        pi0=pi0,
-                        std_dev=std_dev,
+                        pi0=pi0[0],
+                        std_dev=std_dev[0],
                         k=2,
                     ) + emission_baf(
                         bafs[1][i],
                         m_ij1,
                         p_ij1,
-                        pi0=pi0,
-                        std_dev=std_dev,
+                        pi0=pi0[1],
+                        std_dev=std_dev[1],
                         k=2,
                     )
                 # Add in the initialization + first emission?
@@ -402,8 +402,7 @@ def backward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doub
     return betas, scaler, states, None, sum(scaler)
 
 
-
-def viterbi_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.1):
+def viterbi_algo_sibs(bafs, mat_haps, pat_haps, states, A, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
     """Viterbi algorithm and path tracing through sibling embryos."""
     cdef int i,j,n,m;
     assert len(bafs) == 2
@@ -424,15 +423,15 @@ def viterbi_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
                     bafs[0][i],
                     m_ij0,
                     p_ij0,
-                    pi0=pi0,
-                    std_dev=std_dev,
+                    pi0=pi0[0],
+                    std_dev=std_dev[0],
                     k=2,
                 ) + emission_baf(
                     bafs[1][i],
                     m_ij1,
                     p_ij1,
-                    pi0=pi0,
-                    std_dev=std_dev,
+                    pi0=pi0[1],
+                    std_dev=std_dev[1],
                     k=2,
                 )
             psi[j, i] = np.argmax(deltas[:, i - 1] + A[:, j]).astype(int)
