@@ -1,6 +1,6 @@
 # `karyohmm`
 
-Karyohmm is a method to estimate copy number of chromosomes from large-scale genotyping (specifically for PGT data) when conditioning on parental haplotypes. Specifically, we estimate the posterior probability of a specific karyotypic state (e.g. disomy vs maternal trisomy) in the `MetaHMM` framework.
+Karyohmm is a method to estimate copy number of chromosomes from large-scale genotyping intensity data (specifically for PGT data) when conditioning on parental haplotypes. Specifically, we estimate the posterior probability of a specific karyotypic state (e.g. disomy vs maternal trisomy) in the `MetaHMM` framework.
 
 ## Installation
 
@@ -12,8 +12,7 @@ cd karyohmm/
 pip install .
 ```
 
-While the majority of the interface uses `python`, many of the internal helper functions built using `cython` (see the `karyohmm_utils.pyx` file)
-
+While the majority of the interface uses `python`, many of the internal helper functions built using `Cython` (see the `karyohmm_utils.pyx` file)
 
 ## `MetaHMM`
 
@@ -36,11 +35,6 @@ The states in the `MetaHMM` model correspond to specific karyotypes for chromoso
 * `3m` - extra maternal chromosome (maternal trisomy)
 * `3p` - extra paternal chromosome (paternal trisomy)
 
-
-## `EuploidyHMM`
-
-The `EuploidyHMM` mode is a restricted version of the `karyohmm` framework in that it only supports a disomic model. The primary utility of this mode is to estimate crossover recombination events across multiple embryos. This is the less explored method in terms of its error properties and behavior and should not be used in the majority of inference cases.
-
 ## CLI
 
 The installation of `karyohmm` also includes a `karyohmm-cli` implementation that can be run directly from the command-line. This is work in progress, but currently implements the majority of the `MetaHMM` inference steps for a single data file. To see this on a simulated example of two embryos:
@@ -48,10 +42,11 @@ The installation of `karyohmm` also includes a `karyohmm-cli` implementation tha
 ```
 karyohmm-cli -i data/test_disomy_embryo.tsv -o data/out_disomy
 karyohmm-cli -i data/test_mat_trisomy_embryo.tsv -o data/out_mat_trisomy
+karyohmm-cli -i data/test_combined_embryo.tsv -o data/out_combined
 ```
 
-This will run the `MetaHMM` model for two simulated datasets and output a simple table of posterior probabilities of each potential karyotypic outcome. To see the full spectrum of options when running the model, you can run `karyohmm-cli --help`.
+This will run the `MetaHMM` model for two simulated datasets and output a simple table of posterior probabilities of each potential karyotypic outcome. To see the full display of options when running the model, you can run `karyohmm-cli --help`.
 
 ## Contact
 
-* @aabiddanda
+Please submit an issue or contact @aabiddanda
