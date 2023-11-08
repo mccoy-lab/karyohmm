@@ -180,80 +180,98 @@ def main(
         raise NotImplementedError(
             "Meta-HMM is currently the only supported model for karyohmm!"
         )
-    logging.info("Starting inference of karyohmm emission parameters.")
-    # Defining the numpy objects to test out.
-    mat_haps = np.vstack([data_df.mat_hap0.values, data_df.mat_hap1.values])
-    pat_haps = np.vstack([data_df.pat_hap0.values, data_df.pat_hap1.values])
-    bafs = data_df.baf.values
-    pi0_est, sigma_est = hmm.est_sigma_pi0(
-        bafs=bafs,
-        mat_haps=mat_haps,
-        pat_haps=pat_haps,
-        unphased=unphased,
-        r=recomb_rate,
-        a=aneuploidy_rate,
-        algo=algo,
-    )
-    logging.info("Finished inference of HMM-parameters!")
-    if viterbi:
-        logging.info("Running Viterbi algorithm path tracing.")
-        path, states, _, _ = hmm.viterbi(
+    # The unique chromosomes present in this dataset and the specific
+    uniq_chroms = np.unique(data_df["chrom"])
+    kar_dfs = []
+    for c in uniq_chroms:
+        logging.info(f"Starting inference of karyohmm emission parameters for {c}.")
+        cur_df = data_df[data_df["chrom"] == c].sort_values("pos")
+        # Defining the numpy objects to test out.
+        mat_haps = np.vstack([cur_df.mat_hap0.values, cur_df.mat_hap1.values])
+        pat_haps = np.vstack([cur_df.pat_hap0.values, cur_df.pat_hap1.values])
+        bafs = cur_df.baf.values
+        pi0_est, sigma_est = hmm.est_sigma_pi0(
             bafs=bafs,
             mat_haps=mat_haps,
             pat_haps=pat_haps,
-            pi0=pi0_est,
-            std_dev=sigma_est,
             unphased=unphased,
             r=recomb_rate,
             a=aneuploidy_rate,
+            algo=algo,
         )
-        state_lbls = [hmm.get_state_str(s) for s in states]
-        n, ns = path.size, len(states)
-        path_mat = np.zeros(shape=(n, ns), dtype=np.int32)
-        for i, p in enumerate(path):
-            path_mat[i, p] = 1
-        path_df = pd.DataFrame(path_mat)
-        path_df.columns = state_lbls
-        path_df["pi0_hat"] = pi0_est
-        path_df["sigma_hat"] = sigma_est
-        path_df["chrom"] = data_df.chrom.values
-        path_df["pos"] = data_df.pos.values
-        cols_to_move = ["chrom", "pos", "pi0_hat", "sigma_hat"]
-        path_df = path_df[
-            cols_to_move + [col for col in path_df.columns if col not in cols_to_move]
-        ]
-        out_fp = f"{out}.meta.viterbi.tsv.gz" if gzip else f"{out}.meta.viterbi.tsv"
-        path_df.to_csv(out_fp, sep="\t", index=None)
-        logging.info(f"Wrote Viterbi algorithm traceback to {out_fp}")
-    else:
-        gammas, states, karyotypes = hmm.forward_backward(
-            bafs=bafs,
-            mat_haps=mat_haps,
-            pat_haps=pat_haps,
-            pi0=pi0_est,
-            std_dev=sigma_est,
-            unphased=unphased,
-        )
-        kar_prob = hmm.posterior_karyotypes(gammas, karyotypes)
-        kar_prob["pi0_hat"] = pi0_est
-        kar_prob["sigma_hat"] = sigma_est
-        df = pd.DataFrame(kar_prob, index=[0])
+        logging.info(f"Finished inference of HMM-parameters for {c}!")
+        if viterbi:
+            logging.info("Running Viterbi algorithm path tracing.")
+            path, states, _, _ = hmm.viterbi(
+                bafs=bafs,
+                mat_haps=mat_haps,
+                pat_haps=pat_haps,
+                pi0=pi0_est,
+                std_dev=sigma_est,
+                unphased=unphased,
+                r=recomb_rate,
+                a=aneuploidy_rate,
+            )
+            state_lbls = [hmm.get_state_str(s) for s in states]
+            n, ns = path.size, len(states)
+            path_mat = np.zeros(shape=(n, ns), dtype=np.int32)
+            for i, p in enumerate(path):
+                path_mat[i, p] = 1
+            path_df = pd.DataFrame(path_mat)
+            path_df.columns = state_lbls
+            path_df["pi0_hat"] = pi0_est
+            path_df["sigma_hat"] = sigma_est
+            path_df["chrom"] = cur_df.chrom.values
+            path_df["pos"] = cur_df.pos.values
+            cols_to_move = ["chrom", "pos", "pi0_hat", "sigma_hat"]
+            path_df = path_df[
+                cols_to_move
+                + [col for col in path_df.columns if col not in cols_to_move]
+            ]
+            out_fp = (
+                f"{out}.{c}.meta.viterbi.tsv.gz"
+                if gzip
+                else f"{out}.{c}.meta.viterbi.tsv"
+            )
+            path_df.to_csv(out_fp, sep="\t", index=None)
+            logging.info(f"Wrote Viterbi algorithm traceback to {out_fp}")
+        else:
+            gammas, states, karyotypes = hmm.forward_backward(
+                bafs=bafs,
+                mat_haps=mat_haps,
+                pat_haps=pat_haps,
+                pi0=pi0_est,
+                std_dev=sigma_est,
+                unphased=unphased,
+            )
+            kar_prob = hmm.posterior_karyotypes(gammas, karyotypes)
+            kar_prob["pi0_hat"] = pi0_est
+            kar_prob["sigma_hat"] = sigma_est
+            kar_prob["chrom"] = c
+            df = pd.DataFrame(kar_prob, index=[0])
+            kar_dfs.append(df)
+            state_lbls = [hmm.get_state_str(s) for s in states]
+            gamma_df = pd.DataFrame(gammas.T)
+            gamma_df.columns = state_lbls
+            gamma_df["chrom"] = cur_df["chrom"].values
+            gamma_df["pos"] = cur_df["pos"].values
+            gamma_df["pi0_hat"] = pi0_est
+            gamma_df["sigma_hat"] = sigma_est
+            cols_to_move = ["chrom", "pos", "pi0_hat", "sigma_hat"]
+            gamma_df = gamma_df[
+                cols_to_move
+                + [col for col in gamma_df.columns if col not in cols_to_move]
+            ]
+            out_fp = (
+                f"{out}.{c}.meta.gammas.tsv.gz"
+                if gzip
+                else f"{out}.{c}.meta.gammas.tsv"
+            )
+            gamma_df.to_csv(out_fp, sep="\t", index=None)
+            logging.info(f"Wrote forward-backward algorithm results to {out_fp}")
+    if not viterbi:
         out_fp = f"{out}.meta.posterior.tsv.gz" if gzip else f"{out}.meta.posterior.tsv"
-        df.to_csv(out_fp, sep="\t", index=None)
-        logging.info(f"Wrote posterior karyotypes to {out_fp}")
-
-        state_lbls = [hmm.get_state_str(s) for s in states]
-        gamma_df = pd.DataFrame(gammas.T)
-        gamma_df.columns = state_lbls
-        gamma_df["chrom"] = data_df["chrom"].values
-        gamma_df["pos"] = data_df["pos"].values
-        gamma_df["pi0_hat"] = pi0_est
-        gamma_df["sigma_hat"] = sigma_est
-        cols_to_move = ["chrom", "pos", "pi0_hat", "sigma_hat"]
-        gamma_df = gamma_df[
-            cols_to_move + [col for col in gamma_df.columns if col not in cols_to_move]
-        ]
-        out_fp = f"{out}.meta.gammas.tsv.gz" if gzip else f"{out}.meta.gammas.tsv"
-        gamma_df.to_csv(out_fp, sep="\t", index=None)
-        logging.info(f"Wrote forward-backward algorithm results to {out_fp}")
+        kar_df = pd.concat(kar_dfs)
+        kar_df.to_csv(out_fp, sep="\t", index=None)
+        logging.info(f"Wrote full posterior karyotypes to {out_fp}")
     logging.info("Finished karyohmm analysis!")
