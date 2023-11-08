@@ -7,11 +7,24 @@ import pandas as pd
 
 from karyohmm import MetaHMM
 
+# Shared type requirements for underlying data
+karyo_dtypes = {
+    "chrom": str,
+    "pos": float,
+    "ref": str,
+    "alt": str,
+    "baf": float,
+    "mat_hap0": int,
+    "mat_hap1": int,
+    "pat_hap0": int,
+    "pat_hap1": int,
+}
+
 
 def read_data_np(input_fp):
     """Read data from an .npy or npz file and reformat for karyohmm."""
-    data = np.load(input_fp)
-    for x in ["chrom", "pos", "ref", "alt", "baf", "lrr", "mat_haps", "pat_haps"]:
+    data = np.load(input_fp, allow_pickle=True)
+    for x in ["chrom", "pos", "ref", "alt", "baf", "mat_haps", "pat_haps"]:
         assert x in data
     df = pd.DataFrame(
         {
@@ -20,12 +33,12 @@ def read_data_np(input_fp):
             "ref": data["ref"],
             "alt": data["alt"],
             "baf": data["baf"],
-            "lrr": data["lrr"],
             "mat_hap0": data["mat_haps"][0, :],
             "mat_hap1": data["mat_haps"][1, :],
             "pat_hap0": data["pat_haps"][0, :],
             "pat_hap1": data["pat_haps"][1, :],
-        }
+        },
+        dtype=karyo_dtypes,
     )
     return df
 
@@ -37,14 +50,13 @@ def read_data_df(input_fp):
         sep = "\t"
     elif ".txt" in input_fp:
         sep = " "
-    df = pd.read_csv(input_fp, sep=sep)
+    df = pd.read_csv(input_fp, dtype=karyo_dtypes, sep=sep)
     for x in [
         "chrom",
         "pos",
         "ref",
         "alt",
         "baf",
-        "lrr",
         "mat_hap0",
         "mat_hap1",
         "pat_hap0",
@@ -56,16 +68,20 @@ def read_data_df(input_fp):
 
 def read_data(input_fp):
     """Read in data in either pandas/numpy format."""
-    try:
-        df = read_data_df(input_fp)
-    except Exception:
+    if (".npz" in input_fp) or (".npy" in input_fp):
         df = read_data_np(input_fp)
+    else:
+        df = read_data_df(input_fp)
     return df
 
 
 @click.command()
 @click.option(
-    "--input", "-i", required=True, type=str, help="Input data file for PGT Data."
+    "--input",
+    "-i",
+    required=True,
+    type=click.Path(exists=True),
+    help="Input data file for PGT-A array intensity data.",
 )
 @click.option(
     "--viterbi",
@@ -89,13 +105,42 @@ def read_data(input_fp):
     default=False,
     type=bool,
     show_default=True,
+    help="Run inference in unphased mode.",
 )
 @click.option(
-    "--niter",
+    "--algo",
     required=False,
-    default=50,
-    type=int,
+    default="Powell",
+    type=click.Choice(["Nelder-Mead", "L-BFGS-B", "Powell"]),
     show_default=True,
+    help="Method for parameter inference.",
+)
+@click.option(
+    "--recomb_rate",
+    "-r",
+    required=False,
+    default=1e-8,
+    type=float,
+    show_default=True,
+    help="Recombination rate between SNPs.",
+)
+@click.option(
+    "--aneuploidy_rate",
+    "-a",
+    required=False,
+    default=1e-10,
+    type=float,
+    show_default=True,
+    help="Probability of shifting between aneuploidy states between SNPs.",
+)
+@click.option(
+    "--gzip",
+    "-g",
+    is_flag=True,
+    required=False,
+    type=bool,
+    default=True,
+    help="Gzip output files",
 )
 @click.option(
     "--out",
@@ -105,7 +150,17 @@ def read_data(input_fp):
     default="karyohmm",
     help="Output file prefix.",
 )
-def main(input, viterbi, mode, unphased, niter, out):
+def main(
+    input,
+    viterbi,
+    mode,
+    unphased,
+    algo="Powell",
+    recomb_rate=1e-8,
+    aneuploidy_rate=1e-10,
+    gzip=True,
+    out="karyohmm",
+):
     """Karyohmm CLI."""
     print(f"Reading in input data {input} ...", file=sys.stderr)
     data_df = read_data(input)
@@ -114,8 +169,10 @@ def main(input, viterbi, mode, unphased, niter, out):
     if mode == "Meta":
         hmm = MetaHMM()
     else:
-        raise NotImplementedError("Meta-HMM is currently the only supported mode!")
-    print("Inference of HMM-parameters ...", file=sys.stderr)
+        raise NotImplementedError(
+            "Meta-HMM is currently the only supported model for karyohmm!"
+        )
+    print("Inference of karyohmm emission parameters ...", file=sys.stderr)
     # Defining the numpy objects to test out.
     mat_haps = np.vstack([data_df.mat_hap0.values, data_df.mat_hap1.values])
     pat_haps = np.vstack([data_df.pat_hap0.values, data_df.pat_hap1.values])
@@ -125,10 +182,14 @@ def main(input, viterbi, mode, unphased, niter, out):
         mat_haps=mat_haps,
         pat_haps=pat_haps,
         unphased=unphased,
+        r=recomb_rate,
+        a=aneuploidy_rate,
+        algo=algo,
     )
     print("Finished inference of HMM-parameters!", file=sys.stderr)
     print("Running analyses ... ", file=sys.stderr)
     if viterbi:
+        print("Running Viterbi algorithm path tracing...")
         path, states, _, _ = hmm.viterbi(
             bafs=bafs,
             mat_haps=mat_haps,
@@ -136,6 +197,8 @@ def main(input, viterbi, mode, unphased, niter, out):
             pi0=pi0_est,
             std_dev=sigma_est,
             unphased=unphased,
+            r=recomb_rate,
+            a=aneuploidy_rate,
         )
         state_lbls = [hmm.get_state_str(s) for s in states]
         n, ns = path.size, len(states)
@@ -153,7 +216,7 @@ def main(input, viterbi, mode, unphased, niter, out):
             cols_to_move + [col for col in path_df.columns if col not in cols_to_move]
         ]
         path_df.to_csv(f"{out}.meta.viterbi.tsv", sep="\t", index=None)
-        print(f"Wrote viterbi algorithm traceback to {out}.meta.viterbi.tsv")
+        print(f"Wrote Viterbi algorithm traceback to {out}.meta.viterbi.tsv")
     else:
         gammas, states, karyotypes = hmm.forward_backward(
             bafs=bafs,
@@ -167,9 +230,10 @@ def main(input, viterbi, mode, unphased, niter, out):
         kar_prob["pi0_hat"] = pi0_est
         kar_prob["sigma_hat"] = sigma_est
         df = pd.DataFrame(kar_prob, index=[0])
-        df.to_csv(f"{out}.meta.posterior.tsv", sep="\t", index=None)
+        out_fp = f"{out}.meta.posterior.tsv.gz" if gzip else f"{out}.meta.posterior.tsv"
+        df.to_csv(out_fp, sep="\t", index=None)
         print(
-            f"Wrote posterior karyotypes to {out}.meta.posterior.tsv",
+            f"Wrote posterior karyotypes to {out_fp}",
             file=sys.stderr,
         )
 
@@ -184,9 +248,10 @@ def main(input, viterbi, mode, unphased, niter, out):
         gamma_df = gamma_df[
             cols_to_move + [col for col in gamma_df.columns if col not in cols_to_move]
         ]
-        gamma_df.to_csv(f"{out}.meta.gammas.tsv", sep="\t", index=None)
+        out_fp = f"{out}.meta.gammas.tsv.gz" if gzip else f"{out}.meta.gammas.tsv"
+        gamma_df.to_csv(out_fp, sep="\t", index=None)
         print(
-            f"Wrote forward-backward algorithm results to {out}.meta.gammas.tsv",
+            f"Wrote forward-backward algorithm results to {out_fp}",
             file=sys.stderr,
         )
     print("Finished karyohmm analysis!", file=sys.stderr)
