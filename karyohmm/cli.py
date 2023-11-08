@@ -1,4 +1,5 @@
 """CLI for karyohmm."""
+import logging
 import sys
 
 import click
@@ -6,6 +7,13 @@ import numpy as np
 import pandas as pd
 
 from karyohmm import MetaHMM
+
+# Setup the logging configuration for the CLI
+logging.basicConfig(
+    format="%(asctime)s %(levelname)-8s %(message)s",
+    level=logging.INFO,
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 # Shared type requirements for underlying data
 karyo_dtypes = {
@@ -162,17 +170,17 @@ def main(
     out="karyohmm",
 ):
     """Karyohmm CLI."""
-    print(f"Reading in input data {input} ...", file=sys.stderr)
+    logging.info(f"Starting to read input data {input}.")
     data_df = read_data(input)
     assert data_df is not None
-    print(f"Finished reading in {input}.", file=sys.stderr)
+    logging.info(f"Finished reading in {input}.")
     if mode == "Meta":
         hmm = MetaHMM()
     else:
         raise NotImplementedError(
             "Meta-HMM is currently the only supported model for karyohmm!"
         )
-    print("Inference of karyohmm emission parameters ...", file=sys.stderr)
+    logging.info("Starting inference of karyohmm emission parameters.")
     # Defining the numpy objects to test out.
     mat_haps = np.vstack([data_df.mat_hap0.values, data_df.mat_hap1.values])
     pat_haps = np.vstack([data_df.pat_hap0.values, data_df.pat_hap1.values])
@@ -186,10 +194,9 @@ def main(
         a=aneuploidy_rate,
         algo=algo,
     )
-    print("Finished inference of HMM-parameters!", file=sys.stderr)
-    print("Running analyses ... ", file=sys.stderr)
+    logging.info("Finished inference of HMM-parameters!")
     if viterbi:
-        print("Running Viterbi algorithm path tracing...")
+        logging.info("Running Viterbi algorithm path tracing.")
         path, states, _, _ = hmm.viterbi(
             bafs=bafs,
             mat_haps=mat_haps,
@@ -215,8 +222,9 @@ def main(
         path_df = path_df[
             cols_to_move + [col for col in path_df.columns if col not in cols_to_move]
         ]
-        path_df.to_csv(f"{out}.meta.viterbi.tsv", sep="\t", index=None)
-        print(f"Wrote Viterbi algorithm traceback to {out}.meta.viterbi.tsv")
+        out_fp = f"{out}.meta.viterbi.tsv.gz" if gzip else f"{out}.meta.viterbi.tsv"
+        path_df.to_csv(out_fp, sep="\t", index=None)
+        logging.info(f"Wrote Viterbi algorithm traceback to {out_fp}")
     else:
         gammas, states, karyotypes = hmm.forward_backward(
             bafs=bafs,
@@ -232,10 +240,7 @@ def main(
         df = pd.DataFrame(kar_prob, index=[0])
         out_fp = f"{out}.meta.posterior.tsv.gz" if gzip else f"{out}.meta.posterior.tsv"
         df.to_csv(out_fp, sep="\t", index=None)
-        print(
-            f"Wrote posterior karyotypes to {out_fp}",
-            file=sys.stderr,
-        )
+        logging.info(f"Wrote posterior karyotypes to {out_fp}")
 
         state_lbls = [hmm.get_state_str(s) for s in states]
         gamma_df = pd.DataFrame(gammas.T)
@@ -250,8 +255,5 @@ def main(
         ]
         out_fp = f"{out}.meta.gammas.tsv.gz" if gzip else f"{out}.meta.gammas.tsv"
         gamma_df.to_csv(out_fp, sep="\t", index=None)
-        print(
-            f"Wrote forward-backward algorithm results to {out_fp}",
-            file=sys.stderr,
-        )
-    print("Finished karyohmm analysis!", file=sys.stderr)
+        logging.info(f"Wrote forward-backward algorithm results to {out_fp}")
+    logging.info("Finished karyohmm analysis!")
