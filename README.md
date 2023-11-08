@@ -30,14 +30,12 @@ The states in the `MetaHMM` model correspond to specific karyotypes for chromoso
 * `1m` - only a single maternal chromosome is copied from (paternal chromosome loss / paternal monosomy)
 * `1p` - only a single paternal chromosome is copied from (maternal chromosome loss/ maternal monosomy)
 * `2` - disomy
-* `2m` - maternal uni-parental disomy (not available in models without LRR)
-* `2p` - paternal uni-parental disomy (not available in models without LRR)
 * `3m` - extra maternal chromosome (maternal trisomy)
 * `3p` - extra paternal chromosome (paternal trisomy)
 
 ## CLI
 
-The installation of `karyohmm` also includes a `karyohmm-cli` implementation that can be run directly from the command-line. This is work in progress, but currently implements the majority of the `MetaHMM` inference steps for a single data file. To see this on a simulated example of two embryos:
+The installation of `karyohmm` also includes a `karyohmm-cli` implementation that can be run directly from the command-line. This is work in progress, but currently implements the majority of the `MetaHMM` inference steps for a single data file. To see this on a simulated example of three embryos:
 
 ```
 karyohmm-cli -i data/test_disomy_embryo.tsv -o data/out_disomy
