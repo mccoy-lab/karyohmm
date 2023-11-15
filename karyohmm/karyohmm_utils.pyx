@@ -354,7 +354,7 @@ def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A, (double, double
     scaler[-1] = logsumexp(betas[:, -1])
     betas[:, -1] -= scaler[-1]
     for i in range(n - 2, -1, -1):
-        A_hat = A + np.log(pos[i] - pos[i-1])
+        A_hat = A + np.log(pos[i+1] - pos[i])
         cur_emissions = np.zeros(m)
         for j in range(m):
             m_ij0 = mat_dosage(mat_haps[:, i+1], states[j][0])

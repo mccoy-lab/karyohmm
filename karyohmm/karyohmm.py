@@ -267,6 +267,7 @@ class MetaHMM(AneuploidyHMM):
         assert bafs.size == mat_haps.shape[1]
         assert bafs.size == pos.size
         assert mat_haps.shape == pat_haps.shape
+        assert np.all(pos[1:] > pos[:-1])
         A = self.create_transition_matrix(self.karyotypes, r=r, a=a, unphased=unphased)
         alphas, scaler, _, _, loglik = forward_algo(
             bafs,
@@ -321,6 +322,7 @@ class MetaHMM(AneuploidyHMM):
         assert bafs.size == mat_haps.shape[1]
         assert bafs.size == pos.size
         assert mat_haps.shape == pat_haps.shape
+        assert np.all(pos[1:] > pos[:-1])
         A = self.create_transition_matrix(self.karyotypes, r=r, a=a, unphased=unphased)
         betas, scaler, _, _, loglik = backward_algo(
             bafs,
@@ -430,7 +432,7 @@ class MetaHMM(AneuploidyHMM):
         assert bafs.size == pos.size
         assert bafs.size == mat_haps.shape[1]
         assert mat_haps.shape == pat_haps.shape
-
+        assert np.all(pos[1:] > pos[:-1])
         A = self.create_transition_matrix(self.karyotypes, r=r, a=a, unphased=unphased)
         path, states, deltas, psi = viterbi_algo(
             bafs,
@@ -552,6 +554,13 @@ class QuadHMM(AneuploidyHMM):
             - loglik (`float`): total log-likelihood of joint sibling B-allele frequencies
 
         """
+        assert len(bafs) == 2
+        assert bafs[0].size == pos.size
+        assert bafs[0].size == bafs[1].size
+        assert bafs[0].size == mat_haps.shape[1]
+        assert (mat_haps.ndim == 2) and (pat_haps.ndim == 2)
+        assert mat_haps.size == pat_haps.size
+        assert np.all(pos[1:] > pos[:-1])
         A = self.create_transition_matrix(r=r)
         alphas, scaler, states, karyotypes, loglik = forward_algo_sibs(
             bafs,
@@ -594,6 +603,13 @@ class QuadHMM(AneuploidyHMM):
             - loglik (`float`): total log-likelihood of joint sibling B-allele frequencies
 
         """
+        assert len(bafs) == 2
+        assert bafs[0].size == pos.size
+        assert bafs[0].size == bafs[1].size
+        assert bafs[0].size == mat_haps.shape[1]
+        assert (mat_haps.ndim == 2) and (pat_haps.ndim == 2)
+        assert mat_haps.size == pat_haps.size
+        assert np.all(pos[1:] > pos[:-1])
         A = self.create_transition_matrix(r=r)
         alphas, scaler, states, karyotypes, loglik = backward_algo_sibs(
             bafs,
