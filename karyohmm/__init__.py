@@ -15,7 +15,7 @@ Modules exported are:
 
 """
 
-__version__ = "0.1.8"
+__version__ = "0.1.8b"
 
 from .karyohmm import MetaHMM, PhaseCorrect, QuadHMM
 from .simulator import PGTSim

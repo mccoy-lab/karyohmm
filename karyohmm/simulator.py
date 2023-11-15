@@ -308,6 +308,7 @@ class PGTSim(PGTSimBase):
         afs=None,
         ploidy=2,
         m=10000,
+        length=50e6,
         rec_prob=1e-4,
         mat_skew=0.5,
         std_dev=0.15,
@@ -343,8 +344,10 @@ class PGTSim(PGTSimBase):
         ) = self.create_switch_errors(
             mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
         )
+        pos = np.sort(np.random.uniform(high=length, size=m))
         assert geno.size == m
         assert baf.size == m
+        assert pos.size == m
         res_table = {
             "mat_haps": mat_haps,
             "pat_haps": pat_haps,
@@ -356,6 +359,7 @@ class PGTSim(PGTSimBase):
             "zs_paternal": zs_paternal,
             "geno_embryo": geno,
             "baf_embryo": baf,
+            "pos": pos,
             "m": m,
             "aploid": aploid,
             "ploidy": ploidy,
@@ -372,7 +376,8 @@ class PGTSim(PGTSimBase):
         afs=None,
         ploidy=2,
         m=10000,
-        nsibs=5,
+        length=50e6,
+        nsibs=3,
         rec_prob=1e-4,
         std_dev=0.2,
         mix_prop=0.3,
@@ -396,6 +401,7 @@ class PGTSim(PGTSimBase):
         ) = self.create_switch_errors(
             mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
         )
+        pos = np.sort(np.random.uniform(high=length, size=m))
         res_table["mat_haps_true"] = mat_haps
         res_table["pat_haps_true"] = pat_haps
         res_table["mat_haps_real"] = mat_haps_prime
@@ -404,6 +410,7 @@ class PGTSim(PGTSimBase):
         res_table["pat_switch"] = pat_switch
         res_table["nsibs"] = nsibs
         res_table["aploid"] = "2"
+        res_table["pos"] = pos
         for i in range(nsibs):
             (
                 zs_maternal,

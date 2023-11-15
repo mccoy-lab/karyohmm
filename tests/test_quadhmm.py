@@ -27,6 +27,7 @@ def test_forward_algorithm(data):
     hmm = QuadHMM()
     _, _, _, _, loglik = hmm.forward_algorithm(
         bafs=[data["baf_embryo0"], data["baf_embryo1"]],
+        pos=data["pos"],
         mat_haps=data["mat_haps_true"],
         pat_haps=data["pat_haps_true"],
     )
@@ -38,6 +39,7 @@ def test_backward_algorithm(data):
     hmm = QuadHMM()
     _, _, _, _, loglik = hmm.forward_algorithm(
         bafs=[data["baf_embryo0"], data["baf_embryo1"]],
+        pos=data["pos"],
         mat_haps=data["mat_haps_true"],
         pat_haps=data["pat_haps_true"],
     )
@@ -49,11 +51,13 @@ def test_forward_vs_backward_loglik(data):
     hmm = QuadHMM()
     _, _, _, _, fwd_loglik = hmm.forward_algorithm(
         bafs=[data["baf_embryo0"], data["baf_embryo1"]],
+        pos=data["pos"],
         mat_haps=data["mat_haps_true"],
         pat_haps=data["pat_haps_true"],
     )
     _, _, _, _, bwd_loglik = hmm.backward_algorithm(
         bafs=[data["baf_embryo0"], data["baf_embryo1"]],
+        pos=data["pos"],
         mat_haps=data["mat_haps_true"],
         pat_haps=data["pat_haps_true"],
     )
@@ -68,6 +72,7 @@ def test_viterbi_algorithm(data):
     hmm = QuadHMM()
     path, states, deltas, psi = hmm.viterbi_algorithm(
         bafs=[data["baf_embryo0"], data["baf_embryo1"]],
+        pos=data["pos"],
         mat_haps=data["mat_haps_true"],
         pat_haps=data["pat_haps_true"],
     )
@@ -84,11 +89,13 @@ def test_recomb_isolation_map(data):
     hmm = QuadHMM()
     res_path01 = hmm.map_path(
         bafs=[data["baf_embryo0"], data["baf_embryo1"]],
+        pos=data["pos"],
         mat_haps=data["mat_haps_true"],
         pat_haps=data["pat_haps_true"],
     )
     res_path02 = hmm.map_path(
         bafs=[data["baf_embryo0"], data["baf_embryo2"]],
+        pos=data["pos"],
         mat_haps=data["mat_haps_true"],
         pat_haps=data["pat_haps_true"],
     )
@@ -110,11 +117,13 @@ def test_recomb_isolation_viterbi(data):
     hmm = QuadHMM()
     res_path01 = hmm.viterbi_path(
         bafs=[data["baf_embryo0"], data["baf_embryo1"]],
+        pos=data["pos"],
         mat_haps=data["mat_haps_true"],
         pat_haps=data["pat_haps_true"],
     )
     res_path02 = hmm.viterbi_path(
         bafs=[data["baf_embryo0"], data["baf_embryo2"]],
+        pos=data["pos"],
         mat_haps=data["mat_haps_true"],
         pat_haps=data["pat_haps_true"],
     )
