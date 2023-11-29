@@ -302,7 +302,7 @@ class MetaHMM(AneuploidyHMM):
             - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
             - pi0 (`float`): sparsity parameter for B-allele emission model
             - std_dev (`float`): standard deviation for B-allele emission model
-            - r (`float`): intra-karyotype transition rate
+            - r (`float`): intra-karyotype transition rate (recombination)
             - a (`float`): inter-karyotype transition rate
             - unphased (`bool`): run the model in unphased mode
 
@@ -357,7 +357,7 @@ class MetaHMM(AneuploidyHMM):
             - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
             - pi0 (`float`): sparsity parameter for B-allele emission model
             - std_dev (`float`): standard deviation for B-allele emission model
-            - r (`float`): intra-karyotype transition rate
+            - r (`float`): intra-karyotype transition rate (recombination)
             - a (`float`): inter-karyotype transition rate
             - unphased (`bool`): run the model in unphased mode
 

@@ -389,6 +389,7 @@ class PGTSim(PGTSimBase):
         assert m > 0
         assert seed > 0
         assert nsibs > 0
+        assert length > 0
         np.random.seed(seed)
 
         res_table = {}
