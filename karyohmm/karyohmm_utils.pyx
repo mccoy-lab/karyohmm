@@ -304,8 +304,6 @@ def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A, (double, double)
                 p_ij1,
                 pi0=pi0[1],
                 std_dev=std_dev[1],
-                pi0=pi0,
-                std_dev=std_dev,
                 k=2,
             )
         alphas[j,0] += cur_emission
@@ -394,8 +392,6 @@ def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A, (double, double
                         p_ij0,
                         pi0=pi0[0],
                         std_dev=std_dev[0],
-                        pi0=pi0,
-                        std_dev=std_dev,
                         k=2,
                     ) + emission_baf(
                         bafs[1][i],
