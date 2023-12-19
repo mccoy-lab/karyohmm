@@ -463,7 +463,7 @@ class MetaHMM(AneuploidyHMM):
         nk = np.unique(karyotypes).size
         gamma_karyo = np.zeros(shape=(nk, m))
         _, idx = np.unique(karyotypes, return_index=True)
-        uniq_karyo = karyotypes[np.argsort(idx)]
+        uniq_karyo = karyotypes[np.sort(idx)]
         for i, k in enumerate(uniq_karyo):
             # This is just the summed version of the posteriors ...
             gamma_karyo[i, :] = np.sum(np.exp(gammas[(karyotypes == k), :]), axis=0)
