@@ -462,10 +462,12 @@ class MetaHMM(AneuploidyHMM):
         k, m = gammas.shape
         nk = np.unique(karyotypes).size
         gamma_karyo = np.zeros(shape=(nk, m))
-        for i, k in enumerate(np.unique(karyotypes)):
+        _, idx = np.unique(karyotypes, return_index=True)
+        uniq_karyo = karyotypes[np.argsort(idx)]
+        for i, k in enumerate(uniq_karyo):
             # This is just the summed version of the posteriors ...
             gamma_karyo[i, :] = np.sum(np.exp(gammas[(karyotypes == k), :]), axis=0)
-        return gamma_karyo
+        return gamma_karyo, uniq_karyo
 
     def posterior_karyotypes(self, gammas, karyotypes):
         """Obtain full posterior on karyotypes chromosome-wide.
@@ -490,7 +492,7 @@ class MetaHMM(AneuploidyHMM):
 
 
 class QuadHMM(AneuploidyHMM):
-    """Updated HMM for sibling embryos based on the model of Roach et al 2010 but designed for BAF data."""
+    """Updated HMM for sibling euploid embryos based on the model of Roach et al 2010 but designed for BAF data."""
 
     def __init__(self):
         """Initialize the QuadHMM model."""
