@@ -21,10 +21,11 @@ from karyohmm_utils import (
     forward_algo,
     forward_algo_sibs,
     lod_phase,
+    mix_loglik,
     viterbi_algo,
     viterbi_algo_sibs,
 )
-from scipy.optimize import minimize
+from scipy.optimize import brentq, minimize
 from scipy.special import logsumexp as logsumexp_sp
 
 
@@ -954,6 +955,100 @@ class QuadHMM(AneuploidyHMM):
         pat_recomb_lst = [k for k in pat_recomb if pat_recomb[k] > len(path_xzs) / 2]
         # This returns the list of tuples on the recombination positions and minimum distances across the traces.
         return mat_recomb_lst, pat_recomb_lst, mat_recomb, pat_recomb
+
+
+class MosaicEst:
+    """Class to perform estimation of mosaic rates."""
+
+    def __init__(self, mat_haps, pat_haps, bafs):
+        """Initialize the class."""
+        assert mat_haps.ndim == 2
+        assert pat_haps.ndim == 2
+        assert bafs.ndim == 1
+        assert bafs.size == mat_haps.shape[1]
+        assert bafs.size == pat_haps.shape[1]
+        self.mat_haps = mat_haps
+        self.pat_haps = pat_haps
+        self.bafs == bafs
+        self.het_bafs = None
+
+    def baf_hets(self):
+        """Compute the BAF at expected heterozygotes in the embryo."""
+        mat_geno = np.sum(self.mat_haps, axis=0)
+        pat_geno = np.sum(self.pat_haps, axis=0)
+        exp_het_idx = ((mat_geno == 0) & (pat_geno == 2)) | (
+            (mat_geno == 2) & (pat_geno == 0)
+        )
+        self.het_bafs = self.bafs[exp_het_idx]
+        self.n_het = self.het_bafs.size
+
+    def est_mle_mosaic(self, sigma=None, algo="L-BFGS-B", h=1e-6, gain=True):
+        """Estimate the MLE mosaic estimate + 95% confidence intervals.
+
+        Return:
+            - ci_mle_theta (`list`): 95% confidence interval of baf deviation statistic
+            - ci_cf (`list`): 95% confidence interval for cellular fraction
+
+        """
+        assert self.het_bafs is not None
+        assert algo in ["L-BFGS-B", "Nelder-Mead", "Powell"]
+        ci_mle_theta = [0.0, 0.0, 0.0]
+        ci_cf = [0.0, 0.0, 0.0]
+        if sigma is None:
+            f = lambda x: -mix_loglik(self.het_bafs, pi0=x[0], theta=x[1], std_dev=x[2])
+            opt_res = minimize(
+                f,
+                x0=[0.5, 1e-9, 0.1],
+                algo=algo,
+                bounds=[(0.1, 0.9), (1e-9, 0.5), (1e-4, 0.5)],
+            )
+            mle_theta = opt_res.x[1]
+            f2 = lambda x: mix_loglik(
+                self.het_bafs, pi0=opt_res.x[0], theta=x, std_dev=opt_res.x[2]
+            )
+        else:
+            f = lambda x: -mix_loglik(
+                self.het_bafs, pi0=x[0], theta=x[1], std_dev=sigma
+            )
+            opt_res = minimize(
+                f, x0=[0.5, 1e-9], algo=algo, bounds=[(0.1, 0.9), (1e-9, 0.5)]
+            )
+            mle_theta = opt_res.x[1]
+            f2 = lambda x: mix_loglik(
+                self.het_bafs, pi0=opt_res.x[0], theta=x, std_dev=sigma
+            )
+        # Now we compute the Fisher information matrix using the symmetric second derivative.
+        logI = (f2(mle_theta + h) - 2 * f2(mle_theta) + f2(mle_theta - h)) / (h**2)
+        fisher_I_inv = 1.0 / -logI
+        ci_mle_theta[0] = mle_theta - 1.96 * np.sqrt(1.0 / self.n_het * fisher_I_inv)
+        ci_mle_theta[1] = mle_theta
+        ci_mle_theta[2] = mle_theta + 1.96 * np.sqrt(1.0 / self.n_het * fisher_I_inv)
+        ci_mle_theta[0] = max(0.0, ci_mle_theta)
+        ci_mle_theta[1] = min(1.0, ci_mle_theta)
+        # Now we run a series of optimizations to determine if it is a mosaic gain or loss...
+        cn_est = lambda cn: np.abs(1 / cn - 0.5)
+        cf_est = lambda cn: np.abs(2.0 - cn)
+        if gain:
+            ci_cf[0] = cf_est(
+                brentq(lambda x: cn_est(x) - ci_mle_theta[0], 2.0 - h, 3.0)
+            )
+            ci_cf[1] = cf_est(
+                brentq(lambda x: cn_est(x) - ci_mle_theta[1], 2.0 - h, 3.0)
+            )
+            ci_cf[2] = cf_est(
+                brentq(lambda x: cn_est(x) - ci_mle_theta[2], 2.0 - h, 3.0)
+            )
+        else:
+            ci_cf[0] = cf_est(
+                brentq(lambda x: cn_est(x) - ci_mle_theta[0], 1.0, 2.0 + h)
+            )
+            ci_cf[1] = cf_est(
+                brentq(lambda x: cn_est(x) - ci_mle_theta[1], 1.0, 2.0 + h)
+            )
+            ci_cf[2] = cf_est(
+                brentq(lambda x: cn_est(x) - ci_mle_theta[2], 1.0, 2.0 + h)
+            )
+        return ci_mle_theta, ci_cf
 
 
 class PhaseCorrect:

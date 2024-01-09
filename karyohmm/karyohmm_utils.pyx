@@ -118,6 +118,16 @@ cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double
     else:
         return x
 
+cpdef double mix_loglik(double[:] bafs, double pi0=0.5, double theta=0.1, double std_dev=0.2):
+    """Mixture log-likelihood for expected heterozygotes to estimate baf-deviation."""
+    cdef double logll = 0.0;
+    cdef int i, n;
+    n = bafs.size
+    for i in range(n):
+        logll += logaddexp(np.log(pi0) + truncnorm_pdf(bafs[i], 0.0, 1.0, mu=0.5-theta, sigma=std_dev),
+                           np.log(1.0 - pi0) + truncnorm_pdf(bafs[i], 0.0, 1.0, mu=0.5+theta, sigma=std_dev))
+    return logll
+
 def lod_phase(haps1, haps2, baf, **kwargs):
     """Estimate the log-likelihood of being the phase vs. antiphase orientation for heterozygotes."""
     cdef int i,j;
