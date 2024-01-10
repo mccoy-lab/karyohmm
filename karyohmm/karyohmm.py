@@ -969,7 +969,7 @@ class MosaicEst:
         assert bafs.size == pat_haps.shape[1]
         self.mat_haps = mat_haps
         self.pat_haps = pat_haps
-        self.bafs == bafs
+        self.bafs = bafs
         self.het_bafs = None
 
     def baf_hets(self):
