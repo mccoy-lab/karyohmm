@@ -992,6 +992,7 @@ class MosaicEst:
         """
         assert self.het_bafs is not None
         assert algo in ["L-BFGS-B", "Nelder-Mead", "Powell"]
+        assert (h > 0) and (h < 1e-2)
         ci_mle_theta = [0.0, 0.0, 0.0]
         ci_cf = [0.0, 0.0, 0.0]
         if sigma is None:
@@ -999,8 +1000,8 @@ class MosaicEst:
             opt_res = minimize(
                 f,
                 x0=[0.5, 1e-9, 0.1],
-                algo=algo,
-                bounds=[(0.1, 0.9), (1e-9, 0.5), (1e-4, 0.5)],
+                method=algo,
+                bounds=[(0.1, 0.9), (1e-9, 1 - 1e-9), (1e-4, 0.5)],
             )
             mle_theta = opt_res.x[1]
             f2 = lambda x: mix_loglik(
@@ -1011,7 +1012,7 @@ class MosaicEst:
                 self.het_bafs, pi0=x[0], theta=x[1], std_dev=sigma
             )
             opt_res = minimize(
-                f, x0=[0.5, 1e-9], algo=algo, bounds=[(0.1, 0.9), (1e-9, 0.5)]
+                f, x0=[0.5, 1e-9], method=algo, bounds=[(0.1, 0.9), (1e-9, 1 - 1e-9)]
             )
             mle_theta = opt_res.x[1]
             f2 = lambda x: mix_loglik(
