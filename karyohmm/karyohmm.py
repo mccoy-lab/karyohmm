@@ -1020,34 +1020,34 @@ class MosaicEst:
             )
         # Now we compute the Fisher information matrix using the symmetric second derivative.
         logI = (f2(mle_theta + h) - 2 * f2(mle_theta) + f2(mle_theta - h)) / (h**2)
-        fisher_I_inv = 1.0 / -logI
+        fisher_I_inv = 1.0 / - logI
         ci_mle_theta[0] = mle_theta - 1.96 * np.sqrt(1.0 / self.n_het * fisher_I_inv)
         ci_mle_theta[1] = mle_theta
         ci_mle_theta[2] = mle_theta + 1.96 * np.sqrt(1.0 / self.n_het * fisher_I_inv)
-        ci_mle_theta[0] = max(0.0, ci_mle_theta)
-        ci_mle_theta[1] = min(1.0, ci_mle_theta)
+        ci_mle_theta[0] = max(0.0, ci_mle_theta[0])
+        ci_mle_theta[2] = min(1.0, ci_mle_theta[2])
         # Now we run a series of optimizations to determine if it is a mosaic gain or loss...
         cn_est = lambda cn: np.abs(1 / cn - 0.5)
         cf_est = lambda cn: np.abs(2.0 - cn)
         if gain:
             ci_cf[0] = cf_est(
-                brentq(lambda x: cn_est(x) - ci_mle_theta[0], 2.0 - h, 3.0)
+                brentq(lambda x: cn_est(x) - ci_mle_theta[0], 2.0, 3.0)
             )
             ci_cf[1] = cf_est(
-                brentq(lambda x: cn_est(x) - ci_mle_theta[1], 2.0 - h, 3.0)
+                brentq(lambda x: cn_est(x) - ci_mle_theta[1], 2.0, 3.0)
             )
             ci_cf[2] = cf_est(
-                brentq(lambda x: cn_est(x) - ci_mle_theta[2], 2.0 - h, 3.0)
+                brentq(lambda x: cn_est(x) - ci_mle_theta[2], 2.0, 3.0)
             )
         else:
             ci_cf[0] = cf_est(
-                brentq(lambda x: cn_est(x) - ci_mle_theta[0], 1.0, 2.0 + h)
+                brentq(lambda x: cn_est(x) - ci_mle_theta[0], 1.0, 2.0)
             )
             ci_cf[1] = cf_est(
-                brentq(lambda x: cn_est(x) - ci_mle_theta[1], 1.0, 2.0 + h)
+                brentq(lambda x: cn_est(x) - ci_mle_theta[1], 1.0, 2.0)
             )
             ci_cf[2] = cf_est(
-                brentq(lambda x: cn_est(x) - ci_mle_theta[2], 1.0, 2.0 + h)
+                brentq(lambda x: cn_est(x) - ci_mle_theta[2], 1.0, 2.0)
             )
         return ci_mle_theta, ci_cf
 

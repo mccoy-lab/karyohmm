@@ -26,7 +26,7 @@ def test_baf_hets(data=data_disomy):
     assert m_est.het_bafs is not None
 
 
-def test_mosaic_est(data=data_disomy):
+def test_mosaic_est_w_sigma(data=data_disomy):
     """Test estimates of cell-fraction for mosaicism."""
     m_est = MosaicEst(
         mat_haps=data["mat_haps"], pat_haps=data["pat_haps"], bafs=data["baf_embryo"]
@@ -37,3 +37,19 @@ def test_mosaic_est(data=data_disomy):
     assert ci_mle_theta[1] <= ci_mle_theta[2]
     assert ci_cf[0] <= ci_cf[1]
     assert ci_cf[1] <= ci_cf[2]
+    # It should be a very low mosaic cell-fraction ...
+    assert ci_cf[1] <= 1e-2
+
+def test_mosaic_est_wo_sigma(data=data_disomy):
+    """Test estimates of cell-fraction for mosaicism."""
+    m_est = MosaicEst(
+        mat_haps=data["mat_haps"], pat_haps=data["pat_haps"], bafs=data["baf_embryo"]
+    )
+    m_est.baf_hets()
+    ci_mle_theta, ci_cf = m_est.est_mle_mosaic()
+    assert ci_mle_theta[0] <= ci_mle_theta[1]
+    assert ci_mle_theta[1] <= ci_mle_theta[2]
+    assert ci_cf[0] <= ci_cf[1]
+    assert ci_cf[1] <= ci_cf[2]
+    # It should be a very low mosaic cell-fraction still ...
+    assert ci_cf[1] <= 1e-2
