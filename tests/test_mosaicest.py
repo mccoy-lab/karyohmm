@@ -40,6 +40,7 @@ def test_mosaic_est_w_sigma(data=data_disomy):
     # It should be a very low mosaic cell-fraction ...
     assert ci_cf[1] <= 1e-2
 
+
 def test_mosaic_est_wo_sigma(data=data_disomy):
     """Test estimates of cell-fraction for mosaicism."""
     m_est = MosaicEst(

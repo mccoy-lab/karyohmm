@@ -6,7 +6,7 @@ cdef double sqrt2 = sqrt(2.);
 cdef double sqrt2pi = sqrt(2*pi);
 cdef double logsqrt2pi = log(1/sqrt2pi)
 
-cdef double logsumexp(double[:] x):
+cpdef double logsumexp(double[:] x):
     """Cython implementation of the logsumexp trick"""
     cdef int i,n;
     cdef double m = -1e32;
@@ -122,10 +122,13 @@ cpdef double mix_loglik(double[:] bafs, double pi0=0.5, double theta=0.1, double
     """Mixture log-likelihood for expected heterozygotes to estimate baf-deviation."""
     cdef double logll = 0.0;
     cdef int i, n;
+    cdef double ll[3];
     n = bafs.size
     for i in range(n):
-        logll += logaddexp(np.log(pi0) + truncnorm_pdf(bafs[i], 0.0, 1.0, mu=0.5-theta, sigma=std_dev),
-                           np.log(1.0 - pi0) + truncnorm_pdf(bafs[i], 0.0, 1.0, mu=0.5+theta, sigma=std_dev))
+        ll[0] = log(pi0/2.0) + truncnorm_pdf(bafs[i], 0.0, 1.0, mu=0.5+theta, sigma=std_dev)
+        ll[1] = log(pi0/2.0) + truncnorm_pdf(bafs[i], 0.0, 1.0, mu=0.5-theta, sigma=std_dev)
+        ll[2] = log(1.0 - pi0) + truncnorm_pdf(bafs[i], 0.0, 1.0, mu=0.5, sigma=std_dev)
+        logll += logsumexp(ll)
     return logll
 
 def lod_phase(haps1, haps2, baf, **kwargs):

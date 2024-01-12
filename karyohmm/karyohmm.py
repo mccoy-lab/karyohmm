@@ -982,8 +982,8 @@ class MosaicEst:
         self.het_bafs = self.bafs[exp_het_idx]
         self.n_het = self.het_bafs.size
 
-    def est_mle_mosaic(self, sigma=None, algo="L-BFGS-B", h=1e-6, gain=True):
-        """Estimate the MLE mosaic estimate + 95% confidence intervals.
+    def est_mle_mosaic(self, sigma=None, h=1e-6, gain=True):
+        """Estimate the MLE mosaic estimate + 95% confidence intervals using numerical optimization.
 
         Return:
             - ci_mle_theta (`list`): 95% confidence interval of baf deviation statistic
@@ -991,8 +991,9 @@ class MosaicEst:
 
         """
         assert self.het_bafs is not None
-        assert algo in ["L-BFGS-B", "Nelder-Mead", "Powell"]
         assert (h > 0) and (h < 1e-2)
+        if sigma is not None:
+            assert (sigma > 1e-4) and (sigma <= 0.5)
         ci_mle_theta = [0.0, 0.0, 0.0]
         ci_cf = [0.0, 0.0, 0.0]
         if sigma is None:
@@ -1000,7 +1001,7 @@ class MosaicEst:
             opt_res = minimize(
                 f,
                 x0=[0.5, 1e-9, 0.1],
-                method=algo,
+                method="Powell",
                 bounds=[(0.1, 0.9), (1e-9, 1 - 1e-9), (1e-4, 0.5)],
             )
             mle_theta = opt_res.x[1]
@@ -1012,15 +1013,19 @@ class MosaicEst:
                 self.het_bafs, pi0=x[0], theta=x[1], std_dev=sigma
             )
             opt_res = minimize(
-                f, x0=[0.5, 1e-9], method=algo, bounds=[(0.1, 0.9), (1e-9, 1 - 1e-9)]
+                f,
+                x0=[0.5, 1e-9],
+                method="Powell",
+                bounds=[(0.1, 0.9), (1e-9, 1 - 1e-9)],
             )
             mle_theta = opt_res.x[1]
             f2 = lambda x: mix_loglik(
                 self.het_bafs, pi0=opt_res.x[0], theta=x, std_dev=sigma
             )
-        # Now we compute the Fisher information matrix using the symmetric second derivative.
+        # Now we compute the Fisher information using the symmetric second derivative.
+        # TODO: if fisher_I_inv is negative, then we should return nulls?
         logI = (f2(mle_theta + h) - 2 * f2(mle_theta) + f2(mle_theta - h)) / (h**2)
-        fisher_I_inv = 1.0 / - logI
+        fisher_I_inv = 1.0 / -logI
         ci_mle_theta[0] = mle_theta - 1.96 * np.sqrt(1.0 / self.n_het * fisher_I_inv)
         ci_mle_theta[1] = mle_theta
         ci_mle_theta[2] = mle_theta + 1.96 * np.sqrt(1.0 / self.n_het * fisher_I_inv)
@@ -1030,25 +1035,13 @@ class MosaicEst:
         cn_est = lambda cn: np.abs(1 / cn - 0.5)
         cf_est = lambda cn: np.abs(2.0 - cn)
         if gain:
-            ci_cf[0] = cf_est(
-                brentq(lambda x: cn_est(x) - ci_mle_theta[0], 2.0, 3.0)
-            )
-            ci_cf[1] = cf_est(
-                brentq(lambda x: cn_est(x) - ci_mle_theta[1], 2.0, 3.0)
-            )
-            ci_cf[2] = cf_est(
-                brentq(lambda x: cn_est(x) - ci_mle_theta[2], 2.0, 3.0)
-            )
+            ci_cf[0] = cf_est(brentq(lambda x: cn_est(x) - ci_mle_theta[0], 2.0, 3.0))
+            ci_cf[1] = cf_est(brentq(lambda x: cn_est(x) - ci_mle_theta[1], 2.0, 3.0))
+            ci_cf[2] = cf_est(brentq(lambda x: cn_est(x) - ci_mle_theta[2], 2.0, 3.0))
         else:
-            ci_cf[0] = cf_est(
-                brentq(lambda x: cn_est(x) - ci_mle_theta[0], 1.0, 2.0)
-            )
-            ci_cf[1] = cf_est(
-                brentq(lambda x: cn_est(x) - ci_mle_theta[1], 1.0, 2.0)
-            )
-            ci_cf[2] = cf_est(
-                brentq(lambda x: cn_est(x) - ci_mle_theta[2], 1.0, 2.0)
-            )
+            ci_cf[0] = cf_est(brentq(lambda x: cn_est(x) - ci_mle_theta[0], 1.0, 2.0))
+            ci_cf[1] = cf_est(brentq(lambda x: cn_est(x) - ci_mle_theta[1], 1.0, 2.0))
+            ci_cf[2] = cf_est(brentq(lambda x: cn_est(x) - ci_mle_theta[2], 1.0, 2.0))
         return ci_mle_theta, ci_cf
 
 
