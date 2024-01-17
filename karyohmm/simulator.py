@@ -323,7 +323,7 @@ class PGTSim(PGTSimBase):
         afs=None,
         ploidy=2,
         m=10000,
-        length=50e6,
+        length=1e7,
         rec_prob=1e-4,
         mat_skew=0.5,
         std_dev=0.15,
