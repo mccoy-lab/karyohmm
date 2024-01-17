@@ -327,7 +327,7 @@ class PGTSim(PGTSimBase):
         rec_prob=1e-4,
         mat_skew=0.5,
         std_dev=0.15,
-        mix_prop=0.7,
+        mix_prop=0.3,
         alpha=1.0,
         switch_err_rate=1e-2,
         seed=42,
@@ -476,9 +476,10 @@ class PGTSimMosaic(PGTSimBase):
         props=np.array([0, 0, 1.0, 0.0]),
         ncells=10,
         m=10000,
+        length=10e6,
         rec_prob=1e-4,
         mat_skew=0.5,
-        std_dev=0.2,
+        std_dev=0.15,
         mix_prop=0.3,
         alpha=1.0,
         seed=42,
@@ -487,6 +488,7 @@ class PGTSimMosaic(PGTSimBase):
         assert ploidies.size == props.size
         assert m > 0
         assert ncells > 0
+        assert length > 0
         if ~np.isclose(np.sum(props), 1.0):
             props /= np.sum(props)
         # 1. Simulate the parental haplotypes
@@ -537,6 +539,7 @@ class PGTSimMosaic(PGTSimBase):
         # Take the mean BAF + LRR estimates across the bulk samples
         baf_embryo = np.mean(bafs, axis=0)
         lrr_embryo = np.mean(lrrs, axis=0)
+        pos = np.sort(np.random.uniform(high=length, size=m))
         assert baf_embryo.size == m
         res_table = {
             "mat_haps": mat_haps,
@@ -549,6 +552,7 @@ class PGTSimMosaic(PGTSimBase):
             "baf_embryo": baf_embryo,
             "lrr_embryo": lrr_embryo,
             "m": m,
+            "pos": pos,
             "aploid": aploids,
             "ploidies": mix_ploidies,
             "rec_prob": rec_prob,
