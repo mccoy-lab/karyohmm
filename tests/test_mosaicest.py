@@ -3,6 +3,7 @@ import numpy as np
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
+from karyohmm_utils import logsumexp
 
 from karyohmm import MosaicEst, PGTSim
 
@@ -26,6 +27,24 @@ def test_baf_hets(data=data_disomy):
     )
     m_est.baf_hets()
     assert m_est.het_bafs is not None
+
+
+@given(
+    sw_err=st.floats(min_value=1e-8, max_value=0.05),
+    t_rate=st.floats(min_value=1e-8, max_value=0.2),
+)
+def test_transition_matrices(sw_err, t_rate):
+    """Test that creation of the transition matrices is well-reasoned."""
+    m_est = MosaicEst(
+        mat_haps=data_disomy["mat_haps"],
+        pat_haps=data_disomy["pat_haps"],
+        bafs=data_disomy["baf_embryo"],
+    )
+    m_est.create_transition_matrix(switch_err=sw_err, t_rate=t_rate)
+    # Assert that all of the rows sum up to 1
+    assert np.isclose(logsumexp(m_est.A[0, :]), 0.0)
+    assert np.isclose(logsumexp(m_est.A[1, :]), 0.0)
+    assert np.isclose(logsumexp(m_est.A[2, :]), 0.0)
 
 
 @given(theta=st.floats(min_value=0.0, max_value=0.5))

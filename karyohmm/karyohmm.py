@@ -998,6 +998,8 @@ class MosaicEst:
             - A (`np.array`): state x state matrix of log-transition rates
 
         """
+        assert (switch_err > 0) and (switch_err <= 0.05)
+        assert (t_rate > 0) and (t_rate < 0.5)
         A = np.zeros(shape=(3, 3))
         # Just make this as a kind of switch error rate or something?
         # 1. Transition rates here are the switch error rate effectively
