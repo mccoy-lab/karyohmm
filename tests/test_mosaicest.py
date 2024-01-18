@@ -9,7 +9,13 @@ from karyohmm import MosaicEst, PGTSim
 
 # --- Generating test data for applications --- #
 pgt_sim = PGTSim()
-data_disomy = pgt_sim.full_ploidy_sim(m=2000, length=10e6, std_dev=0.15, seed=42)
+data_disomy = pgt_sim.full_ploidy_sim(m=5000, length=1e7, std_dev=0.1, seed=42)
+data_trisomy = pgt_sim.full_ploidy_sim(
+    m=5000, ploidy=3, length=1e7, std_dev=0.1, seed=42
+)
+data_monosomy = pgt_sim.full_ploidy_sim(
+    m=5000, ploidy=1, length=1e7, std_dev=0.1, seed=42
+)
 
 
 def test_mosaic_est_init(data=data_disomy):
@@ -69,3 +75,55 @@ def test_est_cf(theta):
         assert cf_loss == 0.0
     if theta == 0.5:
         assert (cf_gain == 1.0) and (cf_loss == 1.0)
+
+
+def test_mle_theta_disomy(data=data_disomy):
+    """Test that the mle estimation of theta works correctly in the disomy case."""
+    m_est = MosaicEst(
+        mat_haps=data["mat_haps"], pat_haps=data["pat_haps"], bafs=data["baf_embryo"]
+    )
+    m_est.baf_hets()
+    m_est.create_transition_matrix()
+    # Actually run the estimation routine and make sure the estimand is good ...
+    m_est.est_mle_theta()
+    assert m_est.mle_theta is not None
+    assert ~np.isnan(m_est.mle_theta)
+    assert m_est.mle_theta < 1e-3
+    ci_theta = m_est.ci_mle_theta()
+    assert ci_theta[0] <= ci_theta[1]
+    assert ci_theta[1] <= ci_theta[2]
+
+
+def test_mle_theta_trisomy(data=data_trisomy):
+    """Test that the mle estimation of theta works correctly in the trisomy case."""
+    m_est = MosaicEst(
+        mat_haps=data["mat_haps"], pat_haps=data["pat_haps"], bafs=data["baf_embryo"]
+    )
+    m_est.baf_hets()
+    m_est.create_transition_matrix()
+    # Actually run the estimation routine and make sure the estimand is good ...
+    m_est.est_mle_theta()
+    assert m_est.mle_theta is not None
+    assert ~np.isnan(m_est.mle_theta)
+    assert m_est.mle_theta > 0.1
+    ci_theta = m_est.ci_mle_theta()
+    assert ci_theta[0] <= ci_theta[1]
+    assert ci_theta[1] <= ci_theta[2]
+
+
+def test_mle_theta_monosomy(data=data_monosomy):
+    """Test that the mle estimation of theta works correctly in the monosomy case."""
+    m_est = MosaicEst(
+        mat_haps=data["mat_haps"], pat_haps=data["pat_haps"], bafs=data["baf_embryo"]
+    )
+    m_est.baf_hets()
+    m_est.create_transition_matrix()
+    # Actually run the estimation routine and make sure the estimand is good ...
+    m_est.est_mle_theta()
+    assert m_est.mle_theta is not None
+    assert ~np.isnan(m_est.mle_theta)
+    # The shift for monosomies should be much higher than for trisomies
+    assert m_est.mle_theta > 0.33
+    ci_theta = m_est.ci_mle_theta()
+    assert ci_theta[0] <= ci_theta[1]
+    assert ci_theta[1] <= ci_theta[2]

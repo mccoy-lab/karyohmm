@@ -27,7 +27,7 @@ from karyohmm_utils import (
     viterbi_algo,
     viterbi_algo_sibs,
 )
-from scipy.optimize import brentq, minimize, minimize_scalar
+from scipy.optimize import brentq, brute, minimize
 from scipy.special import logsumexp as logsumexp_sp
 
 
@@ -1060,13 +1060,11 @@ class MosaicEst:
     def est_mle_theta(self, std_dev=0.1):
         """Estimate the MLE estimate of theta."""
         try:
-            opt_res = minimize_scalar(
-                lambda x: self.forward_algo_mix(theta=x, std_dev=std_dev),
-                method="Powell",
-                bounds=(0.0, 0.5),
-            )
-            self.mle_theta = opt_res.x
-        except Exception:
+            f = lambda x: -self.forward_algo_mix(theta=x, std_dev=std_dev)[2]
+            x0 = brute(func=f, ranges=[[0.0, 0.5]], disp=True, finish=None, Ns=25)
+            opt_res = minimize(f, x0=[x0], bounds=[(0.0, 0.5)])
+            self.mle_theta = opt_res.x[0]
+        except ValueError:
             self.mle_theta = np.nan
 
     def ci_mle_theta(self, std_dev=0.1, h=1e-6):
@@ -1076,12 +1074,19 @@ class MosaicEst:
         """
         assert (self.mle_theta is not None) and (~np.isnan(self.mle_theta))
         assert (h >= 0) and (h <= 0.01)
-        ci_mle_theta = (np.nan, np.nan, np.nan)
+        ci_mle_theta = [np.nan, np.nan, np.nan]
         try:
             f = lambda x: self.forward_algo_mix(theta=x, std_dev=std_dev)[2]
-            logI = (
-                f(self.mle_theta + h) - 2 * f(self.mle_theta) + f(self.mle_theta - h)
-            ) / (h**2)
+            if self.mle_theta < h:
+                logI = (
+                    f(self.mle_theta + h) - 2 * f(self.mle_theta) + f(self.mle_theta)
+                ) / (h**2)
+            else:
+                logI = (
+                    f(self.mle_theta + h)
+                    - 2 * f(self.mle_theta)
+                    + f(self.mle_theta - h)
+                ) / (h**2)
             fisher_I_inv = 1.0 / -logI
 
             ci_mle_theta[0] = self.mle_theta - 1.96 * np.sqrt(
