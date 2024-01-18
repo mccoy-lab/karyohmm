@@ -6,7 +6,7 @@ cdef double sqrt2 = sqrt(2.);
 cdef double sqrt2pi = sqrt(2*pi);
 cdef double logsqrt2pi = log(1/sqrt2pi)
 
-cdef double logsumexp(double[:] x):
+cpdef double logsumexp(double[:] x):
     """Cython implementation of the logsumexp trick"""
     cdef int i,n;
     cdef double m = -1e32;
@@ -17,6 +17,53 @@ cdef double logsumexp(double[:] x):
     for i in range(n):
         c += exp(x[i] - m)
     return m + log(c)
+
+cdef double logdiffexp(double a, double b):
+    """Log-sum-exp trick but for differences."""
+    return log(exp(a) - exp(b) + 1e-124)
+
+cpdef double logaddexp(double a, double b):
+    cdef double m = -1e32;
+    cdef double c = 0.0;
+    m = max(a,b)
+    c = exp(a - m) + exp(b - m)
+    return m + log(c)
+
+cpdef double logmeanexp(double a, double b):
+    """Apply a logmeanexp routine for two numbers."""
+    cdef double m = -1e32;
+    cdef double c = 0.0;
+    m = max(a,b)
+    c = exp(a - m) + exp(b - m)
+    return m + log(c) - 2.0
+
+cdef double psi(double x):
+    """CDF for a normal distribution function in log-space."""
+    if x < -4:
+        return logsqrt2pi - 0.5*(x**2) - log(-x)
+    else:
+        return log((1.0 + erf(x / sqrt2))) - log(2.0)
+
+cdef double norm_pdf(double x):
+    """PDF for the normal distribution function in log-space.
+
+    NOTE: at some point we might want to generalize this to include mean-shift and stddev.
+    """
+    return logsqrt2pi - 0.5*(x**2)
+
+cpdef double norm_logl(double x, double m, double s):
+    """Normal log-likelihood function."""
+    return logsqrt2pi - 0.5*log(s) - 0.5*((x - m) / s)**2
+
+cpdef double truncnorm_pdf(double x, double a, double b, double mu=0.5, double sigma=0.2):
+    """Custom definition of the log of the truncated normal pdf."""
+    cdef double p, z, alpha, beta, eta;
+    beta = (b - mu) / sigma
+    alpha = (a - mu) / sigma
+    eta = (max(min(x,b),a) - mu) / sigma
+    z = logdiffexp(psi(beta), psi(alpha))
+    p = norm_pdf(eta) - log(sigma) - z
+    return p
 
 cpdef double mat_dosage(mat_hap, state):
     """Obtain the maternal dosage."""
@@ -69,38 +116,6 @@ cpdef double pat_dosage(pat_hap, state):
             p = pat_hap[state[2]]
     return p
 
-cdef double psi(double x):
-    """CDF for a normal distribution function in log-space."""
-    if x < -4:
-        return logsqrt2pi - 0.5*(x**2) - log(-x)
-    else:
-        return log((1.0 + erf(x / sqrt2))) - log(2.0)
-
-cdef double norm_pdf(double x):
-    """PDF for the normal distribution function in log-space."""
-    return logsqrt2pi -  0.5*(x**2)
-
-cdef double logdiffexp(double a, double b):
-    """Log-sum-exp trick but for differences."""
-    return log(exp(a) - exp(b) + 1e-124)
-
-cdef double logaddexp(double a, double b):
-    cdef double m = -1e32;
-    cdef double c = 0.0;
-    m = max(a,b)
-    c = exp(a - m) + exp(b - m)
-    return m + log(c)
-
-cpdef double truncnorm_pdf(double x, double a, double b, double mu=0.5, double sigma=0.2):
-    """Custom definition of the log of the truncated normal pdf."""
-    cdef double p, z, alpha, beta, eta;
-    beta = (b - mu) / sigma
-    alpha = (a - mu) / sigma
-    eta = (max(min(x,b),a) - mu) / sigma
-    z = logdiffexp(psi(beta), psi(alpha))
-    p = norm_pdf(eta) - log(sigma) - z
-    return p
-
 cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double std_dev=0.2, int k=2):
     """Emission distribution function for B-allele frequency in the sample."""
     cdef double mu_i, x, x0, x1;
@@ -117,6 +132,19 @@ cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double
         return logaddexp(log(pi0) + x1, log((1 - pi0)) + x)
     else:
         return x
+
+cpdef double mix_loglik(double[:] bafs, double pi0=0.5, double theta=0.1, double std_dev=0.2):
+    """Mixture log-likelihood for expected heterozygotes to estimate baf-deviation."""
+    cdef double logll = 0.0;
+    cdef int i, n;
+    cdef double ll[3];
+    n = bafs.size
+    for i in range(n):
+        ll[0] = log(pi0/2.0) + truncnorm_pdf(bafs[i], 0.0, 1.0, mu=0.5+theta, sigma=std_dev)
+        ll[1] = log(pi0/2.0) + truncnorm_pdf(bafs[i], 0.0, 1.0, mu=0.5-theta, sigma=std_dev)
+        ll[2] = log(1.0 - pi0) + truncnorm_pdf(bafs[i], 0.0, 1.0, mu=0.5, sigma=std_dev)
+        logll += logsumexp(ll)
+    return logll
 
 def lod_phase(haps1, haps2, baf, **kwargs):
     """Estimate the log-likelihood of being the phase vs. antiphase orientation for heterozygotes."""
