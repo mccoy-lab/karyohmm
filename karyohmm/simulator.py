@@ -391,10 +391,10 @@ class PGTSim(PGTSimBase):
         afs=None,
         ploidy=2,
         m=10000,
-        length=50e6,
+        length=1e7,
         nsibs=3,
         rec_prob=1e-4,
-        std_dev=0.2,
+        std_dev=0.15,
         mix_prop=0.3,
         switch_err_rate=1e-2,
         seed=42,
@@ -476,12 +476,13 @@ class PGTSimMosaic(PGTSimBase):
         props=np.array([0, 0, 1.0, 0.0]),
         ncells=10,
         m=10000,
-        length=10e6,
+        length=1e7,
         rec_prob=1e-4,
         mat_skew=0.5,
         std_dev=0.15,
         mix_prop=0.3,
         alpha=1.0,
+        switch_err_rate=1e-2,
         seed=42,
     ):
         """Simulate BAF from a mixture of ploidies."""
@@ -495,7 +496,7 @@ class PGTSimMosaic(PGTSimBase):
         np.random.seed(seed)
         mat_haps, pat_haps = self.draw_parental_genotypes(afs=afs, m=m, seed=seed)
         mat_haps_prime, pat_haps_prime, _, _ = self.create_switch_errors(
-            mat_haps, pat_haps, err_rate=3e-2, seed=seed
+            mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
         )
         # 2. Draw cells from a distribution of ploidies
         mix_ploidies = np.random.choice(ploidies, p=props, size=ncells)
