@@ -18,6 +18,53 @@ cpdef double logsumexp(double[:] x):
         c += exp(x[i] - m)
     return m + log(c)
 
+cdef double logdiffexp(double a, double b):
+    """Log-sum-exp trick but for differences."""
+    return log(exp(a) - exp(b) + 1e-124)
+
+cpdef double logaddexp(double a, double b):
+    cdef double m = -1e32;
+    cdef double c = 0.0;
+    m = max(a,b)
+    c = exp(a - m) + exp(b - m)
+    return m + log(c)
+
+cpdef double logmeanexp(double a, double b):
+    """Apply a logmeanexp routine for two numbers."""
+    cdef double m = -1e32;
+    cdef double c = 0.0;
+    m = max(a,b)
+    c = exp(a - m) + exp(b - m)
+    return m + log(c) - 2.0
+
+cdef double psi(double x):
+    """CDF for a normal distribution function in log-space."""
+    if x < -4:
+        return logsqrt2pi - 0.5*(x**2) - log(-x)
+    else:
+        return log((1.0 + erf(x / sqrt2))) - log(2.0)
+
+cdef double norm_pdf(double x):
+    """PDF for the normal distribution function in log-space.
+
+    NOTE: at some point we might want to generalize this to include mean-shift and stddev.
+    """
+    return logsqrt2pi - 0.5*(x**2)
+
+cpdef double norm_logl(double x, double m, double s):
+    """Normal log-likelihood function."""
+    return logsqrt2pi - 0.5*log(s) - 0.5*((x - m) / s)**2
+
+cpdef double truncnorm_pdf(double x, double a, double b, double mu=0.5, double sigma=0.2):
+    """Custom definition of the log of the truncated normal pdf."""
+    cdef double p, z, alpha, beta, eta;
+    beta = (b - mu) / sigma
+    alpha = (a - mu) / sigma
+    eta = (max(min(x,b),a) - mu) / sigma
+    z = logdiffexp(psi(beta), psi(alpha))
+    p = norm_pdf(eta) - log(sigma) - z
+    return p
+
 cpdef double mat_dosage(mat_hap, state):
     """Obtain the maternal dosage."""
     cdef int k,i,l;
@@ -67,38 +114,6 @@ cpdef double pat_dosage(pat_hap, state):
             p = pat_hap[state[2]] + pat_hap[state[3]]
         else:
             p = pat_hap[state[2]]
-    return p
-
-cdef double psi(double x):
-    """CDF for a normal distribution function in log-space."""
-    if x < -4:
-        return logsqrt2pi - 0.5*(x**2) - log(-x)
-    else:
-        return log((1.0 + erf(x / sqrt2))) - log(2.0)
-
-cdef double norm_pdf(double x):
-    """PDF for the normal distribution function in log-space."""
-    return logsqrt2pi -  0.5*(x**2)
-
-cdef double logdiffexp(double a, double b):
-    """Log-sum-exp trick but for differences."""
-    return log(exp(a) - exp(b) + 1e-124)
-
-cdef double logaddexp(double a, double b):
-    cdef double m = -1e32;
-    cdef double c = 0.0;
-    m = max(a,b)
-    c = exp(a - m) + exp(b - m)
-    return m + log(c)
-
-cpdef double truncnorm_pdf(double x, double a, double b, double mu=0.5, double sigma=0.2):
-    """Custom definition of the log of the truncated normal pdf."""
-    cdef double p, z, alpha, beta, eta;
-    beta = (b - mu) / sigma
-    alpha = (a - mu) / sigma
-    eta = (max(min(x,b),a) - mu) / sigma
-    z = logdiffexp(psi(beta), psi(alpha))
-    p = norm_pdf(eta) - log(sigma) - z
     return p
 
 cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double std_dev=0.2, int k=2):

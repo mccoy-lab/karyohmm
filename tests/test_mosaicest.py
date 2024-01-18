@@ -1,6 +1,8 @@
 """Test suite for mosaic cell-fraction estimation."""
 import numpy as np
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from karyohmm import MosaicEst, PGTSim
 
@@ -26,31 +28,25 @@ def test_baf_hets(data=data_disomy):
     assert m_est.het_bafs is not None
 
 
-def test_mosaic_est_w_sigma(data=data_disomy):
-    """Test estimates of cell-fraction for mosaicism."""
+@given(theta=st.floats(min_value=0.0, max_value=0.5))
+def test_est_cf(theta):
+    """Test numerical accuracy of cell-fraction estimation."""
     m_est = MosaicEst(
-        mat_haps=data["mat_haps"], pat_haps=data["pat_haps"], bafs=data["baf_embryo"]
+        mat_haps=data_disomy["mat_haps"],
+        pat_haps=data_disomy["pat_haps"],
+        bafs=data_disomy["baf_embryo"],
     )
-    m_est.baf_hets()
-    ci_mle_theta, ci_cf = m_est.est_mle_mosaic(sigma=0.15)
-    assert ci_mle_theta[0] <= ci_mle_theta[1]
-    assert ci_mle_theta[1] <= ci_mle_theta[2]
-    assert ci_cf[0] <= ci_cf[1]
-    assert ci_cf[1] <= ci_cf[2]
-    # It should be a very low mosaic cell-fraction ...
-    assert ci_cf[1] <= 1e-2
-
-
-def test_mosaic_est_wo_sigma(data=data_disomy):
-    """Test estimates of cell-fraction for mosaicism."""
-    m_est = MosaicEst(
-        mat_haps=data["mat_haps"], pat_haps=data["pat_haps"], bafs=data["baf_embryo"]
-    )
-    m_est.baf_hets()
-    ci_mle_theta, ci_cf = m_est.est_mle_mosaic()
-    assert ci_mle_theta[0] <= ci_mle_theta[1]
-    assert ci_mle_theta[1] <= ci_mle_theta[2]
-    assert ci_cf[0] <= ci_cf[1]
-    assert ci_cf[1] <= ci_cf[2]
-    # It should be a very low mosaic cell-fraction still ...
-    assert ci_cf[1] <= 1e-2
+    cf_gain = m_est.est_cf(theta=theta, gain=True)
+    cf_loss = m_est.est_cf(theta=theta, gain=False)
+    if np.isnan(theta):
+        assert np.isnan(cf_gain) and np.isnan(cf_loss)
+    assert (cf_gain >= 0) and (cf_gain <= 1.0)
+    if theta >= (2 / 3 - 1 / 2):
+        # This is the maximal value for a chromosomal gain ...
+        assert cf_gain == 1.0
+    if theta == 0.0:
+        # No possible gain or loss
+        assert cf_gain == 0.0
+        assert cf_loss == 0.0
+    if theta == 0.5:
+        assert (cf_gain == 1.0) and (cf_loss == 1.0)
