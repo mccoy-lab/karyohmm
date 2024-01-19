@@ -1081,7 +1081,7 @@ class MosaicEst:
                 logI = (
                     f(self.mle_theta + h) - 2 * f(self.mle_theta) + f(self.mle_theta)
                 ) / (h**2)
-            elif self.mle_theta > 0.5 - h:
+            elif self.mle_theta > (0.5 - h):
                 logI = (
                     f(self.mle_theta) - 2 * f(self.mle_theta) + f(self.mle_theta - h)
                 ) / (h**2)
@@ -1101,7 +1101,7 @@ class MosaicEst:
                 1.0 / self.n_het * fisher_I_inv
             )
             ci_mle_theta[0] = max(0.0, ci_mle_theta[0])
-            ci_mle_theta[2] = min(1.0, ci_mle_theta[2])
+            ci_mle_theta[2] = min(0.5, ci_mle_theta[2])
         except ValueError:
             pass
         return ci_mle_theta
