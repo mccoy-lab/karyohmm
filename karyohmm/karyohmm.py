@@ -1081,6 +1081,10 @@ class MosaicEst:
                 logI = (
                     f(self.mle_theta + h) - 2 * f(self.mle_theta) + f(self.mle_theta)
                 ) / (h**2)
+            elif self.mle_theta > 0.5 - h:
+                logI = (
+                    f(self.mle_theta) - 2 * f(self.mle_theta) + f(self.mle_theta - h)
+                ) / (h**2)
             else:
                 logI = (
                     f(self.mle_theta + h)
