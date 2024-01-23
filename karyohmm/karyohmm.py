@@ -495,7 +495,7 @@ class MetaHMM(AneuploidyHMM):
 
 
 class QuadHMM(AneuploidyHMM):
-    """Updated HMM for sibling euploid embryos based on the model of Roach et al 2010 but designed for BAF data."""
+    """HMM for sibling euploid embryos based on Roach et al 2010 but for BAF data."""
 
     def __init__(self):
         """Initialize the QuadHMM model."""
@@ -962,16 +962,18 @@ class QuadHMM(AneuploidyHMM):
 class MosaicEst:
     """Class to perform estimation of mosaic rates."""
 
-    def __init__(self, mat_haps, pat_haps, bafs):
+    def __init__(self, mat_haps, pat_haps, bafs, pos):
         """Initialize the class."""
         assert mat_haps.ndim == 2
         assert pat_haps.ndim == 2
         assert bafs.ndim == 1
         assert bafs.size == mat_haps.shape[1]
         assert bafs.size == pat_haps.shape[1]
+        assert pos.size == bafs.size
         self.mat_haps = mat_haps
         self.pat_haps = pat_haps
         self.bafs = bafs
+        self.pos = pos
         self.het_bafs = None
         self.A = None
         self.mle_theta = None
@@ -984,6 +986,30 @@ class MosaicEst:
             (mat_geno == 2) & (pat_geno == 0)
         )
         self.het_bafs = self.bafs[exp_het_idx]
+        self.n_het = self.het_bafs.size
+        if self.n_het < 10:
+            raise ValueError("Fewer than 10 expected heterozygotes!")
+
+    def viterbi_hets(self, **kwargs):
+        """Predict the embryo genotype using viterbi traceback from parental haplotypes (under disomy)."""
+        meta_hmm = MetaHMM(disomy=True)
+        path, karyo, _, _ = meta_hmm.viterbi_algorithm(
+            pos=self.pos,
+            mat_haps=self.mat_haps,
+            pat_haps=self.pat_haps,
+            bafs=self.bafs,
+            **kwargs,
+        )
+        embryo_geno = np.zeros(path.size, dtype=np.int32)
+        m = self.pos.size
+        assert embryo_geno.size == m
+        for i in range(m):
+            embryo_geno[i] = (
+                self.mat_haps[karyo[path[i]][0], i]
+                + self.pat_haps[karyo[path[i]][2], i]
+            )
+        pred_het_idx = embryo_geno == 1
+        self.het_bafs = self.bafs[pred_het_idx]
         self.n_het = self.het_bafs.size
         if self.n_het < 10:
             raise ValueError("Fewer than 10 expected heterozygotes!")

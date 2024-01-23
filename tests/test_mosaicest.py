@@ -21,7 +21,10 @@ data_monosomy = pgt_sim.full_ploidy_sim(
 def test_mosaic_est_init(data=data_disomy):
     """Test the intialization of the mosaic estimation."""
     m_est = MosaicEst(
-        mat_haps=data["mat_haps"], pat_haps=data["pat_haps"], bafs=data["baf_embryo"]
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+        bafs=data["baf_embryo"],
+        pos=data["pos"],
     )
     assert m_est.het_bafs is None
 
@@ -29,7 +32,10 @@ def test_mosaic_est_init(data=data_disomy):
 def test_baf_hets(data=data_disomy):
     """Test isolation of BAFs from heterozygotes."""
     m_est = MosaicEst(
-        mat_haps=data["mat_haps"], pat_haps=data["pat_haps"], bafs=data["baf_embryo"]
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+        bafs=data["baf_embryo"],
+        pos=data["pos"],
     )
     m_est.baf_hets()
     assert m_est.het_bafs is not None
@@ -45,6 +51,7 @@ def test_transition_matrices(sw_err, t_rate):
         mat_haps=data_disomy["mat_haps"],
         pat_haps=data_disomy["pat_haps"],
         bafs=data_disomy["baf_embryo"],
+        pos=data_disomy["pos"],
     )
     m_est.create_transition_matrix(switch_err=sw_err, t_rate=t_rate)
     # Assert that all of the rows sum up to 1
@@ -60,6 +67,7 @@ def test_est_cf(theta):
         mat_haps=data_disomy["mat_haps"],
         pat_haps=data_disomy["pat_haps"],
         bafs=data_disomy["baf_embryo"],
+        pos=data_disomy["pos"],
     )
     cf_gain = m_est.est_cf(theta=theta, gain=True)
     cf_loss = m_est.est_cf(theta=theta, gain=False)
@@ -80,7 +88,10 @@ def test_est_cf(theta):
 def test_mle_theta_disomy(data=data_disomy):
     """Test that the mle estimation of theta works correctly in the disomy case."""
     m_est = MosaicEst(
-        mat_haps=data["mat_haps"], pat_haps=data["pat_haps"], bafs=data["baf_embryo"]
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+        bafs=data["baf_embryo"],
+        pos=data["pos"],
     )
     m_est.baf_hets()
     m_est.create_transition_matrix()
@@ -97,7 +108,10 @@ def test_mle_theta_disomy(data=data_disomy):
 def test_mle_theta_trisomy(data=data_trisomy):
     """Test that the mle estimation of theta works correctly in the trisomy case."""
     m_est = MosaicEst(
-        mat_haps=data["mat_haps"], pat_haps=data["pat_haps"], bafs=data["baf_embryo"]
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+        bafs=data["baf_embryo"],
+        pos=data["pos"],
     )
     m_est.baf_hets()
     m_est.create_transition_matrix()
@@ -114,7 +128,10 @@ def test_mle_theta_trisomy(data=data_trisomy):
 def test_mle_theta_monosomy(data=data_monosomy):
     """Test that the mle estimation of theta works correctly in the monosomy case."""
     m_est = MosaicEst(
-        mat_haps=data["mat_haps"], pat_haps=data["pat_haps"], bafs=data["baf_embryo"]
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+        bafs=data["baf_embryo"],
+        pos=data["pos"],
     )
     m_est.baf_hets()
     m_est.create_transition_matrix()
@@ -127,3 +144,18 @@ def test_mle_theta_monosomy(data=data_monosomy):
     ci_theta = m_est.ci_mle_theta()
     assert ci_theta[0] <= ci_theta[1]
     assert ci_theta[1] <= ci_theta[2]
+
+
+def viterbi_geno(data=data_disomy):
+    """Test of new viterbi genotyping routine."""
+    m_est = MosaicEst(
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+        bafs=data["baf_embryo"],
+        pos=data["pos"],
+    )
+    m_est.baf_hets()
+    prev_hets = m_est.n_hets.copy()
+    m_est.viterbi_geno()
+    # Viterbi-based genotyping should uncover substantially more heterozygotes
+    assert m_est.n_hets > prev_hets
