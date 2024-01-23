@@ -156,6 +156,69 @@ def viterbi_geno(data=data_disomy):
     )
     m_est.baf_hets()
     prev_hets = m_est.n_hets.copy()
-    m_est.viterbi_geno()
+    m_est.viterbi_hets()
     # Viterbi-based genotyping should uncover substantially more heterozygotes
     assert m_est.n_hets > prev_hets
+
+
+def test_mle_theta_disomy_viterbi(data=data_disomy):
+    """Test the mle estimation of theta under a viterbi genotyping strategy."""
+    m_est = MosaicEst(
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+        bafs=data["baf_embryo"],
+        pos=data["pos"],
+    )
+    m_est.viterbi_hets()
+    m_est.create_transition_matrix()
+    # Actually run the estimation routine and make sure the estimand is good ...
+    m_est.est_mle_theta()
+    assert m_est.mle_theta is not None
+    assert ~np.isnan(m_est.mle_theta)
+    # The shift for monosomies should be much higher than for trisomies
+    assert m_est.mle_theta < 0.005
+    ci_theta = m_est.ci_mle_theta()
+    assert ci_theta[0] <= ci_theta[1]
+    assert ci_theta[1] <= ci_theta[2]
+
+
+def test_mle_theta_trisomy_viterbi(data=data_trisomy):
+    """Test the mle estimation of theta under a viterbi genotyping strategy."""
+    m_est = MosaicEst(
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+        bafs=data["baf_embryo"],
+        pos=data["pos"],
+    )
+    m_est.viterbi_hets()
+    m_est.create_transition_matrix()
+    # Actually run the estimation routine and make sure the estimand is good ...
+    m_est.est_mle_theta()
+    assert m_est.mle_theta is not None
+    assert ~np.isnan(m_est.mle_theta)
+    # The shift for a meiotic trisomy should be much higher than for trisomies
+    assert m_est.mle_theta > 0.08
+    ci_theta = m_est.ci_mle_theta()
+    assert ci_theta[0] <= ci_theta[1]
+    assert ci_theta[1] <= ci_theta[2]
+
+
+def test_mle_theta_monosomy_viterbi(data=data_monosomy):
+    """Test the mle estimation of theta under a viterbi genotyping strategy."""
+    m_est = MosaicEst(
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+        bafs=data["baf_embryo"],
+        pos=data["pos"],
+    )
+    m_est.viterbi_hets()
+    m_est.create_transition_matrix()
+    # Actually run the estimation routine and make sure the estimand is good ...
+    m_est.est_mle_theta()
+    assert m_est.mle_theta is not None
+    assert ~np.isnan(m_est.mle_theta)
+    # The shift for a meiotic trisomy should be much higher than for trisomies
+    assert m_est.mle_theta > 0.3
+    ci_theta = m_est.ci_mle_theta()
+    assert ci_theta[0] <= ci_theta[1]
+    assert ci_theta[1] <= ci_theta[2]
