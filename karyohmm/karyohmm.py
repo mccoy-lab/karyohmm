@@ -21,10 +21,13 @@ from karyohmm_utils import (
     forward_algo,
     forward_algo_sibs,
     lod_phase,
+    logsumexp,
+    mix_loglik,
+    norm_logl,
     viterbi_algo,
     viterbi_algo_sibs,
 )
-from scipy.optimize import minimize
+from scipy.optimize import brentq, brute, minimize
 from scipy.special import logsumexp as logsumexp_sp
 
 
@@ -60,6 +63,7 @@ class AneuploidyHMM:
     def est_sigma_pi0(
         self,
         bafs,
+        pos,
         mat_haps,
         pat_haps,
         algo="Nelder-Mead",
@@ -71,6 +75,7 @@ class AneuploidyHMM:
 
         Arguments:
             - bafs (`np.array`): B-allele frequencies across the all m sites
+            - pos (`np.array`): basepair positions of the SNPs
             - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
             - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
             - algo (`str`): one of Nelder-Mead, L-BFGS-B, or Powell algorithms for optimization
@@ -92,6 +97,7 @@ class AneuploidyHMM:
         opt_res = minimize(
             lambda x: -self.forward_algorithm(
                 bafs=bafs,
+                pos=pos,
                 mat_haps=mat_haps,
                 pat_haps=pat_haps,
                 pi0=x[0],
@@ -191,7 +197,7 @@ class MetaHMM(AneuploidyHMM):
                 dtype=str,
             )
 
-    def create_transition_matrix(self, karyotypes, r=1e-4, a=1e-7, unphased=False):
+    def create_transition_matrix(self, karyotypes, r=1e-8, a=1e-10, unphased=False):
         """Create an inter-karyotype transition matrix.
 
         Arguments:
@@ -226,23 +232,25 @@ class MetaHMM(AneuploidyHMM):
     def forward_algorithm(
         self,
         bafs,
+        pos,
         mat_haps,
         pat_haps,
         pi0=0.5,
         std_dev=0.25,
-        r=1e-4,
-        a=1e-7,
+        r=1e-8,
+        a=1e-10,
         unphased=False,
     ):
         """Forward HMM algorithm under a multi-ploidy model.
 
         Arguments:
             - bafs (`np.array`): B-allele frequencies across the all m sites
+            - pos (`np.array`): m-length vector of basepair positions for sites
             - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
             - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
             - pi0 (`float`): sparsity parameter for B-allele emission model
             - std_dev (`float`): standard deviation for B-allele emission model
-            - r (`float`): intra-karyotype transition rate
+            - r (`float`): intra-karyotype transition rate (recombination)
             - a (`float`): inter-karyotype transition rate
             - unphased (`bool`): run the model in unphased mode
 
@@ -255,14 +263,18 @@ class MetaHMM(AneuploidyHMM):
 
         """
         assert bafs.ndim == 1
+        assert pos.ndim == 1
         assert (mat_haps.ndim == 2) & (pat_haps.ndim == 2)
         assert (pi0 > 0) & (pi0 < 1.0)
         assert std_dev > 0
         assert bafs.size == mat_haps.shape[1]
+        assert bafs.size == pos.size
         assert mat_haps.shape == pat_haps.shape
+        assert np.all(pos[1:] > pos[:-1])
         A = self.create_transition_matrix(self.karyotypes, r=r, a=a, unphased=unphased)
         alphas, scaler, _, _, loglik = forward_algo(
             bafs,
+            pos,
             mat_haps,
             pat_haps,
             self.states,
@@ -275,23 +287,25 @@ class MetaHMM(AneuploidyHMM):
     def backward_algorithm(
         self,
         bafs,
+        pos,
         mat_haps,
         pat_haps,
         pi0=0.5,
         std_dev=0.25,
-        r=1e-4,
-        a=1e-7,
+        r=1e-8,
+        a=1e-10,
         unphased=False,
     ):
         """Backward HMM algorithm under a given statespace model.
 
         Arguments:
             - bafs (`np.array`): B-allele frequencies across the all m sites
+            - pos (`np.array`): m-length vector of basepair positions for sites
             - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
             - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
             - pi0 (`float`): sparsity parameter for B-allele emission model
             - std_dev (`float`): standard deviation for B-allele emission model
-            - r (`float`): intra-karyotype transition rate
+            - r (`float`): intra-karyotype transition rate (recombination)
             - a (`float`): inter-karyotype transition rate
             - unphased (`bool`): run the model in unphased mode
 
@@ -304,14 +318,18 @@ class MetaHMM(AneuploidyHMM):
 
         """
         assert bafs.ndim == 1
+        assert pos.ndim == 1
         assert (mat_haps.ndim == 2) & (pat_haps.ndim == 2)
         assert (pi0 > 0) & (pi0 < 1.0)
         assert std_dev > 0
         assert bafs.size == mat_haps.shape[1]
+        assert bafs.size == pos.size
         assert mat_haps.shape == pat_haps.shape
+        assert np.all(pos[1:] > pos[:-1])
         A = self.create_transition_matrix(self.karyotypes, r=r, a=a, unphased=unphased)
         betas, scaler, _, _, loglik = backward_algo(
             bafs,
+            pos,
             mat_haps,
             pat_haps,
             self.states,
@@ -324,23 +342,25 @@ class MetaHMM(AneuploidyHMM):
     def forward_backward(
         self,
         bafs,
+        pos,
         mat_haps,
         pat_haps,
         pi0=0.2,
         std_dev=0.25,
-        r=1e-4,
-        a=1e-7,
+        r=1e-8,
+        a=1e-10,
         unphased=False,
     ):
         """Run the forward-backward algorithm across all states.
 
         Arguments:
             - bafs (`np.array`): B-allele frequencies across the all m sites
+            - pos (`np.array`): m-length vector of basepair positions for sites
             - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
             - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
             - pi0 (`float`): sparsity parameter for B-allele emission model
             - std_dev (`float`): standard deviation for B-allele emission model
-            - r (`float`): intra-karyotype transition rate
+            - r (`float`): intra-karyotype transition rate (recombination)
             - a (`float`): inter-karyotype transition rate
             - unphased (`bool`): run the model in unphased mode
 
@@ -352,6 +372,7 @@ class MetaHMM(AneuploidyHMM):
         """
         alphas, _, states, karyotypes, _ = self.forward_algorithm(
             bafs,
+            pos,
             mat_haps,
             pat_haps,
             pi0=pi0,
@@ -362,6 +383,7 @@ class MetaHMM(AneuploidyHMM):
         )
         betas, _, _, _, _ = self.backward_algorithm(
             bafs,
+            pos,
             mat_haps,
             pat_haps,
             pi0=pi0,
@@ -376,18 +398,20 @@ class MetaHMM(AneuploidyHMM):
     def viterbi_algorithm(
         self,
         bafs,
+        pos,
         mat_haps,
         pat_haps,
         pi0=0.2,
         std_dev=0.25,
-        r=1e-4,
-        a=1e-7,
+        r=1e-8,
+        a=1e-10,
         unphased=False,
     ):
         """Implement the viterbi traceback through karyotypic states.
 
         Arguments:
             - bafs (`np.array`): B-allele frequencies across the all m sites
+            - pos (`np.array`): m-length vector of basepair positions for sites
             - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
             - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
             - pi0 (`float`): sparsity parameter for B-allele emission model
@@ -404,15 +428,18 @@ class MetaHMM(AneuploidyHMM):
 
         """
         assert bafs.ndim == 1
+        assert pos.ndim == 1
         assert (mat_haps.ndim == 2) & (pat_haps.ndim == 2)
         assert (pi0 > 0) & (pi0 < 1.0)
         assert std_dev > 0
+        assert bafs.size == pos.size
         assert bafs.size == mat_haps.shape[1]
         assert mat_haps.shape == pat_haps.shape
-
+        assert np.all(pos[1:] > pos[:-1])
         A = self.create_transition_matrix(self.karyotypes, r=r, a=a, unphased=unphased)
         path, states, deltas, psi = viterbi_algo(
             bafs,
+            pos,
             mat_haps,
             pat_haps,
             self.states,
@@ -438,10 +465,12 @@ class MetaHMM(AneuploidyHMM):
         k, m = gammas.shape
         nk = np.unique(karyotypes).size
         gamma_karyo = np.zeros(shape=(nk, m))
-        for i, k in enumerate(np.unique(karyotypes)):
+        _, idx = np.unique(karyotypes, return_index=True)
+        uniq_karyo = karyotypes[np.sort(idx)]
+        for i, k in enumerate(uniq_karyo):
             # This is just the summed version of the posteriors ...
             gamma_karyo[i, :] = np.sum(np.exp(gammas[(karyotypes == k), :]), axis=0)
-        return gamma_karyo
+        return gamma_karyo, uniq_karyo
 
     def posterior_karyotypes(self, gammas, karyotypes):
         """Obtain full posterior on karyotypes chromosome-wide.
@@ -466,7 +495,7 @@ class MetaHMM(AneuploidyHMM):
 
 
 class QuadHMM(AneuploidyHMM):
-    """Updated HMM for sibling embryos based on the model of Roach et al 2010 but designed for BAF data."""
+    """HMM for sibling euploid embryos based on Roach et al 2010 but for BAF data."""
 
     def __init__(self):
         """Initialize the QuadHMM model."""
@@ -483,7 +512,7 @@ class QuadHMM(AneuploidyHMM):
             for j in self.single_states:
                 self.states.append((i, j))
 
-    def create_transition_matrix(self, r=1e-16):
+    def create_transition_matrix(self, r=1e-8):
         """Create the transition matrix.
 
         Arguments:
@@ -502,16 +531,24 @@ class QuadHMM(AneuploidyHMM):
         return np.log(A)
 
     def forward_algorithm(
-        self, bafs, mat_haps, pat_haps, pi0=0.7, std_dev=0.15, r=1e-16
+        self,
+        bafs,
+        pos,
+        mat_haps,
+        pat_haps,
+        pi0=(0.7, 0.7),
+        std_dev=(0.15, 0.15),
+        r=1e-8,
     ):
         """Implement the forward algorithm for QuadHMM model.
 
         Arguments:
             - bafs (`list`): list of two arrays of B-allele frequencies across m sites for two siblings
+            - pos (`np.array`): m-length vector of basepair positions for sites
             - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
             - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
-            - pi0 (`float`): sparsity parameter for B-allele emission model
-            - std_dev (`float`): standard deviation for B-allele emission model
+            - pi0 (`tuple - float`): sparsity parameter for B-allele emission model
+            - std_dev (`tuple - float`): standard deviation for B-allele emission model
             - r (`float`): inter-state transition rate
 
         Returns:
@@ -522,9 +559,17 @@ class QuadHMM(AneuploidyHMM):
             - loglik (`float`): total log-likelihood of joint sibling B-allele frequencies
 
         """
+        assert len(bafs) == 2
+        assert bafs[0].size == pos.size
+        assert bafs[0].size == bafs[1].size
+        assert bafs[0].size == mat_haps.shape[1]
+        assert (mat_haps.ndim == 2) and (pat_haps.ndim == 2)
+        assert mat_haps.size == pat_haps.size
+        assert np.all(pos[1:] > pos[:-1])
         A = self.create_transition_matrix(r=r)
         alphas, scaler, states, karyotypes, loglik = forward_algo_sibs(
             bafs,
+            pos,
             mat_haps,
             pat_haps,
             states=self.states,
@@ -535,16 +580,24 @@ class QuadHMM(AneuploidyHMM):
         return alphas, scaler, states, karyotypes, loglik
 
     def backward_algorithm(
-        self, bafs, mat_haps, pat_haps, pi0=0.7, std_dev=0.15, r=1e-16
+        self,
+        bafs,
+        pos,
+        mat_haps,
+        pat_haps,
+        pi0=(0.7, 0.7),
+        std_dev=(0.15, 0.15),
+        r=1e-8,
     ):
         """Implement the forward algorithm for QuadHMM model.
 
         Arguments:
             - bafs (`list`): list of two arrays of B-allele frequencies across m sites for two siblings
+            - pos (`np.array`): m-length vector of basepair positions for sites
             - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
             - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
-            - pi0 (`float`): sparsity parameter for B-allele emission model
-            - std_dev (`float`): standard deviation for B-allele emission model
+            - pi0 (`tuple - float`): sparsity parameter for B-allele emission model
+            - std_dev (`tuple - float`): standard deviation for B-allele emission model
             - r (`float`): inter-state transition rate
 
         Returns:
@@ -555,9 +608,17 @@ class QuadHMM(AneuploidyHMM):
             - loglik (`float`): total log-likelihood of joint sibling B-allele frequencies
 
         """
+        assert len(bafs) == 2
+        assert bafs[0].size == pos.size
+        assert bafs[0].size == bafs[1].size
+        assert bafs[0].size == mat_haps.shape[1]
+        assert (mat_haps.ndim == 2) and (pat_haps.ndim == 2)
+        assert mat_haps.size == pat_haps.size
+        assert np.all(pos[1:] > pos[:-1])
         A = self.create_transition_matrix(r=r)
         alphas, scaler, states, karyotypes, loglik = backward_algo_sibs(
             bafs,
+            pos,
             mat_haps,
             pat_haps,
             states=self.states,
@@ -568,16 +629,24 @@ class QuadHMM(AneuploidyHMM):
         return alphas, scaler, states, karyotypes, loglik
 
     def forward_backward(
-        self, bafs, mat_haps, pat_haps, pi0=0.7, std_dev=0.15, r=1e-16
+        self,
+        bafs,
+        pos,
+        mat_haps,
+        pat_haps,
+        pi0=(0.7, 0.7),
+        std_dev=(0.15, 0.15),
+        r=1e-8,
     ):
         """Implement the forward-backward algorithm for the QuadHMM model.
 
         Arguments:
             - bafs (`list`): list of two arrays of B-allele frequencies across m sites for two siblings
+            - pos (`np.array`): m-length vector of basepair positions for sites
             - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
             - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
-            - pi0 (`float`): sparsity parameter for B-allele emission model
-            - std_dev (`float`): standard deviation for B-allele emission model
+            - pi0 (`tuple - float`): sparsity parameter for B-allele emission model
+            - std_dev (`tuple - float`): standard deviation for B-allele emission model
             - r (`float`): inter-state transition rate
 
         Returns:
@@ -589,6 +658,7 @@ class QuadHMM(AneuploidyHMM):
         A = self.create_transition_matrix(r=r)
         alphas, _, states, _, _ = forward_algo_sibs(
             bafs,
+            pos,
             mat_haps,
             pat_haps,
             states=self.states,
@@ -598,6 +668,7 @@ class QuadHMM(AneuploidyHMM):
         )
         betas, _, _, _, _ = backward_algo_sibs(
             bafs,
+            pos,
             mat_haps,
             pat_haps,
             states=self.states,
@@ -609,16 +680,24 @@ class QuadHMM(AneuploidyHMM):
         return gammas, states, None
 
     def viterbi_algorithm(
-        self, bafs, mat_haps, pat_haps, pi0=0.7, std_dev=0.15, r=1e-16
+        self,
+        bafs,
+        pos,
+        mat_haps,
+        pat_haps,
+        pi0=(0.7, 0.7),
+        std_dev=(0.15, 0.15),
+        r=1e-8,
     ):
         """Viterbi algorithm definition in a QuadHMM-context.
 
         Arguments:
             - bafs (`list`): list of two arrays of B-allele frequencies across m sites for two siblings
+            - pos (`np.array`): m-length vector of basepair positions for sites
             - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
             - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
-            - pi0 (`float`): sparsity parameter for B-allele emission model
-            - std_dev (`float`): standard deviation for B-allele emission model
+            - pi0 (`tuple - float`): sparsity parameter for B-allele emission model
+            - std_dev (`tuple - float`): standard deviation for B-allele emission model
             - r (`float`): inter-state transition rate
 
         Returns:
@@ -631,6 +710,7 @@ class QuadHMM(AneuploidyHMM):
         A = self.create_transition_matrix(r=r)
         path, states, deltas, psi = viterbi_algo_sibs(
             bafs,
+            pos,
             mat_haps,
             pat_haps,
             states=self.states,
@@ -714,11 +794,21 @@ class QuadHMM(AneuploidyHMM):
             non_identical,
         )
 
-    def viterbi_path(self, bafs, mat_haps, pat_haps, pi0=0.7, std_dev=0.15, r=1e-16):
+    def viterbi_path(
+        self,
+        bafs,
+        pos,
+        mat_haps,
+        pat_haps,
+        pi0=(0.7, 0.7),
+        std_dev=(0.15, 0.15),
+        r=1e-8,
+    ):
         """Obtain the restricted Viterbi path for traceback.
 
         Arguments:
             - bafs (`list`): list of two arrays of B-allele frequencies across m sites for two siblings
+            - pos (`np.arary`): m-length vector of basepair positions for sites
             - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
             - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
             - pi0 (`float`): sparsity parameter for B-allele emission model
@@ -730,20 +820,30 @@ class QuadHMM(AneuploidyHMM):
 
         """
         path, _, _, _ = self.viterbi_algorithm(
-            bafs, mat_haps, pat_haps, pi0=pi0, std_dev=std_dev, r=r
+            bafs, pos, mat_haps, pat_haps, pi0=pi0, std_dev=std_dev, r=r
         )
         res_path = self.restrict_path(path)
         return res_path
 
-    def map_path(self, bafs, mat_haps, pat_haps, pi0=0.7, std_dev=0.15, r=1e-16):
+    def map_path(
+        self,
+        bafs,
+        pos,
+        mat_haps,
+        pat_haps,
+        pi0=(0.7, 0.7),
+        std_dev=(0.15, 0.15),
+        r=1e-8,
+    ):
         """Obtain the Maximum A-Posteriori Path across restricted states.
 
         Arguments:
             - bafs (`list`): list of two arrays of B-allele frequencies across m sites for two siblings
+            - pos (`np.array`): m-length vector of basepair positions for sites
             - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
             - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
-            - pi0 (`float`): sparsity parameter for B-allele emission model
-            - std_dev (`float`): standard deviation for B-allele emission model
+            - pi0 (`tuple float`): sparsity parameter for B-allele emission model
+            - std_dev (`tuple float`): standard deviation for B-allele emission model
             - r (`float`): inter-state transition rate
 
         Returns:
@@ -751,7 +851,7 @@ class QuadHMM(AneuploidyHMM):
 
         """
         gammas, _, _ = self.forward_backward(
-            bafs, mat_haps, pat_haps, pi0=pi0, std_dev=std_dev, r=r
+            bafs, pos, mat_haps, pat_haps, pi0=pi0, std_dev=std_dev, r=r
         )
         (
             maternal_haploidentical,
@@ -857,6 +957,196 @@ class QuadHMM(AneuploidyHMM):
         pat_recomb_lst = [k for k in pat_recomb if pat_recomb[k] > len(path_xzs) / 2]
         # This returns the list of tuples on the recombination positions and minimum distances across the traces.
         return mat_recomb_lst, pat_recomb_lst, mat_recomb, pat_recomb
+
+
+class MosaicEst:
+    """Class to perform estimation of mosaic rates."""
+
+    def __init__(self, mat_haps, pat_haps, bafs, pos):
+        """Initialize the class."""
+        assert mat_haps.ndim == 2
+        assert pat_haps.ndim == 2
+        assert bafs.ndim == 1
+        assert bafs.size == mat_haps.shape[1]
+        assert bafs.size == pat_haps.shape[1]
+        assert pos.size == bafs.size
+        self.mat_haps = mat_haps
+        self.pat_haps = pat_haps
+        self.bafs = bafs
+        self.pos = pos
+        self.het_bafs = None
+        self.A = None
+        self.mle_theta = None
+
+    def baf_hets(self):
+        """Compute the BAF at expected heterozygotes in the embryo."""
+        mat_geno = np.sum(self.mat_haps, axis=0)
+        pat_geno = np.sum(self.pat_haps, axis=0)
+        exp_het_idx = ((mat_geno == 0) & (pat_geno == 2)) | (
+            (mat_geno == 2) & (pat_geno == 0)
+        )
+        self.het_bafs = self.bafs[exp_het_idx]
+        self.n_het = self.het_bafs.size
+        if self.n_het < 10:
+            raise ValueError("Fewer than 10 expected heterozygotes!")
+
+    def viterbi_hets(self, **kwargs):
+        """Predict the embryo genotype using viterbi traceback from parental haplotypes (under disomy)."""
+        meta_hmm = MetaHMM(disomy=True)
+        path, karyo, _, _ = meta_hmm.viterbi_algorithm(
+            pos=self.pos,
+            mat_haps=self.mat_haps,
+            pat_haps=self.pat_haps,
+            bafs=self.bafs,
+            **kwargs,
+        )
+        embryo_geno = np.zeros(path.size, dtype=np.int32)
+        m = self.pos.size
+        assert embryo_geno.size == m
+        for i in range(m):
+            embryo_geno[i] = (
+                self.mat_haps[karyo[path[i]][0], i]
+                + self.pat_haps[karyo[path[i]][2], i]
+            )
+        pred_het_idx = embryo_geno == 1
+        self.het_bafs = self.bafs[pred_het_idx]
+        self.n_het = self.het_bafs.size
+        if self.n_het < 10:
+            raise ValueError("Fewer than 10 expected heterozygotes!")
+
+    def create_transition_matrix(self, switch_err=0.01, t_rate=1e-4):
+        """Create the transition matrix.
+
+        Arguments:
+            - r (`float`): rate parameter sibling copying model...
+
+        Returns:
+            - A (`np.array`): state x state matrix of log-transition rates
+
+        """
+        assert (switch_err > 0) and (switch_err <= 0.05)
+        assert (t_rate > 0) and (t_rate < 0.5)
+        A = np.zeros(shape=(3, 3))
+        # Just make this as a kind of switch error rate or something?
+        # 1. Transition rates here are the switch error rate effectively
+        A[0, 2] = switch_err
+        A[2, 0] = switch_err
+        # 2. Transition rates
+        A[0, 1] = t_rate
+        A[2, 1] = t_rate
+        A[1, 0] = t_rate
+        A[1, 2] = t_rate
+        A[0, 0] = 1.0 - np.sum(A[0, :])
+        A[1, 1] = 1.0 - np.sum(A[1, :])
+        A[2, 2] = 1.0 - np.sum(A[2, :])
+        self.A = np.log(A)
+
+    def forward_algo_mix(self, theta=0.0, std_dev=0.1):
+        """Implement the forward-algorithm for the 3-state HMM under the Loh et al model."""
+        assert theta >= 0
+        assert std_dev > 0.0
+        assert self.A is not None
+        n = self.het_bafs.size
+        m = 3
+        alphas = np.zeros(shape=(m, n))
+        alphas[:, 0] = np.log(1.0 / m)
+        # NOTE: I wonder if you don't have to use the truncation here and can instead just use the baf - 0.5f
+        alphas[0, 0] += norm_logl(self.het_bafs[0] - 0.5, -theta, std_dev)
+        alphas[1, 0] += norm_logl(self.het_bafs[0] - 0.5, 0.0, std_dev)
+        alphas[2, 0] += norm_logl(self.het_bafs[0] - 0.5, +theta, std_dev)
+        scaler = np.zeros(n)
+        scaler[0] = logsumexp(alphas[:, 0])
+        alphas[:, 0] -= scaler[0]
+        for i in range(1, n):
+            for j in range(3):
+                # NOTE: there has to be a better way to do this ...
+                if j == 0:
+                    alphas[j, i] += norm_logl(self.het_bafs[i] - 0.5, -theta, std_dev)
+                elif j == 1:
+                    alphas[j, i] += norm_logl(self.het_bafs[i] - 0.5, 0.0, std_dev)
+                else:
+                    alphas[j, i] += norm_logl(self.het_bafs[i] - 0.5, theta, std_dev)
+                alphas[j, i] += logsumexp(self.A[:, j] + alphas[:, (i - 1)])
+            scaler[i] = logsumexp(alphas[:, i])
+            alphas[:, i] -= scaler[i]
+        return alphas, scaler, np.sum(scaler)
+
+    def lrt_theta(self, std_dev=0.1):
+        """LRT of Theta not being 0."""
+        assert std_dev > 0.0
+        ll_h0 = self.forward_algo_mix(theta=0.0, std_dev=std_dev)[2]
+        if self.mle_theta is None:
+            self.est_mle_theta(std_dev=std_dev)
+        if ~np.isnan(self.mle_theta):
+            ll_h1 = self.forward_algo_mix(theta=self.mle_theta, std_dev=std_dev)[2]
+            return -2 * (ll_h0 - ll_h1)
+        else:
+            return np.nan
+
+    def est_mle_theta(self, std_dev=0.1):
+        """Estimate the MLE estimate of theta."""
+        try:
+            f = lambda x: -self.forward_algo_mix(theta=x, std_dev=std_dev)[2]
+            x0 = brute(func=f, ranges=[[0.0, 0.5]], disp=True, finish=None, Ns=25)
+            opt_res = minimize(f, x0=[x0], bounds=[(0.0, 0.5)])
+            self.mle_theta = opt_res.x[0]
+        except ValueError:
+            self.mle_theta = np.nan
+
+    def ci_mle_theta(self, std_dev=0.1, h=1e-6):
+        """Estimate the 95% confidence interval of the MLE-theta estimate.
+
+        NOTE: this uses a symmetric second derivative appx to the Fisher Information.
+        """
+        assert (self.mle_theta is not None) and (~np.isnan(self.mle_theta))
+        assert (h >= 0) and (h <= 0.01)
+        ci_mle_theta = [np.nan, np.nan, np.nan]
+        try:
+            f = lambda x: self.forward_algo_mix(theta=x, std_dev=std_dev)[2]
+            if self.mle_theta < h:
+                logI = (
+                    f(self.mle_theta + h) - 2 * f(self.mle_theta) + f(self.mle_theta)
+                ) / (h**2)
+            elif self.mle_theta > (0.5 - h):
+                logI = (
+                    f(self.mle_theta) - 2 * f(self.mle_theta) + f(self.mle_theta - h)
+                ) / (h**2)
+            else:
+                logI = (
+                    f(self.mle_theta + h)
+                    - 2 * f(self.mle_theta)
+                    + f(self.mle_theta - h)
+                ) / (h**2)
+            fisher_I_inv = 1.0 / -logI
+
+            ci_mle_theta[0] = self.mle_theta - 1.96 * np.sqrt(
+                1.0 / self.n_het * fisher_I_inv
+            )
+            ci_mle_theta[1] = self.mle_theta
+            ci_mle_theta[2] = self.mle_theta + 1.96 * np.sqrt(
+                1.0 / self.n_het * fisher_I_inv
+            )
+            ci_mle_theta[0] = max(0.0, ci_mle_theta[0])
+            ci_mle_theta[2] = min(0.5, ci_mle_theta[2])
+        except ValueError:
+            pass
+        return ci_mle_theta
+
+    def est_cf(self, theta=0.0, gain=True):
+        """Estimate mosaic cell fraction from allelic intensity mean shift."""
+        assert (theta >= 0.0) and (theta <= 0.5)
+        cn_est = lambda cn: np.abs(1 / cn - 0.5)
+        cf_est = lambda cn: np.abs(2.0 - cn)
+        if np.isnan(theta):
+            return np.nan
+        else:
+            if gain:
+                try:
+                    return cf_est(brentq(lambda x: cn_est(x) - theta, 2.0, 3.0))
+                except ValueError:
+                    return 1.0
+            else:
+                return cf_est(brentq(lambda x: cn_est(x) - theta, 1.0, 2.0))
 
 
 class PhaseCorrect:

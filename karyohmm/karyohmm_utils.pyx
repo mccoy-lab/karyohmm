@@ -6,7 +6,7 @@ cdef double sqrt2 = sqrt(2.);
 cdef double sqrt2pi = sqrt(2*pi);
 cdef double logsqrt2pi = log(1/sqrt2pi)
 
-cdef double logsumexp(double[:] x):
+cpdef double logsumexp(double[:] x):
     """Cython implementation of the logsumexp trick"""
     cdef int i,n;
     cdef double m = -1e32;
@@ -17,6 +17,53 @@ cdef double logsumexp(double[:] x):
     for i in range(n):
         c += exp(x[i] - m)
     return m + log(c)
+
+cdef double logdiffexp(double a, double b):
+    """Log-sum-exp trick but for differences."""
+    return log(exp(a) - exp(b) + 1e-124)
+
+cpdef double logaddexp(double a, double b):
+    cdef double m = -1e32;
+    cdef double c = 0.0;
+    m = max(a,b)
+    c = exp(a - m) + exp(b - m)
+    return m + log(c)
+
+cpdef double logmeanexp(double a, double b):
+    """Apply a logmeanexp routine for two numbers."""
+    cdef double m = -1e32;
+    cdef double c = 0.0;
+    m = max(a,b)
+    c = exp(a - m) + exp(b - m)
+    return m + log(c) - 2.0
+
+cdef double psi(double x):
+    """CDF for a normal distribution function in log-space."""
+    if x < -4:
+        return logsqrt2pi - 0.5*(x**2) - log(-x)
+    else:
+        return log((1.0 + erf(x / sqrt2))) - log(2.0)
+
+cdef double norm_pdf(double x):
+    """PDF for the normal distribution function in log-space.
+
+    NOTE: at some point we might want to generalize this to include mean-shift and stddev.
+    """
+    return logsqrt2pi - 0.5*(x**2)
+
+cpdef double norm_logl(double x, double m, double s):
+    """Normal log-likelihood function."""
+    return logsqrt2pi - 0.5*log(s) - 0.5*((x - m) / s)**2
+
+cpdef double truncnorm_pdf(double x, double a, double b, double mu=0.5, double sigma=0.2):
+    """Custom definition of the log of the truncated normal pdf."""
+    cdef double p, z, alpha, beta, eta;
+    beta = (b - mu) / sigma
+    alpha = (a - mu) / sigma
+    eta = (max(min(x,b),a) - mu) / sigma
+    z = logdiffexp(psi(beta), psi(alpha))
+    p = norm_pdf(eta) - log(sigma) - z
+    return p
 
 cpdef double mat_dosage(mat_hap, state):
     """Obtain the maternal dosage."""
@@ -69,38 +116,6 @@ cpdef double pat_dosage(pat_hap, state):
             p = pat_hap[state[2]]
     return p
 
-cdef double psi(double x):
-    """CDF for a normal distribution function in log-space."""
-    if x < -4:
-        return logsqrt2pi - 0.5*(x**2) - log(-x)
-    else:
-        return log((1.0 + erf(x / sqrt2))) - log(2.0)
-
-cdef double norm_pdf(double x):
-    """PDF for the normal distribution function in log-space."""
-    return logsqrt2pi -  0.5*(x**2)
-
-cdef double logdiffexp(double a, double b):
-    """Log-sum-exp trick but for differences."""
-    return log(exp(a) - exp(b) + 1e-124)
-
-cdef double logaddexp(double a, double b):
-    cdef double m = -1e32;
-    cdef double c = 0.0;
-    m = max(a,b)
-    c = exp(a - m) + exp(b - m)
-    return m + log(c)
-
-cpdef double truncnorm_pdf(double x, double a, double b, double mu=0.5, double sigma=0.2):
-    """Custom definition of the log of the truncated normal pdf."""
-    cdef double p, z, alpha, beta, eta;
-    beta = (b - mu) / sigma
-    alpha = (a - mu) / sigma
-    eta = (max(min(x,b),a) - mu) / sigma
-    z = logdiffexp(psi(beta), psi(alpha))
-    p = norm_pdf(eta) - log(sigma) - z
-    return p
-
 cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double std_dev=0.2, int k=2):
     """Emission distribution function for B-allele frequency in the sample."""
     cdef double mu_i, x, x0, x1;
@@ -117,6 +132,19 @@ cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double
         return logaddexp(log(pi0) + x1, log((1 - pi0)) + x)
     else:
         return x
+
+cpdef double mix_loglik(double[:] bafs, double pi0=0.5, double theta=0.1, double std_dev=0.2):
+    """Mixture log-likelihood for expected heterozygotes to estimate baf-deviation."""
+    cdef double logll = 0.0;
+    cdef int i, n;
+    cdef double ll[3];
+    n = bafs.size
+    for i in range(n):
+        ll[0] = log(pi0/2.0) + truncnorm_pdf(bafs[i], 0.0, 1.0, mu=0.5+theta, sigma=std_dev)
+        ll[1] = log(pi0/2.0) + truncnorm_pdf(bafs[i], 0.0, 1.0, mu=0.5-theta, sigma=std_dev)
+        ll[2] = log(1.0 - pi0) + truncnorm_pdf(bafs[i], 0.0, 1.0, mu=0.5, sigma=std_dev)
+        logll += logsumexp(ll)
+    return logll
 
 def lod_phase(haps1, haps2, baf, **kwargs):
     """Estimate the log-likelihood of being the phase vs. antiphase orientation for heterozygotes."""
@@ -148,7 +176,7 @@ def lod_phase(haps1, haps2, baf, **kwargs):
             antiphase_orientation = logaddexp(antiphase_orientation, antiphase1)
     return phase_orientation, antiphase_orientation
 
-def forward_algo(bafs,  mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.25):
+def forward_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.25):
     """Helper function for forward algorithm loop-optimization."""
     cdef int i,j,n,m;
     n = bafs.size
@@ -173,6 +201,7 @@ def forward_algo(bafs,  mat_haps, pat_haps, states, A, double pi0=0.2, double st
     scaler[0] = logsumexp(alphas[:, 0])
     alphas[:, 0] -= scaler[0]
     for i in range(1, n):
+        A_hat = A + log(pos[i] - pos[i-1])
         for j in range(m):
             m_ij = mat_dosage(mat_haps[:, i], states[j])
             p_ij = pat_dosage(pat_haps[:, i], states[j])
@@ -185,12 +214,12 @@ def forward_algo(bafs,  mat_haps, pat_haps, states, A, double pi0=0.2, double st
                     std_dev=std_dev,
                     k=ks[j],
                 )
-            alphas[j, i] = cur_emission + logsumexp(A[:, j] + alphas[:, (i - 1)])
+            alphas[j, i] = cur_emission + logsumexp(A_hat[:, j] + alphas[:, (i - 1)])
         scaler[i] = logsumexp(alphas[:, i])
         alphas[:, i] -= scaler[i]
     return alphas, scaler, states, None, sum(scaler)
 
-def backward_algo(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.25):
+def backward_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.25):
     """Helper function for backward algorithm loop-optimization."""
     cdef int i,j,n,m;
     n = bafs.size
@@ -202,6 +231,8 @@ def backward_algo(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double st
     scaler[-1] = logsumexp(betas[:, -1])
     betas[:, -1] -= scaler[-1]
     for i in range(n - 2, -1, -1):
+        # The matrices are element-wise multiplied so add in log-space ...
+        A_hat = A + np.log(pos[i+1] - pos[i])
         # Calculate the full set of emissions
         cur_emissions = np.zeros(m)
         for j in range(m):
@@ -218,7 +249,7 @@ def backward_algo(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double st
                 )
         for j in range(m):
             # This should be the correct version here ...
-            betas[j,i] = logsumexp(A[:, j] + cur_emissions + betas[:, (i + 1)])
+            betas[j,i] = logsumexp(A_hat[:, j] + cur_emissions + betas[:, (i + 1)])
         if i == 0:
             for j in range(m):
                 m_ij = mat_dosage(mat_haps[:, i], states[j])
@@ -239,7 +270,7 @@ def backward_algo(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double st
         betas[:, i] -= scaler[i]
     return betas, scaler, states, None, sum(scaler)
 
-def viterbi_algo(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.25):
+def viterbi_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.25):
     """Cython implementation of the Viterbi algorithm for MLE path estimation through states."""
     cdef int i,j,n,m;
     n = bafs.size
@@ -249,6 +280,7 @@ def viterbi_algo(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std
     psi = np.zeros(shape=(m, n), dtype=int)
     ks = [sum([s >= 0 for s in state]) for state in states]
     for i in range(1, n):
+        A_hat = A + np.log(pos[i] - pos[i-1])
         for j in range(m):
             m_ij = mat_dosage(mat_haps[:, i], states[j])
             p_ij = pat_dosage(pat_haps[:, i], states[j])
@@ -261,7 +293,7 @@ def viterbi_algo(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std
                     std_dev=std_dev,
                     k=ks[j],
                 )
-            psi[j, i] = np.argmax(deltas[:, i - 1] + A[:, j]).astype(int)
+            psi[j, i] = np.argmax(deltas[:, i - 1] + A_hat[:, j]).astype(int)
     path = np.zeros(n, dtype=int)
     path[-1] = np.argmax(deltas[:, -1]).astype(int)
     for i in range(n - 2, -1, -1):
@@ -270,7 +302,7 @@ def viterbi_algo(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std
     return path, states, deltas, psi
 
 
-def forward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.1):
+def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
     """Compute the forward algorithm for sibling embryo HMM."""
     cdef int i,j,n,m;
     assert len(bafs) == 2
@@ -281,25 +313,25 @@ def forward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
     alphas[:, 0] = log(1.0 / m)
     for j in range(m):
         # First sibling embryo
-        m_ij0 = mat_dosage(mat_haps[:, i], states[j][0])
-        p_ij0 = pat_dosage(pat_haps[:, i], states[j][0])
+        m_ij0 = mat_dosage(mat_haps[:, 0], states[j][0])
+        p_ij0 = pat_dosage(pat_haps[:, 0], states[j][0])
         # Second sibling embryo
-        m_ij1 = mat_dosage(mat_haps[:, i], states[j][1])
-        p_ij1 = pat_dosage(pat_haps[:, i], states[j][1])
+        m_ij1 = mat_dosage(mat_haps[:, 0], states[j][1])
+        p_ij1 = pat_dosage(pat_haps[:, 0], states[j][1])
         # This is in log-space ...
         cur_emission = emission_baf(
                 bafs[0][0],
                 m_ij0,
                 p_ij0,
-                pi0=pi0,
-                std_dev=std_dev,
+                pi0=pi0[0],
+                std_dev=std_dev[0],
                 k=2,
             ) + emission_baf(
                 bafs[1][0],
                 m_ij1,
                 p_ij1,
-                pi0=pi0,
-                std_dev=std_dev,
+                pi0=pi0[1],
+                std_dev=std_dev[1],
                 k=2,
             )
         alphas[j,0] += cur_emission
@@ -307,6 +339,7 @@ def forward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
     scaler[0] = logsumexp(alphas[:, 0])
     alphas[:, 0] -= scaler[0]
     for i in range(1, n):
+        A_hat = A + np.log(pos[i] - pos[i-1])
         for j in range(m):
             # First sibling embryo
             m_ij0 = mat_dosage(mat_haps[:, i], states[j][0])
@@ -319,24 +352,24 @@ def forward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
                     bafs[0][i],
                     m_ij0,
                     p_ij0,
-                    pi0=pi0,
-                    std_dev=std_dev,
+                    pi0=pi0[0],
+                    std_dev=std_dev[0],
                     k=2,
                 ) + emission_baf(
                     bafs[1][i],
                     m_ij1,
                     p_ij1,
-                    pi0=pi0,
-                    std_dev=std_dev,
+                    pi0=pi0[1],
+                    std_dev=std_dev[1],
                     k=2,
                 )
-            alphas[j, i] = cur_emission + logsumexp(A[:, j] + alphas[:, i - 1])
+            alphas[j, i] = cur_emission + logsumexp(A_hat[:, j] + alphas[:, i - 1])
         scaler[i] = logsumexp(alphas[:, i])
         alphas[:, i] -= scaler[i]
     return alphas, scaler, states, None, sum(scaler)
 
 
-def backward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.1):
+def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
     """Compute the backward algorithm for the sibling embryo HMM."""
     cdef int i,j,n,m;
     assert len(bafs) == 2
@@ -349,6 +382,7 @@ def backward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doub
     scaler[-1] = logsumexp(betas[:, -1])
     betas[:, -1] -= scaler[-1]
     for i in range(n - 2, -1, -1):
+        A_hat = A + np.log(pos[i+1] - pos[i])
         cur_emissions = np.zeros(m)
         for j in range(m):
             m_ij0 = mat_dosage(mat_haps[:, i+1], states[j][0])
@@ -360,19 +394,19 @@ def backward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doub
                     bafs[0][i + 1],
                     m_ij0,
                     p_ij0,
-                    pi0=pi0,
-                    std_dev=std_dev,
+                    pi0=pi0[0],
+                    std_dev=std_dev[0],
                     k=2,
                 ) + emission_baf(
                     bafs[1][i + 1],
                     m_ij1,
                     p_ij1,
-                    pi0=pi0,
-                    std_dev=std_dev,
+                    pi0=pi0[1],
+                    std_dev=std_dev[1],
                     k=2,
                 )
         for j in range(m):
-            betas[j,i] = logsumexp(A[:, j] + cur_emissions + betas[:, (i + 1)])
+            betas[j,i] = logsumexp(A_hat[:, j] + cur_emissions + betas[:, (i + 1)])
         if i == 0:
             for j in range(m):
                 m_ij0 = mat_dosage(mat_haps[:, i], states[j][0])
@@ -384,15 +418,15 @@ def backward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doub
                         bafs[0][i],
                         m_ij0,
                         p_ij0,
-                        pi0=pi0,
-                        std_dev=std_dev,
+                        pi0=pi0[0],
+                        std_dev=std_dev[0],
                         k=2,
                     ) + emission_baf(
                         bafs[1][i],
                         m_ij1,
                         p_ij1,
-                        pi0=pi0,
-                        std_dev=std_dev,
+                        pi0=pi0[1],
+                        std_dev=std_dev[1],
                         k=2,
                     )
                 # Add in the initialization + first emission?
@@ -402,8 +436,7 @@ def backward_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doub
     return betas, scaler, states, None, sum(scaler)
 
 
-
-def viterbi_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.1):
+def viterbi_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
     """Viterbi algorithm and path tracing through sibling embryos."""
     cdef int i,j,n,m;
     assert len(bafs) == 2
@@ -414,6 +447,7 @@ def viterbi_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
     deltas[:, 0] = log(1.0 / m)
     psi = np.zeros(shape=(m, n), dtype=int)
     for i in range(1, n):
+        A_hat = A + np.log(pos[i] - pos[i-1])
         for j in range(m):
             m_ij0 = mat_dosage(mat_haps[:, i], states[j][0])
             p_ij0 = pat_dosage(pat_haps[:, i], states[j][0])
@@ -424,18 +458,18 @@ def viterbi_algo_sibs(bafs, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
                     bafs[0][i],
                     m_ij0,
                     p_ij0,
-                    pi0=pi0,
-                    std_dev=std_dev,
+                    pi0=pi0[0],
+                    std_dev=std_dev[0],
                     k=2,
                 ) + emission_baf(
                     bafs[1][i],
                     m_ij1,
                     p_ij1,
-                    pi0=pi0,
-                    std_dev=std_dev,
+                    pi0=pi0[1],
+                    std_dev=std_dev[1],
                     k=2,
                 )
-            psi[j, i] = np.argmax(deltas[:, i - 1] + A[:, j]).astype(int)
+            psi[j, i] = np.argmax(deltas[:, i - 1] + A_hat[:, j]).astype(int)
     path = np.zeros(n, dtype=int)
     path[-1] = np.argmax(deltas[:, -1]).astype(int)
     for i in range(n - 2, -1, -1):

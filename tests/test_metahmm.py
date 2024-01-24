@@ -17,10 +17,12 @@ def test_data_integrity(data=data_disomy):
     for x in ["baf_embryo", "mat_haps", "pat_haps"]:
         assert x in data
     baf = data["baf_embryo"]
+    pos = data["pos"]
     mat_haps = data["mat_haps"]
     pat_haps = data["pat_haps"]
     assert np.all((baf <= 1.0) & (baf >= 0.0))
     assert baf.size == mat_haps.shape[1]
+    assert baf.size == pos.size
     assert mat_haps.shape == pat_haps.shape
     assert np.all((mat_haps == 0) | (mat_haps == 1))
     assert np.all((pat_haps == 0) | (pat_haps == 1))
@@ -33,6 +35,19 @@ def test_forward_algorithm(data):
     hmm = MetaHMM()
     _, _, _, karyotypes, loglik = hmm.forward_algorithm(
         bafs=data["baf_embryo"],
+        pos=data["pos"],
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+    )
+
+
+@pytest.mark.parametrize("data", [data_disomy, data_trisomy, data_monosomy])
+def test_backward_algorithm(data):
+    """Test the implementation of the backward algorithm."""
+    hmm = MetaHMM()
+    _, _, _, karyotypes, loglik = hmm.backward_algorithm(
+        bafs=data["baf_embryo"],
+        pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
     )
@@ -44,31 +59,23 @@ def test_disomy_model(data):
     hmm = MetaHMM(disomy=True)
     _, _, _, karyotypes, loglik = hmm.forward_algorithm(
         bafs=data["baf_embryo"],
+        pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
     )
     _, _, _, karyotypes, loglik = hmm.backward_algorithm(
         bafs=data["baf_embryo"],
+        pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
     )
     gammas, _, karyotypes = hmm.forward_backward(
         bafs=data["baf_embryo"],
+        pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
     )
     assert np.all(np.isclose(np.sum(np.exp(gammas), axis=0), 1.0))
-
-
-@pytest.mark.parametrize("data", [data_disomy, data_trisomy, data_monosomy])
-def test_backward_algorithm(data):
-    """Test the implementation of the backward algorithm."""
-    hmm = MetaHMM()
-    _, _, _, karyotypes, loglik = hmm.backward_algorithm(
-        bafs=data["baf_embryo"],
-        mat_haps=data["mat_haps"],
-        pat_haps=data["pat_haps"],
-    )
 
 
 @pytest.mark.parametrize("data", [data_disomy])
@@ -78,11 +85,13 @@ def test_forward_vs_backward_loglik(data):
 
     _, _, _, _, fwd_loglik = hmm.forward_algorithm(
         bafs=data["baf_embryo"],
+        pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
     )
     _, _, _, _, bwd_loglik = hmm.backward_algorithm(
         bafs=data["baf_embryo"],
+        pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
     )
@@ -95,6 +104,7 @@ def test_fwd_bwd_algorithm(data):
     hmm = MetaHMM()
     gammas, _, karyotypes = hmm.forward_backward(
         bafs=data["baf_embryo"],
+        pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
     )
@@ -112,6 +122,7 @@ def test_est_pi0_sigma(data):
     hmm = MetaHMM()
     pi0_est, sigma_est = hmm.est_sigma_pi0(
         bafs=data["baf_embryo"],
+        pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
     )
@@ -134,6 +145,7 @@ def test_est_pi0_sigma_bad_pi0_bounds(data, pi0_bounds):
         hmm = MetaHMM()
         pi0_est, sigma_est = hmm.est_sigma_pi0(
             bafs=data["baf_embryo"],
+            pos=data["pos"],
             mat_haps=data["mat_haps"],
             pat_haps=data["pat_haps"],
             pi0_bounds=pi0_bounds,
@@ -150,6 +162,7 @@ def test_est_pi0_sigma_bad_sigma_bounds(data, sigma_bounds):
         hmm = MetaHMM()
         pi0_est, sigma_est = hmm.est_sigma_pi0(
             bafs=data["baf_embryo"],
+            pos=data["pos"],
             mat_haps=data["mat_haps"],
             pat_haps=data["pat_haps"],
             sigma_bounds=sigma_bounds,
@@ -165,6 +178,7 @@ def test_est_pi0_sigma_algos(data, algo):
     hmm = MetaHMM()
     pi0_est, sigma_est = hmm.est_sigma_pi0(
         bafs=data["baf_embryo"],
+        pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
         algo=algo,
@@ -207,6 +221,7 @@ def test_ploidy_correctness(data):
     hmm = MetaHMM()
     gammas, _, karyotypes = hmm.forward_backward(
         bafs=data["baf_embryo"],
+        pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
         pi0=0.7,

@@ -11,7 +11,9 @@ class PGTSimBase:
 
     def __init__(self):
         """Initialize the PGT-A Simulator."""
-        pass
+        # NOTE: the initial SDs are derived from the PENNCNV source code
+        self.lrr_mu = {0: -3.527211, 1: np.log2(0.5), 2: np.log2(1.0), 3: np.log2(1.5)}
+        self.lrr_sd = {0: 1.329152, 1: 0.284338, 2: 0.159645, 3: 0.209089}
 
     def draw_parental_genotypes(self, afs=None, m=100, seed=42):
         """Draw parental genotypes from a beta distribution.
@@ -265,6 +267,19 @@ class PGTSimBase:
                     baf[i] = truncnorm.rvs(a, b, loc=mu_i, scale=std_dev)
         return true_geno, baf
 
+    def sim_logR_ratio(self, mat_hap, pat_hap, ploidy=2, alpha=1.0, seed=42):
+        """Simulate logR-ratio conditional on ploidy.
+
+        Alpha is the degree to which the variance is increased for the LRR.
+        """
+        assert seed > 0
+        assert ploidy in [0, 1, 2, 3]
+        assert mat_hap.size == pat_hap.size
+        np.random.seed(seed)
+        m = mat_hap.size
+        lrr = norm.rvs(self.lrr_mu[ploidy], scale=self.lrr_sd[ploidy] * alpha, size=m)
+        return lrr
+
     def sim_read_counts(self, mat_hap, pat_hap, coverage=1.0):
         """Simulate read counts for embryos."""
         raise NotImplementedError("NGS-based simulation is not available yet!")
@@ -308,10 +323,11 @@ class PGTSim(PGTSimBase):
         afs=None,
         ploidy=2,
         m=10000,
+        length=1e7,
         rec_prob=1e-4,
         mat_skew=0.5,
         std_dev=0.15,
-        mix_prop=0.7,
+        mix_prop=0.3,
         alpha=1.0,
         switch_err_rate=1e-2,
         seed=42,
@@ -343,8 +359,10 @@ class PGTSim(PGTSimBase):
         ) = self.create_switch_errors(
             mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
         )
+        pos = np.sort(np.random.uniform(high=length, size=m))
         assert geno.size == m
         assert baf.size == m
+        assert pos.size == m
         res_table = {
             "mat_haps": mat_haps,
             "pat_haps": pat_haps,
@@ -356,6 +374,7 @@ class PGTSim(PGTSimBase):
             "zs_paternal": zs_paternal,
             "geno_embryo": geno,
             "baf_embryo": baf,
+            "pos": pos,
             "m": m,
             "aploid": aploid,
             "ploidy": ploidy,
@@ -372,9 +391,10 @@ class PGTSim(PGTSimBase):
         afs=None,
         ploidy=2,
         m=10000,
-        nsibs=5,
+        length=1e7,
+        nsibs=3,
         rec_prob=1e-4,
-        std_dev=0.2,
+        std_dev=0.15,
         mix_prop=0.3,
         switch_err_rate=1e-2,
         seed=42,
@@ -384,6 +404,7 @@ class PGTSim(PGTSimBase):
         assert m > 0
         assert seed > 0
         assert nsibs > 0
+        assert length > 0
         np.random.seed(seed)
 
         res_table = {}
@@ -396,6 +417,7 @@ class PGTSim(PGTSimBase):
         ) = self.create_switch_errors(
             mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
         )
+        pos = np.sort(np.random.uniform(high=length, size=m))
         res_table["mat_haps_true"] = mat_haps
         res_table["pat_haps_true"] = pat_haps
         res_table["mat_haps_real"] = mat_haps_prime
@@ -404,6 +426,7 @@ class PGTSim(PGTSimBase):
         res_table["pat_switch"] = pat_switch
         res_table["nsibs"] = nsibs
         res_table["aploid"] = "2"
+        res_table["pos"] = pos
         for i in range(nsibs):
             (
                 zs_maternal,
@@ -432,4 +455,111 @@ class PGTSim(PGTSimBase):
             res_table[f"baf_embryo{i}"] = baf
             res_table[f"zs_maternal{i}"] = zs_maternal
             res_table[f"zs_paternal{i}"] = zs_paternal
+        return res_table
+
+
+class PGTSimMosaic(PGTSimBase):
+    """Simulator for mosaic aneuploidies."""
+
+    def __init__(self):
+        """Initialize the mosaic aneuploidy simulator.
+
+        Returns: a PGTSim object
+
+        """
+        super().__init__()
+
+    def mixed_ploidy_sim(
+        self,
+        afs=None,
+        ploidies=np.array([0, 1, 2, 3]),
+        props=np.array([0, 0, 1.0, 0.0]),
+        ncells=10,
+        m=10000,
+        length=1e7,
+        rec_prob=1e-4,
+        mat_skew=0.5,
+        std_dev=0.15,
+        mix_prop=0.3,
+        alpha=1.0,
+        switch_err_rate=1e-2,
+        seed=42,
+    ):
+        """Simulate BAF from a mixture of ploidies."""
+        assert ploidies.size == props.size
+        assert m > 0
+        assert ncells > 0
+        assert length > 0
+        if ~np.isclose(np.sum(props), 1.0):
+            props /= np.sum(props)
+        # 1. Simulate the parental haplotypes
+        np.random.seed(seed)
+        mat_haps, pat_haps = self.draw_parental_genotypes(afs=afs, m=m, seed=seed)
+        mat_haps_prime, pat_haps_prime, _, _ = self.create_switch_errors(
+            mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
+        )
+        # 2. Draw cells from a distribution of ploidies
+        mix_ploidies = np.random.choice(ploidies, p=props, size=ncells)
+        bafs = np.zeros(shape=(ncells, m))
+        lrrs = np.zeros(shape=(ncells, m))
+        genos = np.zeros(shape=(ncells, m))
+        aploids = []
+        # NOTE: only simulate unique ploidies once and then take the weighted mean across them?
+        for i, p in enumerate(np.unique(mix_ploidies)):
+            (
+                zs_maternal,
+                zs_paternal,
+                mat_hap1,
+                pat_hap1,
+                aploid,
+            ) = self.sim_haplotype_paths(
+                mat_haps,
+                pat_haps,
+                ploidy=p,
+                mat_skew=mat_skew,
+                rec_prob=rec_prob,
+                seed=i + 1,
+            )
+            geno, baf = self.sim_b_allele_freq(
+                mat_hap1,
+                pat_hap1,
+                ploidy=p,
+                std_dev=std_dev,
+                mix_prop=mix_prop,
+                seed=i + 1,
+            )
+            lrr = self.sim_logR_ratio(
+                mat_hap1, pat_hap1, ploidy=p, alpha=alpha, seed=i + 1
+            )
+            assert baf.size == m
+            assert lrr.size == m
+            for j in np.where(mix_ploidies == p):
+                bafs[j, :] = baf
+                lrrs[j, :] = lrr
+            aploids.append(aploid)
+        # Take the mean BAF + LRR estimates across the bulk samples
+        baf_embryo = np.mean(bafs, axis=0)
+        lrr_embryo = np.mean(lrrs, axis=0)
+        pos = np.sort(np.random.uniform(high=length, size=m))
+        assert baf_embryo.size == m
+        res_table = {
+            "mat_haps": mat_haps,
+            "pat_haps": pat_haps,
+            "mat_haps_prime": mat_haps_prime,
+            "pat_haps_prime": pat_haps_prime,
+            "geno_embryo_bulk": genos,
+            "baf_embryo_bulk": bafs,
+            "lrr_embryo_bulk": lrrs,
+            "baf_embryo": baf_embryo,
+            "lrr_embryo": lrr_embryo,
+            "m": m,
+            "pos": pos,
+            "aploid": aploids,
+            "ploidies": mix_ploidies,
+            "rec_prob": rec_prob,
+            "std_dev": std_dev,
+            "mix_prop": mix_prop,
+            "seed": seed,
+            "alpha": alpha,
+        }
         return res_table
