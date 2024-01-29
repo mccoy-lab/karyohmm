@@ -258,8 +258,19 @@ def test_string_rep():
                 assert s in hmm.m_monosomy_states
             else:
                 assert s in hmm.p_monosomy_states
+        elif m == 2:
+            assert len(x) == 2 * m
+            assert x in ["m0p0", "m0p1", "m1p0", "m1p1"]
         else:
             assert len(x) == 2 * m
+            assert (
+                ("m0m1" in x)
+                | ("p0p1" in x)
+                | ("m0m0" in x)
+                | ("m1m1" in x)
+                | ("p0p0" in x)
+                | ("p1p1" in x)
+            )
 
 
 @pytest.mark.parametrize("r,a", [(1e-3, 1e-7), (1e-3, 1e-9), (1e-3, 1e-10)])

@@ -143,10 +143,10 @@ class MetaHMM(AneuploidyHMM):
         # First two are the female states ...
         self.m_trisomy_states = [
             (0, 0, 0, -1),
-            (1, 0, 0, -1),
+            (0, 1, 0, -1),
             (1, 1, 0, -1),
             (0, 0, 1, -1),
-            (1, 0, 1, -1),
+            (0, 1, 1, -1),
             (1, 1, 1, -1),
         ]
         self.p_trisomy_states = [
