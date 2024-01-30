@@ -12,6 +12,64 @@ data_monosomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=1, mat_skew=0, seed=42)
 data_nullisomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=0, mat_skew=0, seed=42)
 
 
+def bph(states):
+    """Identify states that are BPH - both parental homologs."""
+    idx = []
+    for i, s in enumerate(states):
+        assert len(s) == 4
+        k = 0
+        for j in range(4):
+            k += s[j] >= 0
+        if k == 3:
+            if s[1] != -1:
+                if s[0] != s[1]:
+                    # Both maternal homologs present
+                    idx.append(i)
+            if s[3] != -1:
+                if s[2] != s[3]:
+                    # Both paternal homologs present
+                    idx.append(i)
+    # Returns indices of both maternal & paternal BPH
+    return idx
+
+
+def sph(states):
+    """Identify states that are SPH - single parental homolog."""
+    idx = []
+    for i, s in enumerate(states):
+        assert len(s) == 4
+        k = 0
+        for j in range(4):
+            k += s[j] >= 0
+        if k == 3:
+            if s[1] != -1:
+                if s[0] == s[1]:
+                    # Both maternal homologs present
+                    idx.append(i)
+            if s[3] != -1:
+                if s[2] == s[3]:
+                    # Both paternal homologs present
+                    idx.append(i)
+    # Returns indices of both maternal & paternal SPH
+    return idx
+
+
+def test_bph_sph():
+    """Test that BPH vs. SPH give you the correct states."""
+    hmm = MetaHMM()
+    sph_idx = sph(hmm.states)
+    bph_idx = bph(hmm.states)
+    # The total number of states shouldb be 12
+    assert len(sph_idx) == 8
+    assert len(bph_idx) == 4
+    for i in sph_idx:
+        x = hmm.states[i]
+        assert (x[0] == x[1]) or (x[2] == x[3])
+    for i in bph_idx:
+        x = hmm.states[i]
+        assert (x[0] != x[1]) or (x[2] != x[3])
+
+
 def test_data_integrity(data=data_disomy):
     """Test for some basic data sanity checks ..."""
     for x in ["baf_embryo", "mat_haps", "pat_haps"]:
@@ -200,8 +258,19 @@ def test_string_rep():
                 assert s in hmm.m_monosomy_states
             else:
                 assert s in hmm.p_monosomy_states
+        elif m == 2:
+            assert len(x) == 2 * m
+            assert x in ["m0p0", "m0p1", "m1p0", "m1p1"]
         else:
             assert len(x) == 2 * m
+            assert (
+                ("m0m1" in x)
+                | ("p0p1" in x)
+                | ("m0m0" in x)
+                | ("m1m1" in x)
+                | ("p0p0" in x)
+                | ("p1p1" in x)
+            )
 
 
 @pytest.mark.parametrize("r,a", [(1e-3, 1e-7), (1e-3, 1e-9), (1e-3, 1e-10)])
