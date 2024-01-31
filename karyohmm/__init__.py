@@ -16,7 +16,7 @@ Modules exported are:
 * PGTSimMosaic: module to generate synthetic PGT data for a mosaic biopsy
 """
 
-__version__ = "0.1.9b"
+__version__ = "0.2.0a"
 
 from .karyohmm import MetaHMM, MosaicEst, PhaseCorrect, QuadHMM
 from .simulator import PGTSim, PGTSimMosaic

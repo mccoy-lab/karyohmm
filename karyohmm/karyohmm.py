@@ -1216,8 +1216,8 @@ class PhaseCorrect:
             assert baf.size == self.pat_haps.shape[1]
             self.embryo_bafs.append(baf)
 
-    def est_disomy_pi0_sigmas(self, **kwargs):
-        """Estimate the noise parameters under a disomy assumption."""
+    def est_sigma_pi0s(self, **kwargs):
+        """Estimate the noise parameters under disomy for each sibling embryo."""
         assert self.embryo_bafs is not None
         hmm = MetaHMM(disomy=True)
         pi0_est_acc = np.zeros(len(self.embryo_bafs))
@@ -1304,9 +1304,10 @@ class PhaseCorrect:
         else:
             self.pat_haps_fixed = fixed_haps
 
-    def correct_haps(self, haps, paths):
+    def correct_haps_viterbi(self, haps, paths):
         """Correct haplotypes using multiple copying paths + majority rule."""
         assert paths.shape[1] == haps.shape[1]
+        assert paths.shape[0] > 1
         n_sib = paths.shape[0]
         m = haps.shape[1]
         n_mis = np.zeros(m - 1)
@@ -1325,13 +1326,21 @@ class PhaseCorrect:
         return n_mis, fixed_haps
 
     def viterbi_phase_correct(self, niter=5, r=1e-8):
-        """Use the Viterbi decoding for phase correction."""
+        """Use the Viterbi decoding for phase correction in multiple iterations.
+
+        Arguments:
+            - niter (`int`): number of iterations to go through for viterbi-based phase correction
+            - r (`float`): recombination rate per basepair
+
+        """
         assert niter > 0
         hmm = MetaHMM(disomy=True)
         mat_haps = self.mat_haps
         pat_haps = self.pat_haps
         n_sibs = len(self.embryo_bafs)
         m = self.pos.size
+        n_mis_mat_tot = np.zeros(niter)
+        n_mis_pat_tot = np.zeros(niter)
         for i in range(niter):
             mat_paths = np.zeros(shape=(n_sibs, m))
             pat_paths = np.zeros(shape=(n_sibs, m))
@@ -1348,15 +1357,18 @@ class PhaseCorrect:
                 # We collect the viterbi path estimates here ...
                 mat_paths[j, :] = np.isin(path, [0, 1])
                 pat_paths[j, :] = np.isin(path, [0, 2])
-            # now we apply the minimum recombinant path-switching setting.
-            n_mis_mat, fixed_mat_haps = self.correct_haps(mat_haps, mat_paths)
-            n_mis_pat, fixed_pat_haps = self.correct_haps(pat_haps, mat_paths)
+            # now we apply the minimum recombination path-switching setting ...
+            n_mis_mat, fixed_mat_haps = self.correct_haps_viterbi(mat_haps, mat_paths)
+            n_mis_pat, fixed_pat_haps = self.correct_haps_viterbi(pat_haps, pat_paths)
+            n_mis_mat_tot[i] = np.sum(n_mis_mat)
+            n_mis_pat_tot[i] = np.sum(n_mis_pat)
             # NOTE: print out that the mismatches have been minimized on both paternal & maternal chromosomes this way?
             mat_haps = fixed_mat_haps
             pat_haps = fixed_pat_haps
-        # Set these variables correctly
+        # Set the corrected haplotypes here
         self.mat_haps_fixed = mat_haps
         self.pat_haps_fixed = pat_haps
+        return mat_haps, pat_haps, n_mis_mat_tot, n_mis_pat_tot
 
     def estimate_switch_err_true(self, maternal=True, fixed=False):
         """Estimate the switch error from true and inferred haplotypes.
