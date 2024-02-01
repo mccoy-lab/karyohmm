@@ -376,6 +376,7 @@ class PGTSim(PGTSimBase):
             "baf_embryo": baf,
             "pos": pos,
             "m": m,
+            "length": length,
             "aploid": aploid,
             "ploidy": ploidy,
             "rec_prob": rec_prob,
@@ -424,9 +425,11 @@ class PGTSim(PGTSimBase):
         res_table["pat_haps_real"] = pat_haps_prime
         res_table["mat_switch"] = mat_switch
         res_table["pat_switch"] = pat_switch
+        res_table["m"] = m
         res_table["nsibs"] = nsibs
         res_table["aploid"] = "2"
         res_table["pos"] = pos
+        res_table["length"] = length
         for i in range(nsibs):
             (
                 zs_maternal,
@@ -554,6 +557,7 @@ class PGTSimMosaic(PGTSimBase):
             "lrr_embryo": lrr_embryo,
             "m": m,
             "pos": pos,
+            "length": length,
             "aploid": aploids,
             "ploidies": mix_ploidies,
             "rec_prob": rec_prob,
