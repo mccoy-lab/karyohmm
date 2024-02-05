@@ -38,3 +38,4 @@ def test_pgt_siblings(length, m, nsib):
     assert np.max(data["pos"]) <= length
     for i in range(nsib):
         assert f"baf_embryo{i}" in data.keys()
+        assert f"geno_embryo{i}" in data.keys()

@@ -456,6 +456,7 @@ class PGTSim(PGTSimBase):
             assert geno.size == m
             assert baf.size == m
             res_table[f"baf_embryo{i}"] = baf
+            res_table[f"geno_embryo{i}"] = geno
             res_table[f"zs_maternal{i}"] = zs_maternal
             res_table[f"zs_paternal{i}"] = zs_paternal
         return res_table
