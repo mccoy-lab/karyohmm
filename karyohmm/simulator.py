@@ -247,7 +247,9 @@ class PGTSimBase:
         baf = np.zeros(true_geno.size)
         for i in range(baf.size):
             if ploidy == 0:
-                baf[i] = np.random.uniform()
+                # I think that this might have to change ...
+                a, b = (0 - 0.5) / std_dev, (1 - 0.5) / std_dev
+                baf[i] = truncnorm.rvs(a, b, loc=0.5, scale=std_dev)
             else:
                 mu_i = true_geno[i] / ploidy
                 a, b = (0 - mu_i) / std_dev, (1 - mu_i) / std_dev
