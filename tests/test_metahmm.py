@@ -283,6 +283,23 @@ def test_transition_matrices(r, a):
 
 
 @pytest.mark.parametrize(
+    "r,a,d", [(1e-8, 1e-10, 1e5), (1e-7, 1e-9, 1e4), (1e-5, 1e-10, 1e3)]
+)
+def test_transition_matrices_dist(r, a, d):
+    """Test how transition matrices scale with distance."""
+    assert r > a
+    hmm = MetaHMM()
+    A = hmm.create_transition_matrix(hmm.karyotypes, r=r, a=a)
+    # this is kind of what we do now ...
+    A_hat = A + np.log(d)
+    for i in range(A.shape[0]):
+        A_hat[i, i] = np.log(1.0 - (np.sum(np.exp(A_hat[i, :])) - np.exp(A_hat[i, i])))
+    for i in range(A.shape[0]):
+        assert np.isclose(np.sum(np.exp(A[i, :])), 1.0)
+        assert np.isclose(np.sum(np.exp(A_hat[i, :])), 1.0)
+
+
+@pytest.mark.parametrize(
     "data", [data_disomy, data_trisomy, data_monosomy, data_nullisomy]
 )
 def test_ploidy_correctness(data):

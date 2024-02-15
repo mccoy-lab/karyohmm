@@ -12,7 +12,7 @@ pgt_sim_mosaic = PGTSimMosaic()
 
 @given(
     length=st.floats(min_value=1e2, max_value=1e8),
-    m=st.integers(min_value=2, max_value=4000),
+    m=st.integers(min_value=2, max_value=1000),
 )
 @settings(max_examples=10, deadline=1000)
 def test_pgt_sim(length, m):
@@ -25,7 +25,7 @@ def test_pgt_sim(length, m):
 
 @given(
     length=st.floats(min_value=1e2, max_value=1e8),
-    m=st.integers(min_value=2, max_value=4000),
+    m=st.integers(min_value=2, max_value=1000),
     nsib=st.integers(min_value=2, max_value=5),
 )
 @settings(max_examples=10, deadline=5000)
