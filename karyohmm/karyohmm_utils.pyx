@@ -1,4 +1,5 @@
-from libc.math cimport erf, exp, log, pi, sqrt
+from libc.math cimport erf, exp, expm1, log, log1p, pi, sqrt
+
 import numpy as np
 
 
@@ -36,6 +37,13 @@ cpdef double logmeanexp(double a, double b):
     m = max(a,b)
     c = exp(a - m) + exp(b - m)
     return m + log(c) - 2.0
+
+cdef double log1mexp(double a):
+    """Log of 1 - e^-x."""
+    if a < 0.693:
+        return log(-expm1(-a))
+    else:
+        return log1p(-exp(-a))
 
 cdef double psi(double x):
     """CDF for a normal distribution function in log-space."""
@@ -202,11 +210,8 @@ def forward_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
     scaler[0] = logsumexp(alphas[:, 0])
     alphas[:, 0] -= scaler[0]
     for i in range(1, n):
-        # Assume that at most SNPs are a megabase apart to preserve transition model
-        di = min(pos[i] - pos[i-1], 1e6)
-        A_hat = A + log(di)
-        for k in range(m):
-            A_hat[k,k] = np.log(1.0 - (np.sum(np.exp(A_hat[k, :])) - np.exp(A_hat[k,k])))
+        di = pos[i] - pos[i-1]
+        A_hat = A + log1mexp(di*1e-8)
         for j in range(m):
             m_ij = mat_dosage(mat_haps[:, i], states[j])
             p_ij = pat_dosage(pat_haps[:, i], states[j])
@@ -238,10 +243,8 @@ def backward_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, doub
     betas[:, -1] -= scaler[-1]
     for i in range(n - 2, -1, -1):
         # The matrices are element-wise multiplied so add in log-space ...
-        di = min(pos[i+1] - pos[i], 1e6)
-        A_hat = A + np.log(di)
-        for k in range(m):
-            A_hat[k,k] = np.log(1.0 - (np.sum(np.exp(A_hat[k, :])) - np.exp(A_hat[k,k])))
+        di = pos[i+1] - pos[i]
+        A_hat = A + log1mexp(di*1e-8)
         # Calculate the full set of emissions
         cur_emissions = np.zeros(m)
         for j in range(m):
@@ -290,10 +293,8 @@ def viterbi_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
     psi = np.zeros(shape=(m, n), dtype=int)
     ks = [sum([s >= 0 for s in state]) for state in states]
     for i in range(1, n):
-        di = min(pos[i] - pos[i-1], 1e6)
-        A_hat = A + np.log(di)
-        for k in range(m):
-            A_hat[k,k] = np.log(1.0 - (np.sum(np.exp(A_hat[k, :])) - np.exp(A_hat[k,k])))
+        di = pos[i] - pos[i-1]
+        A_hat = A + log1mexp(di*1e-8)
         for j in range(m):
             m_ij = mat_dosage(mat_haps[:, i], states[j])
             p_ij = pat_dosage(pat_haps[:, i], states[j])

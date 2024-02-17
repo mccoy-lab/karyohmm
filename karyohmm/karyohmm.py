@@ -197,7 +197,7 @@ class MetaHMM(AneuploidyHMM):
                 dtype=str,
             )
 
-    def create_transition_matrix(self, karyotypes, r=1e-8, a=1e-10, unphased=False):
+    def create_transition_matrix(self, karyotypes, r=1e-2, a=1e-4, unphased=False):
         """Create an inter-karyotype transition matrix.
 
         Arguments:
@@ -237,8 +237,8 @@ class MetaHMM(AneuploidyHMM):
         pat_haps,
         pi0=0.5,
         std_dev=0.25,
-        r=1e-8,
-        a=1e-10,
+        r=1e-2,
+        a=1e-4,
         unphased=False,
     ):
         """Forward HMM algorithm under a multi-ploidy model.
@@ -292,8 +292,8 @@ class MetaHMM(AneuploidyHMM):
         pat_haps,
         pi0=0.5,
         std_dev=0.25,
-        r=1e-8,
-        a=1e-10,
+        r=1e-2,
+        a=1e-4,
         unphased=False,
     ):
         """Backward HMM algorithm under a given statespace model.
@@ -347,8 +347,8 @@ class MetaHMM(AneuploidyHMM):
         pat_haps,
         pi0=0.2,
         std_dev=0.25,
-        r=1e-8,
-        a=1e-10,
+        r=1e-2,
+        a=1e-4,
         unphased=False,
     ):
         """Run the forward-backward algorithm across all states.
@@ -403,8 +403,8 @@ class MetaHMM(AneuploidyHMM):
         pat_haps,
         pi0=0.2,
         std_dev=0.25,
-        r=1e-8,
-        a=1e-10,
+        r=1e-2,
+        a=1e-4,
         unphased=False,
     ):
         """Implement the viterbi traceback through karyotypic states.
