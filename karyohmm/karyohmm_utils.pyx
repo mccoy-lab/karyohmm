@@ -184,9 +184,9 @@ def lod_phase(haps1, haps2, baf, **kwargs):
             antiphase_orientation = logaddexp(antiphase_orientation, antiphase1)
     return phase_orientation, antiphase_orientation
 
-def forward_algo(bafs, pos, mat_haps, pat_haps, states, A1, A2, double pi0=0.2, double std_dev=0.25):
+def forward_algo(bafs, pos, mat_haps, pat_haps, states, A1, A2, double r=1e-8, double pi0=0.2, double std_dev=0.25):
     """Helper function for forward algorithm loop-optimization."""
-    cdef int i,j,k,n,m;
+    cdef int i,j,n,m;
     cdef float di;
     n = bafs.size
     m = len(states)
@@ -211,7 +211,7 @@ def forward_algo(bafs, pos, mat_haps, pat_haps, states, A1, A2, double pi0=0.2, 
     alphas[:, 0] -= scaler[0]
     for i in range(1, n):
         di = pos[i] - pos[i-1]
-        A_hat = np.log(A1 + exp(-di*1e-8)*A2)
+        A_hat = np.log(A1 + exp(-di*r)*A2)
         for j in range(m):
             m_ij = mat_dosage(mat_haps[:, i], states[j])
             p_ij = pat_dosage(pat_haps[:, i], states[j])
@@ -229,9 +229,9 @@ def forward_algo(bafs, pos, mat_haps, pat_haps, states, A1, A2, double pi0=0.2, 
         alphas[:, i] -= scaler[i]
     return alphas, scaler, states, None, sum(scaler)
 
-def backward_algo(bafs, pos, mat_haps, pat_haps, states, A1, A2, double pi0=0.2, double std_dev=0.25):
+def backward_algo(bafs, pos, mat_haps, pat_haps, states, A1, A2, double r=1e-8, double pi0=0.2, double std_dev=0.25):
     """Helper function for backward algorithm loop-optimization."""
-    cdef int i,j,k,n,m;
+    cdef int i,j,n,m;
     cdef float di;
     n = bafs.size
     m = len(states)
@@ -244,7 +244,7 @@ def backward_algo(bafs, pos, mat_haps, pat_haps, states, A1, A2, double pi0=0.2,
     for i in range(n - 2, -1, -1):
         # The matrices are element-wise multiplied so add in log-space ...
         di = pos[i+1] - pos[i]
-        A_hat = np.log(A1 + exp(-di*1e-8)*A2)
+        A_hat = np.log(A1 + exp(-di*r)*A2)
         # Calculate the full set of emissions
         cur_emissions = np.zeros(m)
         for j in range(m):
@@ -282,9 +282,9 @@ def backward_algo(bafs, pos, mat_haps, pat_haps, states, A1, A2, double pi0=0.2,
         betas[:, i] -= scaler[i]
     return betas, scaler, states, None, sum(scaler)
 
-def viterbi_algo(bafs, pos, mat_haps, pat_haps, states, A1, A2, double pi0=0.2, double std_dev=0.25):
+def viterbi_algo(bafs, pos, mat_haps, pat_haps, states, A1, A2, double r=1e-8, double pi0=0.2, double std_dev=0.25):
     """Cython implementation of the Viterbi algorithm for MLE path estimation through states."""
-    cdef int i,j,k,n,m;
+    cdef int i,j,n,m;
     cdef float di;
     n = bafs.size
     m = len(states)
@@ -294,7 +294,7 @@ def viterbi_algo(bafs, pos, mat_haps, pat_haps, states, A1, A2, double pi0=0.2, 
     ks = [sum([s >= 0 for s in state]) for state in states]
     for i in range(1, n):
         di = pos[i] - pos[i-1]
-        A_hat = np.log(A1 + exp(-di*1e-8)*A2)
+        A_hat = np.log(A1 + exp(-di*r)*A2)
         for j in range(m):
             m_ij = mat_dosage(mat_haps[:, i], states[j])
             p_ij = pat_dosage(pat_haps[:, i], states[j])
@@ -316,9 +316,9 @@ def viterbi_algo(bafs, pos, mat_haps, pat_haps, states, A1, A2, double pi0=0.2, 
     return path, states, deltas, psi
 
 
-def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
+def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A1, A2, double r=1e-8, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
     """Compute the forward algorithm for sibling embryo HMM."""
-    cdef int i,j,k,n,m;
+    cdef int i,j,n,m;
     cdef float di;
     assert len(bafs) == 2
     assert bafs[1].size == bafs[0].size
@@ -354,10 +354,8 @@ def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A, (double, double)
     scaler[0] = logsumexp(alphas[:, 0])
     alphas[:, 0] -= scaler[0]
     for i in range(1, n):
-        di = min(pos[i] - pos[i-1], 1e6)
-        A_hat = A + np.log(di)
-        for k in range(m):
-            A_hat[k,k] = np.log(1.0 - (np.sum(np.exp(A_hat[k, :])) - np.exp(A_hat[k,k])))
+        di = pos[i] - pos[i-1]
+        A_hat = np.log(A1 + exp(-di*r)*A2)
         for j in range(m):
             # First sibling embryo
             m_ij0 = mat_dosage(mat_haps[:, i], states[j][0])
@@ -387,9 +385,9 @@ def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A, (double, double)
     return alphas, scaler, states, None, sum(scaler)
 
 
-def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
+def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A1, A2, double r=1e-8, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
     """Compute the backward algorithm for the sibling embryo HMM."""
-    cdef int i,j,k,n,m;
+    cdef int i,j,n,m;
     cdef float di;
     assert len(bafs) == 2
     assert bafs[1].size == bafs[0].size
@@ -402,9 +400,7 @@ def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A, (double, double
     betas[:, -1] -= scaler[-1]
     for i in range(n - 2, -1, -1):
         di = min(pos[i+1] - pos[i], 1e6)
-        A_hat = A + np.log(di)
-        for k in range(m):
-            A_hat[k,k] = np.log(1.0 - (np.sum(np.exp(A_hat[k, :])) - np.exp(A_hat[k,k])))
+        A_hat = np.log(A1 + exp(-di*r)*A2)
         cur_emissions = np.zeros(m)
         for j in range(m):
             m_ij0 = mat_dosage(mat_haps[:, i+1], states[j][0])
@@ -458,9 +454,9 @@ def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A, (double, double
     return betas, scaler, states, None, sum(scaler)
 
 
-def viterbi_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
+def viterbi_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A1, A2, double r=1e-8, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
     """Viterbi algorithm and path tracing through sibling embryos."""
-    cdef int i,j,k,n,m;
+    cdef int i,j,n,m;
     cdef float di;
     assert len(bafs) == 2
     assert bafs[1].size == bafs[0].size
@@ -470,16 +466,14 @@ def viterbi_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A, (double, double)
     deltas[:, 0] = log(1.0 / m)
     psi = np.zeros(shape=(m, n), dtype=int)
     for i in range(1, n):
-        di = min(pos[i] - pos[i-1], 1e6)
-        A_hat = A + np.log(di)
-        for k in range(m):
-            A_hat[k,k] = np.log(1.0 - (np.sum(np.exp(A_hat[k, :])) - np.exp(A_hat[k,k])))
+        di = pos[i] - pos[i-1]
+        A_hat = np.log(A1 + exp(-di*r)*A2)
         for j in range(m):
             m_ij0 = mat_dosage(mat_haps[:, i], states[j][0])
             p_ij0 = pat_dosage(pat_haps[:, i], states[j][0])
             m_ij1 = mat_dosage(mat_haps[:, i], states[j][1])
             p_ij1 = pat_dosage(pat_haps[:, i], states[j][1])
-            deltas[j,i] = np.max(deltas[:,i-1] + A[:,j])
+            deltas[j,i] = np.max(deltas[:,i-1] + A_hat[:,j])
             deltas[j,i] += emission_baf(
                     bafs[0][i],
                     m_ij0,

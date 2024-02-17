@@ -526,7 +526,7 @@ class QuadHMM(AneuploidyHMM):
             for j in self.single_states:
                 self.states.append((i, j))
 
-    def create_transition_matrix(self, r=1e-8):
+    def create_transition_matrix(self, r=1e-2):
         """Create the transition matrix.
 
         Arguments:
@@ -537,12 +537,16 @@ class QuadHMM(AneuploidyHMM):
 
         """
         m = len(self.states)
-        A = np.zeros(shape=(m, m))
-        A[:, :] = r / m
+        A1 = np.zeros(shape=(m, m))
+        A2 = np.zeros(shape=(m, m))
+        A1[:, :] = r / m
+        A2[:, :] = -r / m
         for i in range(m):
-            A[i, i] = 0.0
-            A[i, i] = 1.0 - np.sum(A[i, :])
-        return np.log(A)
+            A1[i, i] = 0.0
+            A1[i, i] = 1.0 - np.sum(A1[i, :])
+            A2[i, i] = 0.0
+            A2[i, i] = -np.sum(A2[i, :])
+        return A1, A2
 
     def forward_algorithm(
         self,
@@ -552,7 +556,7 @@ class QuadHMM(AneuploidyHMM):
         pat_haps,
         pi0=(0.7, 0.7),
         std_dev=(0.15, 0.15),
-        r=1e-8,
+        r=1e-2,
     ):
         """Implement the forward algorithm for QuadHMM model.
 
@@ -580,14 +584,15 @@ class QuadHMM(AneuploidyHMM):
         assert (mat_haps.ndim == 2) and (pat_haps.ndim == 2)
         assert mat_haps.size == pat_haps.size
         assert np.all(pos[1:] > pos[:-1])
-        A = self.create_transition_matrix(r=r)
+        A1, A2 = self.create_transition_matrix(r=r)
         alphas, scaler, states, karyotypes, loglik = forward_algo_sibs(
             bafs,
             pos,
             mat_haps,
             pat_haps,
             states=self.states,
-            A=A,
+            A1=A1,
+            A2=A2,
             pi0=pi0,
             std_dev=std_dev,
         )
@@ -601,7 +606,7 @@ class QuadHMM(AneuploidyHMM):
         pat_haps,
         pi0=(0.7, 0.7),
         std_dev=(0.15, 0.15),
-        r=1e-8,
+        r=1e-2,
     ):
         """Implement the forward algorithm for QuadHMM model.
 
@@ -629,14 +634,15 @@ class QuadHMM(AneuploidyHMM):
         assert (mat_haps.ndim == 2) and (pat_haps.ndim == 2)
         assert mat_haps.size == pat_haps.size
         assert np.all(pos[1:] > pos[:-1])
-        A = self.create_transition_matrix(r=r)
+        A1, A2 = self.create_transition_matrix(r=r)
         alphas, scaler, states, karyotypes, loglik = backward_algo_sibs(
             bafs,
             pos,
             mat_haps,
             pat_haps,
             states=self.states,
-            A=A,
+            A1=A1,
+            A2=A2,
             pi0=pi0,
             std_dev=std_dev,
         )
@@ -650,7 +656,7 @@ class QuadHMM(AneuploidyHMM):
         pat_haps,
         pi0=(0.7, 0.7),
         std_dev=(0.15, 0.15),
-        r=1e-8,
+        r=1e-2,
     ):
         """Implement the forward-backward algorithm for the QuadHMM model.
 
@@ -669,14 +675,15 @@ class QuadHMM(AneuploidyHMM):
             - karyotypes (`np.array`): None
 
         """
-        A = self.create_transition_matrix(r=r)
+        A1, A2 = self.create_transition_matrix(r=r)
         alphas, _, states, _, _ = forward_algo_sibs(
             bafs,
             pos,
             mat_haps,
             pat_haps,
             states=self.states,
-            A=A,
+            A1=A1,
+            A2=A2,
             pi0=pi0,
             std_dev=std_dev,
         )
@@ -686,7 +693,8 @@ class QuadHMM(AneuploidyHMM):
             mat_haps,
             pat_haps,
             states=self.states,
-            A=A,
+            A1=A1,
+            A2=A2,
             pi0=pi0,
             std_dev=std_dev,
         )
@@ -701,7 +709,7 @@ class QuadHMM(AneuploidyHMM):
         pat_haps,
         pi0=(0.7, 0.7),
         std_dev=(0.15, 0.15),
-        r=1e-8,
+        r=1e-2,
     ):
         """Viterbi algorithm definition in a QuadHMM-context.
 
@@ -721,14 +729,15 @@ class QuadHMM(AneuploidyHMM):
             - psi (`np.array`): storage vector for psi variable
 
         """
-        A = self.create_transition_matrix(r=r)
+        A1, A2 = self.create_transition_matrix(r=r)
         path, states, deltas, psi = viterbi_algo_sibs(
             bafs,
             pos,
             mat_haps,
             pat_haps,
             states=self.states,
-            A=A,
+            A1=A1,
+            A2=A2,
             pi0=pi0,
             std_dev=std_dev,
         )
@@ -816,7 +825,7 @@ class QuadHMM(AneuploidyHMM):
         pat_haps,
         pi0=(0.7, 0.7),
         std_dev=(0.15, 0.15),
-        r=1e-8,
+        r=1e-2,
     ):
         """Obtain the restricted Viterbi path for traceback.
 
@@ -847,7 +856,7 @@ class QuadHMM(AneuploidyHMM):
         pat_haps,
         pi0=(0.7, 0.7),
         std_dev=(0.15, 0.15),
-        r=1e-8,
+        r=1e-2,
     ):
         """Obtain the Maximum A-Posteriori Path across restricted states.
 
@@ -1032,7 +1041,8 @@ class MosaicEst:
         """Create the transition matrix.
 
         Arguments:
-            - r (`float`): rate parameter sibling copying model...
+            - switch_err (`float`): rate parameter sibling copying model...
+            - t_rate (`float`): the actual transition rate probability
 
         Returns:
             - A (`np.array`): state x state matrix of log-transition rates
@@ -1330,6 +1340,7 @@ class PhaseCorrect:
         hap_idx1 = np.zeros(haps.shape[1], dtype=np.uint16)
         hap_idx2 = np.ones(haps.shape[1], dtype=np.uint16)
         for i, j in zip(np.arange(m - 1), np.arange(1, m)):
+            # If majority have the same switch - we swap haplotypes ...
             if n_mis[i] > (n_sib / 2):
                 hap_idx1[:i] = 1 - hap_idx1[:i]
                 hap_idx2[:i] = 1 - hap_idx2[:i]
