@@ -283,7 +283,8 @@ def test_transition_matrices(r, a):
 
 
 @pytest.mark.parametrize(
-    "r,a,d", [(1e-8, 1e-10, 1e5), (1e-7, 1e-9, 1e4), (1e-2, 1e-4, 1e3)]
+    "r,a,d",
+    [(1e-8, 1e-10, 1e5), (1e-7, 1e-9, 1e4), (1e-2, 1e-4, 1e3), (1e-2, 1e-4, 2e8)],
 )
 def test_transition_matrices_dist(r, a, d):
     """Test how transition matrices scale with distance."""
