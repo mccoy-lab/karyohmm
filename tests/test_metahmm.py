@@ -277,25 +277,23 @@ def test_string_rep():
 def test_transition_matrices(r, a):
     """Test that transition matrices obey the rules."""
     hmm = MetaHMM()
-    A = hmm.create_transition_matrix(hmm.karyotypes, r=r, a=a)
-    for i in range(A.shape[0]):
-        assert np.isclose(np.sum(np.exp(A[i, :])), 1.0)
+    A1, _ = hmm.create_transition_matrix(hmm.karyotypes, r=r, a=a)
+    for i in range(A1.shape[0]):
+        assert np.isclose(np.sum(A1[i, :]), 1.0)
 
 
 @pytest.mark.parametrize(
-    "r,a,d", [(1e-8, 1e-10, 1e5), (1e-7, 1e-9, 1e4), (1e-5, 1e-10, 1e3)]
+    "r,a,d", [(1e-8, 1e-10, 1e5), (1e-7, 1e-9, 1e4), (1e-2, 1e-4, 1e3)]
 )
 def test_transition_matrices_dist(r, a, d):
     """Test how transition matrices scale with distance."""
     assert r > a
     hmm = MetaHMM()
-    A = hmm.create_transition_matrix(hmm.karyotypes, r=r, a=a)
-    # this is kind of what we do now ...
-    A_hat = A + np.log(d)
-    for i in range(A.shape[0]):
-        A_hat[i, i] = np.log(1.0 - (np.sum(np.exp(A_hat[i, :])) - np.exp(A_hat[i, i])))
-    for i in range(A.shape[0]):
-        assert np.isclose(np.sum(np.exp(A[i, :])), 1.0)
+    A1, A2 = hmm.create_transition_matrix(hmm.karyotypes, r=r, a=a)
+    # This should still sum up to 1
+    A_hat = np.log(A1 + np.exp(-1e-8 * d) * A2)
+    for i in range(A1.shape[0]):
+        assert np.isclose(np.sum(A1[i, :]), 1.0)
         assert np.isclose(np.sum(np.exp(A_hat[i, :])), 1.0)
 
 
@@ -320,6 +318,7 @@ def test_ploidy_correctness(data):
     for x in ["0", "1m", "1p", "2", "3m", "3p"]:
         assert x in post_dict
     assert post_dict[data["aploid"]] == max_post
+    assert post_dict[data["aploid"]] > 0.95
 
 
 @pytest.mark.parametrize(
@@ -350,3 +349,4 @@ def test_ploidy_correctness_mle(data):
     for x in ["0", "1m", "1p", "2", "3m", "3p"]:
         assert x in post_dict
     assert post_dict[data["aploid"]] == max_post
+    assert post_dict[data["aploid"]] > 0.95

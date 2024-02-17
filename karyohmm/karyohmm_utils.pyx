@@ -184,7 +184,7 @@ def lod_phase(haps1, haps2, baf, **kwargs):
             antiphase_orientation = logaddexp(antiphase_orientation, antiphase1)
     return phase_orientation, antiphase_orientation
 
-def forward_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.25):
+def forward_algo(bafs, pos, mat_haps, pat_haps, states, A1, A2, double pi0=0.2, double std_dev=0.25):
     """Helper function for forward algorithm loop-optimization."""
     cdef int i,j,k,n,m;
     cdef float di;
@@ -211,7 +211,7 @@ def forward_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
     alphas[:, 0] -= scaler[0]
     for i in range(1, n):
         di = pos[i] - pos[i-1]
-        A_hat = A + log1mexp(di*1e-8)
+        A_hat = np.log(A1 + exp(-di*1e-8)*A2)
         for j in range(m):
             m_ij = mat_dosage(mat_haps[:, i], states[j])
             p_ij = pat_dosage(pat_haps[:, i], states[j])
@@ -229,7 +229,7 @@ def forward_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
         alphas[:, i] -= scaler[i]
     return alphas, scaler, states, None, sum(scaler)
 
-def backward_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.25):
+def backward_algo(bafs, pos, mat_haps, pat_haps, states, A1, A2, double pi0=0.2, double std_dev=0.25):
     """Helper function for backward algorithm loop-optimization."""
     cdef int i,j,k,n,m;
     cdef float di;
@@ -244,7 +244,7 @@ def backward_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, doub
     for i in range(n - 2, -1, -1):
         # The matrices are element-wise multiplied so add in log-space ...
         di = pos[i+1] - pos[i]
-        A_hat = A + log1mexp(di*1e-8)
+        A_hat = np.log(A1 + exp(-di*1e-8)*A2)
         # Calculate the full set of emissions
         cur_emissions = np.zeros(m)
         for j in range(m):
@@ -282,7 +282,7 @@ def backward_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, doub
         betas[:, i] -= scaler[i]
     return betas, scaler, states, None, sum(scaler)
 
-def viterbi_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.25):
+def viterbi_algo(bafs, pos, mat_haps, pat_haps, states, A1, A2, double pi0=0.2, double std_dev=0.25):
     """Cython implementation of the Viterbi algorithm for MLE path estimation through states."""
     cdef int i,j,k,n,m;
     cdef float di;
@@ -294,11 +294,11 @@ def viterbi_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
     ks = [sum([s >= 0 for s in state]) for state in states]
     for i in range(1, n):
         di = pos[i] - pos[i-1]
-        A_hat = A + log1mexp(di*1e-8)
+        A_hat = np.log(A1 + exp(-di*1e-8)*A2)
         for j in range(m):
             m_ij = mat_dosage(mat_haps[:, i], states[j])
             p_ij = pat_dosage(pat_haps[:, i], states[j])
-            deltas[j,i] = np.max(deltas[:,i-1] + A[:,j])
+            deltas[j,i] = np.max(deltas[:,i-1] + A_hat[:,j])
             deltas[j,i] += emission_baf(
                     bafs[i],
                     m_ij,
