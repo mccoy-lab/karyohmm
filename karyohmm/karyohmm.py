@@ -114,6 +114,32 @@ class AneuploidyHMM:
         sigma_est = opt_res.x[1]
         return pi0_est, sigma_est
 
+    def full_param_inference(
+        self,
+        bafs,
+        pos,
+        mat_haps,
+        pat_haps,
+        algo="Nelder-Mead",
+        pi0_bounds=(0.01, 0.99),
+        sigma_bounds=(1e-2, 1.0),
+    ):
+        """
+
+        Full parameter inference under the B-allele frequency model using naive optimization of the forward algorithm.
+
+        Arguments:
+            - bafs (`np.array`): B-allele frequencies across the all m sites
+            - pos (`np.array`): basepair positions of the SNPs
+            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
+            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
+            - algo (`str`): one of Nelder-Mead, L-BFGS-B, or Powell algorithms for optimization
+
+        """
+        raise NotImplementedError(
+            "We have not implemented full joint parameter inference yet!"
+        )
+
 
 class MetaHMM(AneuploidyHMM):
     """A meta-HMM that evaluates all possible ploidy states for allele intensity data."""
@@ -197,43 +223,6 @@ class MetaHMM(AneuploidyHMM):
                 dtype=str,
             )
 
-    def create_transition_matrix(self, karyotypes, r=1e-2, a=1e-4, unphased=False):
-        """Create an inter-karyotype transition matrix.
-
-        Arguments:
-            - karyotypes (`np.array`): array of karyotype indicators
-            - r (`float`): rate parameter for intra-karyotype transitions
-            - a (`float`): rate parameter for inter-karyotype transitions
-            - unphased (`bool`): indicator if intra-karyotype transitions become equal
-
-        Returns:
-            - A (`np.array`): state x state matrix of log-transition rates
-
-        """
-        m = karyotypes.size
-        assert r <= (1 / m)
-        assert a <= (1 / m)
-        A1 = np.zeros(shape=(m, m))
-        A2 = np.zeros(shape=(m, m))
-        for i in range(m):
-            for j in range(m):
-                if i != j:
-                    if karyotypes[i] == karyotypes[j]:
-                        k = np.sum(karyotypes == karyotypes[i])
-                        if unphased:
-                            A1[i, j] = 1 / k
-                            A2[i, j] = -1.0 / k
-                        else:
-                            A1[i, j] = r
-                            A2[i, j] = -r
-                    else:
-                        A1[i, j] = a
-                        A2[i, j] = -a
-        for i in range(m):
-            A1[i, i] = 1.0 - np.sum(A1[i, :])
-            A2[i, i] = -np.sum(A2[i, :])
-        return A1, A2
-
     def forward_algorithm(
         self,
         bafs,
@@ -242,8 +231,8 @@ class MetaHMM(AneuploidyHMM):
         pat_haps,
         pi0=0.5,
         std_dev=0.25,
-        r=1e-2,
-        a=1e-4,
+        r=1e-8,
+        a=1e-2,
         unphased=False,
     ):
         """Forward HMM algorithm under a multi-ploidy model.
@@ -276,17 +265,18 @@ class MetaHMM(AneuploidyHMM):
         assert bafs.size == pos.size
         assert mat_haps.shape == pat_haps.shape
         assert np.all(pos[1:] > pos[:-1])
-        A1, A2 = self.create_transition_matrix(
-            self.karyotypes, r=r, a=a, unphased=unphased
-        )
+        # A1, A2 = self.create_transition_matrix(
+        #     self.karyotypes, r=r, a=a, unphased=unphased
+        # )
         alphas, scaler, _, _, loglik = forward_algo(
             bafs,
             pos,
             mat_haps,
             pat_haps,
             self.states,
-            A1,
-            A2,
+            self.karyotypes,
+            r=r,
+            a=a,
             pi0=pi0,
             std_dev=std_dev,
         )
@@ -300,8 +290,8 @@ class MetaHMM(AneuploidyHMM):
         pat_haps,
         pi0=0.5,
         std_dev=0.25,
-        r=1e-2,
-        a=1e-4,
+        r=1e-8,
+        a=1e-2,
         unphased=False,
     ):
         """Backward HMM algorithm under a given statespace model.
@@ -334,17 +324,18 @@ class MetaHMM(AneuploidyHMM):
         assert bafs.size == pos.size
         assert mat_haps.shape == pat_haps.shape
         assert np.all(pos[1:] > pos[:-1])
-        A1, A2 = self.create_transition_matrix(
-            self.karyotypes, r=r, a=a, unphased=unphased
-        )
+        # A1, A2 = self.create_transition_matrix(
+        #     self.karyotypes, r=r, a=a, unphased=unphased
+        # )
         betas, scaler, _, _, loglik = backward_algo(
             bafs,
             pos,
             mat_haps,
             pat_haps,
             self.states,
-            A1,
-            A2,
+            self.karyotypes,
+            r=r,
+            a=a,
             pi0=pi0,
             std_dev=std_dev,
         )
@@ -358,8 +349,8 @@ class MetaHMM(AneuploidyHMM):
         pat_haps,
         pi0=0.2,
         std_dev=0.25,
-        r=1e-2,
-        a=1e-4,
+        r=1e-8,
+        a=1e-2,
         unphased=False,
     ):
         """Run the forward-backward algorithm across all states.
@@ -414,8 +405,8 @@ class MetaHMM(AneuploidyHMM):
         pat_haps,
         pi0=0.2,
         std_dev=0.25,
-        r=1e-2,
-        a=1e-4,
+        r=1e-8,
+        a=1e-2,
         unphased=False,
     ):
         """Implement the viterbi traceback through karyotypic states.
@@ -447,17 +438,18 @@ class MetaHMM(AneuploidyHMM):
         assert bafs.size == mat_haps.shape[1]
         assert mat_haps.shape == pat_haps.shape
         assert np.all(pos[1:] > pos[:-1])
-        A1, A2 = self.create_transition_matrix(
-            self.karyotypes, r=r, a=a, unphased=unphased
-        )
+        # A1, A2 = self.create_transition_matrix(
+        #     self.karyotypes, r=r, a=a, unphased=unphased
+        # )
         path, states, deltas, psi = viterbi_algo(
             bafs,
             pos,
             mat_haps,
             pat_haps,
             self.states,
-            A1,
-            A2,
+            self.karyotypes,
+            r=r,
+            a=a,
             pi0=pi0,
             std_dev=std_dev,
         )
