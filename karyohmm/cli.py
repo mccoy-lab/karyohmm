@@ -108,14 +108,6 @@ def read_data(input_fp):
     show_default=True,
 )
 @click.option(
-    "--unphased",
-    required=False,
-    default=False,
-    type=bool,
-    show_default=True,
-    help="Run inference in unphased mode.",
-)
-@click.option(
     "--algo",
     required=False,
     default="Powell",
@@ -162,10 +154,9 @@ def main(
     input,
     viterbi,
     mode,
-    unphased,
     algo="Powell",
     recomb_rate=1e-8,
-    aneuploidy_rate=1e-10,
+    aneuploidy_rate=1e-2,
     gzip=True,
     out="karyohmm",
 ):
@@ -194,7 +185,6 @@ def main(
             bafs=bafs,
             mat_haps=mat_haps,
             pat_haps=pat_haps,
-            unphased=unphased,
             r=recomb_rate,
             a=aneuploidy_rate,
             algo=algo,
@@ -208,7 +198,6 @@ def main(
                 pat_haps=pat_haps,
                 pi0=pi0_est,
                 std_dev=sigma_est,
-                unphased=unphased,
                 r=recomb_rate,
                 a=aneuploidy_rate,
             )
@@ -242,7 +231,6 @@ def main(
                 pat_haps=pat_haps,
                 pi0=pi0_est,
                 std_dev=sigma_est,
-                unphased=unphased,
             )
             kar_prob = hmm.posterior_karyotypes(gammas, karyotypes)
             kar_prob["pi0_hat"] = pi0_est

@@ -1,4 +1,5 @@
-from libc.math cimport erf, exp, log, pi, sqrt
+from libc.math cimport erf, exp, expm1, log, log1p, pi, sqrt
+
 import numpy as np
 
 
@@ -36,6 +37,13 @@ cpdef double logmeanexp(double a, double b):
     m = max(a,b)
     c = exp(a - m) + exp(b - m)
     return m + log(c) - 2.0
+
+cdef double log1mexp(double a):
+    """Log of 1 - e^-x."""
+    if a < 0.693:
+        return log(-expm1(-a))
+    else:
+        return log1p(-exp(-a))
 
 cdef double psi(double x):
     """CDF for a normal distribution function in log-space."""
@@ -116,8 +124,11 @@ cpdef double pat_dosage(pat_hap, state):
             p = pat_hap[state[2]]
     return p
 
-cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double std_dev=0.2, int k=2):
-    """Emission distribution function for B-allele frequency in the sample."""
+cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double std_dev=0.2, int k=2, double eps=1e-3):
+    """Emission distribution function for B-allele frequency in the sample.
+
+    NOTE: this should have some approximate error potentially?
+    """
     cdef double mu_i, x, x0, x1;
     if (m == -1) & (p == -1):
         x = truncnorm_pdf(baf, 0.0, 1.0, mu=0.5, sigma=std_dev)
@@ -176,13 +187,43 @@ def lod_phase(haps1, haps2, baf, **kwargs):
             antiphase_orientation = logaddexp(antiphase_orientation, antiphase1)
     return phase_orientation, antiphase_orientation
 
-def forward_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.25):
+def create_index_arrays(karyotypes):
+    m = karyotypes.size
+    K0 = np.zeros(shape=(m,m))
+    K1 = np.zeros(shape=(m,m))
+    ks = np.zeros(m)
+    for i in range(m):
+        ks[i] = np.sum(karyotypes == karyotypes[i])
+        for j in range(m):
+            if i != j:
+                if karyotypes[i] == karyotypes[j]:
+                    K0[i,j] = 1./ks[i]
+                else:
+                    K1[i,j] = 1./(m-ks[i])
+    return K0,K1
+
+
+cpdef transition_kernel(K0, K1, double d=1e3, double r=1e-8, double a=1e-2):
+    # NOTE: should see if we need to do this in log-space for numerics ...
+    cdef int i,m;
+    cdef double rho, alpha;
+    m = K0.shape[0]
+    rho = 1.0 - exp(-r*d)
+    alpha = 1.0  - exp(-r*a*d)
+    A = K0*rho + K1*alpha
+    for i in range(m):
+        A[i,i] = 1. - np.sum(A[i,:])
+    return np.log(A)
+
+
+def forward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-8, double a=1e-2, double pi0=0.2, double std_dev=0.25):
     """Helper function for forward algorithm loop-optimization."""
-    cdef int i,j,k,n,m;
+    cdef int i,j,n,m;
     cdef float di;
     n = bafs.size
     m = len(states)
     ks = [sum([s >= 0 for s in state]) for state in states]
+    K0,K1 = create_index_arrays(karyotypes)
     alphas = np.zeros(shape=(m, n))
     alphas[:, 0] = log(1.0 / m)
     for j in range(m):
@@ -202,11 +243,9 @@ def forward_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
     scaler[0] = logsumexp(alphas[:, 0])
     alphas[:, 0] -= scaler[0]
     for i in range(1, n):
-        # Assume that at most SNPs are a megabase apart to preserve transition model
-        di = min(pos[i] - pos[i-1], 1e6)
-        A_hat = A + log(di)
-        for k in range(m):
-            A_hat[k,k] = np.log(1.0 - (np.sum(np.exp(A_hat[k, :])) - np.exp(A_hat[k,k])))
+        di = pos[i] - pos[i-1]
+        # This should get the distance dependent transition models ...
+        A_hat = transition_kernel(K0, K1, d=di, r=r, a=a)
         for j in range(m):
             m_ij = mat_dosage(mat_haps[:, i], states[j])
             p_ij = pat_dosage(pat_haps[:, i], states[j])
@@ -224,13 +263,14 @@ def forward_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
         alphas[:, i] -= scaler[i]
     return alphas, scaler, states, None, sum(scaler)
 
-def backward_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.25):
+def backward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-8, double a=1e-2, double pi0=0.2, double std_dev=0.25):
     """Helper function for backward algorithm loop-optimization."""
-    cdef int i,j,k,n,m;
+    cdef int i,j,n,m;
     cdef float di;
     n = bafs.size
     m = len(states)
     ks = [sum([s >= 0 for s in state]) for state in states]
+    K0,K1 = create_index_arrays(karyotypes)
     betas = np.zeros(shape=(m, n))
     betas[:,-1] = log(1)
     scaler = np.zeros(n)
@@ -238,10 +278,8 @@ def backward_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, doub
     betas[:, -1] -= scaler[-1]
     for i in range(n - 2, -1, -1):
         # The matrices are element-wise multiplied so add in log-space ...
-        di = min(pos[i+1] - pos[i], 1e6)
-        A_hat = A + np.log(di)
-        for k in range(m):
-            A_hat[k,k] = np.log(1.0 - (np.sum(np.exp(A_hat[k, :])) - np.exp(A_hat[k,k])))
+        di = pos[i+1] - pos[i]
+        A_hat = transition_kernel(K0, K1, d=di, r=r, a=a)
         # Calculate the full set of emissions
         cur_emissions = np.zeros(m)
         for j in range(m):
@@ -279,9 +317,9 @@ def backward_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, doub
         betas[:, i] -= scaler[i]
     return betas, scaler, states, None, sum(scaler)
 
-def viterbi_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, double std_dev=0.25):
+def viterbi_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-8, double a=1e-2, double pi0=0.2, double std_dev=0.25):
     """Cython implementation of the Viterbi algorithm for MLE path estimation through states."""
-    cdef int i,j,k,n,m;
+    cdef int i,j,n,m;
     cdef float di;
     n = bafs.size
     m = len(states)
@@ -289,15 +327,14 @@ def viterbi_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
     deltas[:, 0] = log(1.0 / m)
     psi = np.zeros(shape=(m, n), dtype=int)
     ks = [sum([s >= 0 for s in state]) for state in states]
+    K0,K1 = create_index_arrays(karyotypes)
     for i in range(1, n):
-        di = min(pos[i] - pos[i-1], 1e6)
-        A_hat = A + np.log(di)
-        for k in range(m):
-            A_hat[k,k] = np.log(1.0 - (np.sum(np.exp(A_hat[k, :])) - np.exp(A_hat[k,k])))
+        di = pos[i] - pos[i-1]
+        A_hat = transition_kernel(K0, K1, d=di, r=r, a=a)
         for j in range(m):
             m_ij = mat_dosage(mat_haps[:, i], states[j])
             p_ij = pat_dosage(pat_haps[:, i], states[j])
-            deltas[j,i] = np.max(deltas[:,i-1] + A[:,j])
+            deltas[j,i] = np.max(deltas[:,i-1] + A_hat[:,j])
             deltas[j,i] += emission_baf(
                     bafs[i],
                     m_ij,
@@ -315,14 +352,15 @@ def viterbi_algo(bafs, pos, mat_haps, pat_haps, states, A, double pi0=0.2, doubl
     return path, states, deltas, psi
 
 
-def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
+def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-8, double a=1e-2, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
     """Compute the forward algorithm for sibling embryo HMM."""
-    cdef int i,j,k,n,m;
+    cdef int i,j,n,m;
     cdef float di;
     assert len(bafs) == 2
     assert bafs[1].size == bafs[0].size
     n = bafs[0].size
     m = len(states)
+    K0,K1 = create_index_arrays(karyotypes)
     alphas = np.zeros(shape=(m, n))
     alphas[:, 0] = log(1.0 / m)
     for j in range(m):
@@ -353,10 +391,8 @@ def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A, (double, double)
     scaler[0] = logsumexp(alphas[:, 0])
     alphas[:, 0] -= scaler[0]
     for i in range(1, n):
-        di = min(pos[i] - pos[i-1], 1e6)
-        A_hat = A + np.log(di)
-        for k in range(m):
-            A_hat[k,k] = np.log(1.0 - (np.sum(np.exp(A_hat[k, :])) - np.exp(A_hat[k,k])))
+        di = pos[i] - pos[i-1]
+        A_hat = transition_kernel(K0,K1, d=di, r=r, a=a)
         for j in range(m):
             # First sibling embryo
             m_ij0 = mat_dosage(mat_haps[:, i], states[j][0])
@@ -386,14 +422,15 @@ def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A, (double, double)
     return alphas, scaler, states, None, sum(scaler)
 
 
-def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
+def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-8, double a=1e-2, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
     """Compute the backward algorithm for the sibling embryo HMM."""
-    cdef int i,j,k,n,m;
+    cdef int i,j,n,m;
     cdef float di;
     assert len(bafs) == 2
     assert bafs[1].size == bafs[0].size
     n = bafs[0].size
     m = len(states)
+    K0,K1 = create_index_arrays(karyotypes)
     betas = np.zeros(shape=(m, n))
     betas[:,-1] = log(1.0)
     scaler = np.zeros(n)
@@ -401,9 +438,7 @@ def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A, (double, double
     betas[:, -1] -= scaler[-1]
     for i in range(n - 2, -1, -1):
         di = min(pos[i+1] - pos[i], 1e6)
-        A_hat = A + np.log(di)
-        for k in range(m):
-            A_hat[k,k] = np.log(1.0 - (np.sum(np.exp(A_hat[k, :])) - np.exp(A_hat[k,k])))
+        A_hat = transition_kernel(K0,K1, d=di, r=r, a=a)
         cur_emissions = np.zeros(m)
         for j in range(m):
             m_ij0 = mat_dosage(mat_haps[:, i+1], states[j][0])
@@ -457,28 +492,27 @@ def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A, (double, double
     return betas, scaler, states, None, sum(scaler)
 
 
-def viterbi_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
+def viterbi_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-8, double a=1e-2, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
     """Viterbi algorithm and path tracing through sibling embryos."""
-    cdef int i,j,k,n,m;
+    cdef int i,j,n,m;
     cdef float di;
     assert len(bafs) == 2
     assert bafs[1].size == bafs[0].size
     n = bafs[0].size
     m = len(states)
+    K0, K1 = create_index_arrays(karyotypes)
     deltas = np.zeros(shape=(m, n))
     deltas[:, 0] = log(1.0 / m)
     psi = np.zeros(shape=(m, n), dtype=int)
     for i in range(1, n):
-        di = min(pos[i] - pos[i-1], 1e6)
-        A_hat = A + np.log(di)
-        for k in range(m):
-            A_hat[k,k] = np.log(1.0 - (np.sum(np.exp(A_hat[k, :])) - np.exp(A_hat[k,k])))
+        di = pos[i] - pos[i-1]
+        A_hat = transition_kernel(K0, K1, d=di, r=r, a=a)
         for j in range(m):
             m_ij0 = mat_dosage(mat_haps[:, i], states[j][0])
             p_ij0 = pat_dosage(pat_haps[:, i], states[j][0])
             m_ij1 = mat_dosage(mat_haps[:, i], states[j][1])
             p_ij1 = pat_dosage(pat_haps[:, i], states[j][1])
-            deltas[j,i] = np.max(deltas[:,i-1] + A[:,j])
+            deltas[j,i] = np.max(deltas[:,i-1] + A_hat[:,j])
             deltas[j,i] += emission_baf(
                     bafs[0][i],
                     m_ij0,
