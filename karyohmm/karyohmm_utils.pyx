@@ -352,7 +352,7 @@ def viterbi_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-
     return path, states, deltas, psi
 
 
-def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A1, A2, double r=1e-8, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
+def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-8, double a=1e-2, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
     """Compute the forward algorithm for sibling embryo HMM."""
     cdef int i,j,n,m;
     cdef float di;
@@ -360,6 +360,7 @@ def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A1, A2, double r=1e
     assert bafs[1].size == bafs[0].size
     n = bafs[0].size
     m = len(states)
+    K0,K1 = create_index_arrays(karyotypes)
     alphas = np.zeros(shape=(m, n))
     alphas[:, 0] = log(1.0 / m)
     for j in range(m):
@@ -391,7 +392,7 @@ def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A1, A2, double r=1e
     alphas[:, 0] -= scaler[0]
     for i in range(1, n):
         di = pos[i] - pos[i-1]
-        A_hat = np.log(A1 + exp(-di*r)*A2)
+        A_hat = transition_kernel(K0,K1, d=di, r=r, a=a)
         for j in range(m):
             # First sibling embryo
             m_ij0 = mat_dosage(mat_haps[:, i], states[j][0])
@@ -421,7 +422,7 @@ def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A1, A2, double r=1e
     return alphas, scaler, states, None, sum(scaler)
 
 
-def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A1, A2, double r=1e-8, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
+def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-8, double a=1e-2, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
     """Compute the backward algorithm for the sibling embryo HMM."""
     cdef int i,j,n,m;
     cdef float di;
@@ -429,6 +430,7 @@ def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A1, A2, double r=1
     assert bafs[1].size == bafs[0].size
     n = bafs[0].size
     m = len(states)
+    K0,K1 = create_index_arrays(karyotypes)
     betas = np.zeros(shape=(m, n))
     betas[:,-1] = log(1.0)
     scaler = np.zeros(n)
@@ -436,7 +438,7 @@ def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A1, A2, double r=1
     betas[:, -1] -= scaler[-1]
     for i in range(n - 2, -1, -1):
         di = min(pos[i+1] - pos[i], 1e6)
-        A_hat = np.log(A1 + exp(-di*r)*A2)
+        A_hat = transition_kernel(K0,K1, d=di, r=r, a=a)
         cur_emissions = np.zeros(m)
         for j in range(m):
             m_ij0 = mat_dosage(mat_haps[:, i+1], states[j][0])
@@ -490,7 +492,7 @@ def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A1, A2, double r=1
     return betas, scaler, states, None, sum(scaler)
 
 
-def viterbi_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A1, A2, double r=1e-8, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
+def viterbi_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-8, double a=1e-2, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
     """Viterbi algorithm and path tracing through sibling embryos."""
     cdef int i,j,n,m;
     cdef float di;
@@ -498,12 +500,13 @@ def viterbi_algo_sibs(bafs, pos, mat_haps, pat_haps, states, A1, A2, double r=1e
     assert bafs[1].size == bafs[0].size
     n = bafs[0].size
     m = len(states)
+    K0, K1 = create_index_arrays(karyotypes)
     deltas = np.zeros(shape=(m, n))
     deltas[:, 0] = log(1.0 / m)
     psi = np.zeros(shape=(m, n), dtype=int)
     for i in range(1, n):
         di = pos[i] - pos[i-1]
-        A_hat = np.log(A1 + exp(-di*r)*A2)
+        A_hat = transition_kernel(K0, K1, d=di, r=r, a=a)
         for j in range(m):
             m_ij0 = mat_dosage(mat_haps[:, i], states[j][0])
             p_ij0 = pat_dosage(pat_haps[:, i], states[j][0])
