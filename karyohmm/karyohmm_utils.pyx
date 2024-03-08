@@ -187,26 +187,33 @@ def lod_phase(haps1, haps2, baf, **kwargs):
             antiphase_orientation = logaddexp(antiphase_orientation, antiphase1)
     return phase_orientation, antiphase_orientation
 
-
-cpdef double[:,:] transition_kernel(karyotypes, double d=1e3, double r=1e-8, double a=1e-2):
-    """Define the distance dependent transition function."""
-    cdef int m, i, j;
+def create_index_arrays(karyotypes):
     m = karyotypes.size
-    K = np.zeros(shape=(m, m))
-    rho = log1mexp(r*d)
-    alpha = log1mexp(r*a*d)
+    K0 = np.zeros(shape=(m,m))
+    K1 = np.zeros(shape=(m,m))
+    ks = np.zeros(m)
     for i in range(m):
+        ks[i] = np.sum(karyotypes == karyotypes[i])
         for j in range(m):
-            k = sum(karyotypes == karyotypes[i])
             if i != j:
                 if karyotypes[i] == karyotypes[j]:
-                    # If you're in the same karyotypic state ...
-                    K[i, j] = rho - k
+                    K0[i,j] = 1./ks[i]
                 else:
-                    K[i, j] = alpha - (m-k)
+                    K1[i,j] = 1./(m-ks[i])
+    return K0,K1
+
+
+cpdef transition_kernel(K0, K1, double d=1e3, double r=1e-8, double a=1e-2):
+    # NOTE: should see if we need to do this in log-space for numerics ...
+    cdef int i,m;
+    cdef double rho, alpha;
+    m = K0.shape[0]
+    rho = 1.0 - exp(-r*d)
+    alpha = 1.0  - exp(-r*a*d)
+    A = K0*rho + K1*alpha
     for i in range(m):
-        K[i,i] = -logsumexp(K[i,:])
-    return K
+        A[i,i] = 1. - np.sum(A[i,:])
+    return np.log(A)
 
 
 def forward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-8, double a=1e-2, double pi0=0.2, double std_dev=0.25):
@@ -216,6 +223,7 @@ def forward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-
     n = bafs.size
     m = len(states)
     ks = [sum([s >= 0 for s in state]) for state in states]
+    K0,K1 = create_index_arrays(karyotypes)
     alphas = np.zeros(shape=(m, n))
     alphas[:, 0] = log(1.0 / m)
     for j in range(m):
@@ -237,7 +245,7 @@ def forward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-
     for i in range(1, n):
         di = pos[i] - pos[i-1]
         # This should get the distance dependent transition models ...
-        A_hat = transition_kernel(karyotypes, d=di, r=r, a=a)
+        A_hat = transition_kernel(K0, K1, d=di, r=r, a=a)
         for j in range(m):
             m_ij = mat_dosage(mat_haps[:, i], states[j])
             p_ij = pat_dosage(pat_haps[:, i], states[j])
@@ -262,6 +270,7 @@ def backward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e
     n = bafs.size
     m = len(states)
     ks = [sum([s >= 0 for s in state]) for state in states]
+    K0,K1 = create_index_arrays(karyotypes)
     betas = np.zeros(shape=(m, n))
     betas[:,-1] = log(1)
     scaler = np.zeros(n)
@@ -270,7 +279,7 @@ def backward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e
     for i in range(n - 2, -1, -1):
         # The matrices are element-wise multiplied so add in log-space ...
         di = pos[i+1] - pos[i]
-        A_hat = transition_kernel(karyotypes, d=di, r=r, a=a)
+        A_hat = transition_kernel(K0, K1, d=di, r=r, a=a)
         # Calculate the full set of emissions
         cur_emissions = np.zeros(m)
         for j in range(m):
@@ -318,9 +327,10 @@ def viterbi_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-
     deltas[:, 0] = log(1.0 / m)
     psi = np.zeros(shape=(m, n), dtype=int)
     ks = [sum([s >= 0 for s in state]) for state in states]
+    K0,K1 = create_index_arrays(karyotypes)
     for i in range(1, n):
         di = pos[i] - pos[i-1]
-        A_hat = transition_kernel(karyotypes, d=di, r=r, a=a)
+        A_hat = transition_kernel(K0, K1, d=di, r=r, a=a)
         for j in range(m):
             m_ij = mat_dosage(mat_haps[:, i], states[j])
             p_ij = pat_dosage(pat_haps[:, i], states[j])

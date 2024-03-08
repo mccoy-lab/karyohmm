@@ -66,7 +66,7 @@ class AneuploidyHMM:
         pos,
         mat_haps,
         pat_haps,
-        algo="Nelder-Mead",
+        algo="Powell",
         pi0_bounds=(0.01, 0.99),
         sigma_bounds=(1e-2, 1.0),
         **kwargs,
@@ -265,9 +265,8 @@ class MetaHMM(AneuploidyHMM):
         assert bafs.size == pos.size
         assert mat_haps.shape == pat_haps.shape
         assert np.all(pos[1:] > pos[:-1])
-        # A1, A2 = self.create_transition_matrix(
-        #     self.karyotypes, r=r, a=a, unphased=unphased
-        # )
+        assert r < 0.5 and r > 0
+        assert a < 0.5 and a > 0
         alphas, scaler, _, _, loglik = forward_algo(
             bafs,
             pos,
@@ -324,9 +323,8 @@ class MetaHMM(AneuploidyHMM):
         assert bafs.size == pos.size
         assert mat_haps.shape == pat_haps.shape
         assert np.all(pos[1:] > pos[:-1])
-        # A1, A2 = self.create_transition_matrix(
-        #     self.karyotypes, r=r, a=a, unphased=unphased
-        # )
+        assert r < 0.5 and r > 0
+        assert a < 0.5 and a > 0
         betas, scaler, _, _, loglik = backward_algo(
             bafs,
             pos,
@@ -438,9 +436,6 @@ class MetaHMM(AneuploidyHMM):
         assert bafs.size == mat_haps.shape[1]
         assert mat_haps.shape == pat_haps.shape
         assert np.all(pos[1:] > pos[:-1])
-        # A1, A2 = self.create_transition_matrix(
-        #     self.karyotypes, r=r, a=a, unphased=unphased
-        # )
         path, states, deltas, psi = viterbi_algo(
             bafs,
             pos,

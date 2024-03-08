@@ -1,6 +1,8 @@
 """Test suite for karyoHMM MetaHMM."""
 import numpy as np
 import pytest
+from karyohmm_utils import create_index_arrays, transition_kernel
+from scipy.special import logsumexp as logsumexp_sp
 
 from karyohmm import MetaHMM, PGTSim
 
@@ -273,29 +275,28 @@ def test_string_rep():
             )
 
 
-@pytest.mark.parametrize("r,a", [(1e-3, 1e-7), (1e-3, 1e-9), (1e-3, 1e-10)])
+@pytest.mark.parametrize("r,a", [(1e-8, 1e-2), (1e-8, 1e-4), (1e-8, 1e-6)])
 def test_transition_matrices(r, a):
     """Test that transition matrices obey the rules."""
     hmm = MetaHMM()
-    A1, _ = hmm.create_transition_matrix(hmm.karyotypes, r=r, a=a)
-    for i in range(A1.shape[0]):
-        assert np.isclose(np.sum(A1[i, :]), 1.0)
+    K0, K1 = create_index_arrays(hmm.karyotypes)
+    A = transition_kernel(K0, K1, r=r, a=a)
+    for i in range(A.shape[0]):
+        assert np.isclose(np.exp(logsumexp_sp(A[i, :])), 1.0)
 
 
 @pytest.mark.parametrize(
     "r,a,d",
-    [(1e-8, 1e-10, 1e5), (1e-7, 1e-9, 1e4), (1e-2, 1e-4, 1e3), (1e-2, 1e-4, 2e8)],
+    [(1e-8, 1e-2, 1e5), (1e-8, 1e-3, 1e4), (1e-8, 1e-2, 1e3), (1e-8, 1e-1, 1e8)],
 )
 def test_transition_matrices_dist(r, a, d):
     """Test how transition matrices scale with distance."""
-    assert r > a
+    assert r < a
     hmm = MetaHMM()
-    A1, A2 = hmm.create_transition_matrix(hmm.karyotypes, r=r, a=a)
-    # This should still sum up to 1
-    A_hat = np.log(A1 + np.exp(-1e-8 * d) * A2)
-    for i in range(A1.shape[0]):
-        assert np.isclose(np.sum(A1[i, :]), 1.0)
-        assert np.isclose(np.sum(np.exp(A_hat[i, :])), 1.0)
+    K0, K1 = create_index_arrays(hmm.karyotypes)
+    A = transition_kernel(K0, K1, d=d, r=r, a=a)
+    for i in range(A.shape[0]):
+        assert np.isclose(np.exp(logsumexp_sp(A[i, :])), 1.0)
 
 
 @pytest.mark.parametrize(

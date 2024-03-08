@@ -11,7 +11,11 @@ extensions = [Extension("karyohmm_utils", ["karyohmm/karyohmm_utils.pyx"])]
 
 setup_args = dict(
     ext_modules=cythonize(
-        extensions, compiler_directives={"language_level": 3, "profile": False}
+        extensions,
+        compiler_directives={
+            "language_level": 3,
+            "profile": False,
+        },
     )
 )
 setup(**setup_args)
