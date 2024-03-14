@@ -944,6 +944,67 @@ class QuadHMM(AneuploidyHMM):
         # This returns the list of tuples on the recombination positions and minimum distances across the traces.
         return mat_recomb_lst, pat_recomb_lst, mat_recomb, pat_recomb
 
+    def est_sharing(
+        self,
+        bafs,
+        pos,
+        mat_haps,
+        pat_haps,
+        pi0=(0.7, 0.7),
+        std_dev=(0.15, 0.15),
+        r=1e-8,
+    ):
+        """Estimate the proportion of the chromosome that is shared identically across siblings.
+
+        Arguments:
+            - bafs (`list`): list of two arrays of B-allele frequencies across m sites for two siblings
+            - pos (`np.array`): m-length vector of basepair positions for sites
+            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
+            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
+            - pi0 (`tuple float`): sparsity parameter for B-allele emission model
+            - std_dev (`tuple float`): standard deviation for B-allele emission model
+            - r (`float`): inter-state transition rate
+
+        Returns:
+            -  mat_haplo_len (`float`): the total length maternal haplo-identity
+            -  pat_haplo_len (`float`): the total length paternal haplo-identity
+            -  both_haplo_len (`float`): the total length identical between siblings
+            -  tot_len (`float`): the total length of the variants typed on the chromosome
+
+        """
+        # 1. Estimate the simplified viterbi path through these states
+        cur_viterbi_path = self.viterbi_path(
+            bafs=bafs,
+            pos=pos,
+            mat_haps=mat_haps,
+            pat_haps=pat_haps,
+            pi0=pi0,
+            std_dev=std_dev,
+            r=r,
+        )
+        # 2. Estimate the amount of the chromosome in haplo-identical states
+        maternal_haplo_idx = np.where(cur_viterbi_path == 0)[0]
+        paternal_haplo_idx = np.where(cur_viterbi_path == 1)[0]
+        both_haplo_idx = np.where(cur_viterbi_path == 2)[0]
+        # 3. Now estimate the fraction of the genome explicitly ...
+        aggregate_length = lambda p, idx: np.sum(
+            [
+                p1 - p0
+                for (p0, p1, x0, x1) in zip(
+                    p[idx][:-1],
+                    p[idx][1:],
+                    idx[:-1],
+                    idx[1:],
+                )
+                if (x1 - 1 == x0)
+            ]
+        )
+        tot_len = pos[-1] - pos[0]
+        mat_haplo_len = aggregate_length(pos, maternal_haplo_idx)
+        pat_haplo_len = aggregate_length(pos, paternal_haplo_idx)
+        both_haplo_len = aggregate_length(pos, both_haplo_idx)
+        return mat_haplo_len, pat_haplo_len, both_haplo_len, tot_len
+
 
 class MosaicEst:
     """Class to perform estimation of mosaic rates."""

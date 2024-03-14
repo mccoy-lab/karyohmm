@@ -135,3 +135,19 @@ def test_recomb_isolation_viterbi(data):
     n_pat_rec = np.sum(zs_paternal0[:-1] != zs_paternal0[1:])
     assert len(mat_rec) == n_mat_rec
     assert len(pat_rec) == n_pat_rec
+
+
+@pytest.mark.parametrize(
+    "data", [data_disomy_sibs, data_disomy_sibs_v2, data_disomy_sibs_v3]
+)
+def test_estimate_sharing(data):
+    """Test the estimate of haplotype sharing across sibling embryos."""
+    hmm = QuadHMM()
+    mat_haplo_len, pat_haplo_len, both_haplo_len, tot_len = hmm.est_sharing(
+        bafs=[data["baf_embryo0"], data["baf_embryo1"]],
+        pos=data["pos"],
+        mat_haps=data["mat_haps_true"],
+        pat_haps=data["pat_haps_true"],
+    )
+    assert tot_len <= data["length"]
+    assert tot_len == (data["pos"][-1] - data["pos"][0])
