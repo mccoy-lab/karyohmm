@@ -352,3 +352,27 @@ def test_ploidy_correctness_mle(data):
         assert x in post_dict
     assert post_dict[data["aploid"]] == max_post
     assert post_dict[data["aploid"]] > 0.95
+
+
+@pytest.mark.parametrize("data", [data_disomy])
+def test_embryo_genotype(data):
+    """Test that the embryo genotyping works as intended."""
+    hmm = MetaHMM(disomy=True)
+    pi0_est, sigma_est = hmm.est_sigma_pi0(
+        bafs=data["baf_embryo"],
+        pos=data["pos"],
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+        algo="Powell",
+    )
+    dosages = hmm.genotype_embryo(
+        bafs=data["baf_embryo"],
+        pos=data["pos"],
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+        pi0=pi0_est,
+        std_dev=sigma_est,
+    )
+    # Check that all dosages sum to 1 ...
+    for i in range(dosages.shape[1]): 
+        assert np.isclose(dosages[:, i].sum(), 1.0)

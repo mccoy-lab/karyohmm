@@ -22,8 +22,10 @@ from karyohmm_utils import (
     forward_algo_sibs,
     lod_phase,
     logsumexp,
+    mat_dosage,
     mix_loglik,
     norm_logl,
+    pat_dosage,
     viterbi_algo,
     viterbi_algo_sibs,
 )
@@ -493,6 +495,46 @@ class MetaHMM(AneuploidyHMM):
         for k in np.unique(karyotypes):
             kar_prob[k] = np.sum(np.exp(gammas[(karyotypes == k), :])) / m
         return kar_prob
+
+    def genotype_embryo(
+        self,
+        bafs,
+        pos,
+        mat_haps,
+        pat_haps,
+        pi0=0.2,
+        std_dev=0.25,
+        r=1e-8,
+        a=1e-2,
+        unphased=False,
+    ):
+        """Obtain genotype dosages for a putative disomic embryo."""
+        if self.aploid != "disomy":
+            raise ValueError(
+                "Obtaining non-disomic embryo genotypes is not currently supported!"
+            )
+        # Run the forward-backward algorithm on this ...
+        gammas, states, _ = self.forward_backward(
+            bafs=bafs,
+            pos=pos,
+            mat_haps=mat_haps,
+            pat_haps=pat_haps,
+            pi0=pi0,
+            std_dev=std_dev,
+            r=r,
+            a=a,
+            unphased=False,
+        )
+        # Now calculate the genotype dosages (oriented to the alternative allele ...)
+        dosages = np.zeros(shape=(3, pos.size), dtype=np.float32)
+        for i in range(pos.size):
+            for j, x in enumerate(states):
+                cur_geno = int(mat_dosage(mat_haps[:,i], x) + pat_dosage(pat_haps[:,i], x))
+                assert (cur_geno >= 0) and (cur_geno <= 2)
+                # this should be analogous to the PL field ...
+                dosages[cur_geno, i] += np.exp(gammas[j, i])
+        # Dosages are oriented towards the ref/alt allele (bottom row is the alt/alt homozygote)
+        return dosages
 
 
 class QuadHMM(AneuploidyHMM):
