@@ -508,7 +508,23 @@ class MetaHMM(AneuploidyHMM):
         a=1e-2,
         unphased=False,
     ):
-        """Obtain genotype dosages for a putative disomic embryo."""
+        """Obtain genotype dosages for a putative disomic embryo.
+
+        Arguments:
+            - bafs (`np.array`): B-allele frequencies across the all m sites
+            - pos (`np.array`): m-length vector of basepair positions for sites
+            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
+            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
+            - pi0 (`float`): sparsity parameter for B-allele emission model
+            - std_dev (`float`): standard deviation for B-allele emission model
+            - r (`float`): intra-karyotype transition rate
+            - a (`float`): inter-karyotype transition rate
+            - unphased (`bool`): run the model in unphased mode
+
+        Returns:
+            - dossages (`np.array`): a 3 x M array of genotype probabilities (RR, RA, AA)
+
+        """
         if self.aploid != "disomy":
             raise ValueError(
                 "Obtaining non-disomic embryo genotypes is not currently supported!"
@@ -525,15 +541,17 @@ class MetaHMM(AneuploidyHMM):
             a=a,
             unphased=False,
         )
-        # Now calculate the genotype dosages (oriented to the alternative allele ...)
+        # Calculate the genotype dosage of the alternative allele
         dosages = np.zeros(shape=(3, pos.size), dtype=np.float32)
         for i in range(pos.size):
             for j, x in enumerate(states):
-                cur_geno = int(mat_dosage(mat_haps[:,i], x) + pat_dosage(pat_haps[:,i], x))
+                cur_geno = int(
+                    mat_dosage(mat_haps[:, i], x) + pat_dosage(pat_haps[:, i], x)
+                )
                 assert (cur_geno >= 0) and (cur_geno <= 2)
-                # this should be analogous to the PL field ...
+                # This is analogous to the PL field (but on raw scale)
                 dosages[cur_geno, i] += np.exp(gammas[j, i])
-        # Dosages are oriented towards the ref/alt allele (bottom row is the alt/alt homozygote)
+        # Dosages are oriented towards the alt allele (bottom row is the alt/alt homozygote)
         return dosages
 
 

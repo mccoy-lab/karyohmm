@@ -374,5 +374,5 @@ def test_embryo_genotype(data):
         std_dev=sigma_est,
     )
     # Check that all dosages sum to 1 ...
-    for i in range(dosages.shape[1]): 
+    for i in range(dosages.shape[1]):
         assert np.isclose(dosages[:, i].sum(), 1.0)
