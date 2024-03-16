@@ -22,8 +22,10 @@ from karyohmm_utils import (
     forward_algo_sibs,
     lod_phase,
     logsumexp,
+    mat_dosage,
     mix_loglik,
     norm_logl,
+    pat_dosage,
     viterbi_algo,
     viterbi_algo_sibs,
 )
@@ -494,6 +496,64 @@ class MetaHMM(AneuploidyHMM):
             kar_prob[k] = np.sum(np.exp(gammas[(karyotypes == k), :])) / m
         return kar_prob
 
+    def genotype_embryo(
+        self,
+        bafs,
+        pos,
+        mat_haps,
+        pat_haps,
+        pi0=0.2,
+        std_dev=0.25,
+        r=1e-8,
+        a=1e-2,
+        unphased=False,
+    ):
+        """Obtain genotype dosages for a putative disomic embryo.
+
+        Arguments:
+            - bafs (`np.array`): B-allele frequencies across the all m sites
+            - pos (`np.array`): m-length vector of basepair positions for sites
+            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
+            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
+            - pi0 (`float`): sparsity parameter for B-allele emission model
+            - std_dev (`float`): standard deviation for B-allele emission model
+            - r (`float`): intra-karyotype transition rate
+            - a (`float`): inter-karyotype transition rate
+            - unphased (`bool`): run the model in unphased mode
+
+        Returns:
+            - dossages (`np.array`): a 3 x M array of genotype probabilities (RR, RA, AA)
+
+        """
+        if self.aploid != "disomy":
+            raise ValueError(
+                "Obtaining non-disomic embryo genotypes is not currently supported!"
+            )
+        # Run the forward-backward algorithm on this ...
+        gammas, states, _ = self.forward_backward(
+            bafs=bafs,
+            pos=pos,
+            mat_haps=mat_haps,
+            pat_haps=pat_haps,
+            pi0=pi0,
+            std_dev=std_dev,
+            r=r,
+            a=a,
+            unphased=False,
+        )
+        # Calculate the genotype dosage of the alternative allele
+        dosages = np.zeros(shape=(3, pos.size), dtype=np.float32)
+        for i in range(pos.size):
+            for j, x in enumerate(states):
+                cur_geno = int(
+                    mat_dosage(mat_haps[:, i], x) + pat_dosage(pat_haps[:, i], x)
+                )
+                assert (cur_geno >= 0) and (cur_geno <= 2)
+                # This is analogous to the PL field (but on raw scale)
+                dosages[cur_geno, i] += np.exp(gammas[j, i])
+        # Dosages are oriented towards the alt allele (bottom row is the alt/alt homozygote)
+        return dosages
+
 
 class QuadHMM(AneuploidyHMM):
     """HMM for sibling euploid embryos based on Roach et al 2010 but for BAF data."""
@@ -943,6 +1003,67 @@ class QuadHMM(AneuploidyHMM):
         pat_recomb_lst = [k for k in pat_recomb if pat_recomb[k] > len(path_xzs) / 2]
         # This returns the list of tuples on the recombination positions and minimum distances across the traces.
         return mat_recomb_lst, pat_recomb_lst, mat_recomb, pat_recomb
+
+    def est_sharing(
+        self,
+        bafs,
+        pos,
+        mat_haps,
+        pat_haps,
+        pi0=(0.7, 0.7),
+        std_dev=(0.15, 0.15),
+        r=1e-8,
+    ):
+        """Estimate the proportion of the chromosome that is shared identically across siblings.
+
+        Arguments:
+            - bafs (`list`): list of two arrays of B-allele frequencies across m sites for two siblings
+            - pos (`np.array`): m-length vector of basepair positions for sites
+            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
+            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
+            - pi0 (`tuple float`): sparsity parameter for B-allele emission model
+            - std_dev (`tuple float`): standard deviation for B-allele emission model
+            - r (`float`): inter-state transition rate
+
+        Returns:
+            -  mat_haplo_len (`float`): the total length maternal haplo-identity
+            -  pat_haplo_len (`float`): the total length paternal haplo-identity
+            -  both_haplo_len (`float`): the total length identical between siblings
+            -  tot_len (`float`): the total length of the variants typed on the chromosome
+
+        """
+        # 1. Estimate the simplified viterbi path through these states
+        cur_viterbi_path = self.viterbi_path(
+            bafs=bafs,
+            pos=pos,
+            mat_haps=mat_haps,
+            pat_haps=pat_haps,
+            pi0=pi0,
+            std_dev=std_dev,
+            r=r,
+        )
+        # 2. Estimate the amount of the chromosome in haplo-identical states
+        maternal_haplo_idx = np.where(cur_viterbi_path == 0)[0]
+        paternal_haplo_idx = np.where(cur_viterbi_path == 1)[0]
+        both_haplo_idx = np.where(cur_viterbi_path == 2)[0]
+        # 3. Now estimate the fraction of the genome explicitly ...
+        aggregate_length = lambda p, idx: np.sum(
+            [
+                p1 - p0
+                for (p0, p1, x0, x1) in zip(
+                    p[idx][:-1],
+                    p[idx][1:],
+                    idx[:-1],
+                    idx[1:],
+                )
+                if (x1 - 1 == x0)
+            ]
+        )
+        tot_len = pos[-1] - pos[0]
+        mat_haplo_len = aggregate_length(pos, maternal_haplo_idx)
+        pat_haplo_len = aggregate_length(pos, paternal_haplo_idx)
+        both_haplo_len = aggregate_length(pos, both_haplo_idx)
+        return mat_haplo_len, pat_haplo_len, both_haplo_len, tot_len
 
 
 class MosaicEst:
