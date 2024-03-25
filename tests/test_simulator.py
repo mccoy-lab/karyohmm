@@ -39,3 +39,18 @@ def test_pgt_siblings(length, m, nsib):
     for i in range(nsib):
         assert f"baf_embryo{i}" in data.keys()
         assert f"geno_embryo{i}" in data.keys()
+
+
+@pytest.mark.parametrize(
+    "length,m,geno_err_par", [(1e6, 1000, 1e-2), ((1e6, 1000, 0.0))]
+)
+def test_w_parental_errors(length, m, geno_err_par):
+    """Test for generation of parental errors in simulations."""
+    data = pgt_sim.full_ploidy_sim(m=m, length=length, geno_err_par=geno_err_par)
+    assert data["m"] == m
+    assert data["length"] == length
+    assert np.max(data["pos"]) <= length
+    if geno_err_par > 0:
+        assert (data["err_mat"].size > 0) | (data["err_pat"].size > 0)
+    else:
+        assert (data["err_mat"].size == 0) & (data["err_pat"].size == 0)

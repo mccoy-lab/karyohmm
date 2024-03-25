@@ -235,6 +235,7 @@ class MetaHMM(AneuploidyHMM):
         std_dev=0.25,
         r=1e-8,
         a=1e-2,
+        eps=1e-3,
         unphased=False,
     ):
         """Forward HMM algorithm under a multi-ploidy model.
@@ -269,6 +270,7 @@ class MetaHMM(AneuploidyHMM):
         assert np.all(pos[1:] > pos[:-1])
         assert r < 0.5 and r > 0
         assert a < 0.5 and a > 0
+        assert (eps > 0) and (eps < 0.5)
         alphas, scaler, _, _, loglik = forward_algo(
             bafs,
             pos,
@@ -280,6 +282,7 @@ class MetaHMM(AneuploidyHMM):
             a=a,
             pi0=pi0,
             std_dev=std_dev,
+            eps=eps,
         )
         return alphas, scaler, self.states, self.karyotypes, loglik
 
@@ -294,6 +297,7 @@ class MetaHMM(AneuploidyHMM):
         r=1e-8,
         a=1e-2,
         unphased=False,
+        eps=1e-3,
     ):
         """Backward HMM algorithm under a given statespace model.
 
@@ -327,6 +331,7 @@ class MetaHMM(AneuploidyHMM):
         assert np.all(pos[1:] > pos[:-1])
         assert r < 0.5 and r > 0
         assert a < 0.5 and a > 0
+        assert (eps > 0) and (eps < 0.5)
         betas, scaler, _, _, loglik = backward_algo(
             bafs,
             pos,
@@ -338,6 +343,7 @@ class MetaHMM(AneuploidyHMM):
             a=a,
             pi0=pi0,
             std_dev=std_dev,
+            eps=eps,
         )
         return betas, scaler, self.states, self.karyotypes, loglik
 
@@ -352,6 +358,7 @@ class MetaHMM(AneuploidyHMM):
         r=1e-8,
         a=1e-2,
         unphased=False,
+        eps=1e-3,
     ):
         """Run the forward-backward algorithm across all states.
 
@@ -381,6 +388,7 @@ class MetaHMM(AneuploidyHMM):
             std_dev=std_dev,
             r=r,
             a=a,
+            eps=eps,
             unphased=unphased,
         )
         betas, _, _, _, _ = self.backward_algorithm(
@@ -392,6 +400,7 @@ class MetaHMM(AneuploidyHMM):
             std_dev=std_dev,
             r=r,
             a=a,
+            eps=eps,
             unphased=unphased,
         )
         gammas = (alphas + betas) - logsumexp_sp(alphas + betas, axis=0)
@@ -407,6 +416,7 @@ class MetaHMM(AneuploidyHMM):
         std_dev=0.25,
         r=1e-8,
         a=1e-2,
+        eps=1e-3,
         unphased=False,
     ):
         """Implement the viterbi traceback through karyotypic states.
@@ -437,6 +447,7 @@ class MetaHMM(AneuploidyHMM):
         assert bafs.size == pos.size
         assert bafs.size == mat_haps.shape[1]
         assert mat_haps.shape == pat_haps.shape
+        assert (eps > 0) and (eps < 0.5)
         assert np.all(pos[1:] > pos[:-1])
         path, states, deltas, psi = viterbi_algo(
             bafs,
@@ -449,6 +460,7 @@ class MetaHMM(AneuploidyHMM):
             a=a,
             pi0=pi0,
             std_dev=std_dev,
+            eps=eps,
         )
         return path, states, deltas, psi
 
@@ -583,6 +595,7 @@ class QuadHMM(AneuploidyHMM):
         pi0=(0.7, 0.7),
         std_dev=(0.15, 0.15),
         r=1e-8,
+        eps=1e-3,
     ):
         """Implement the forward algorithm for QuadHMM model.
 
@@ -610,6 +623,7 @@ class QuadHMM(AneuploidyHMM):
         assert (mat_haps.ndim == 2) and (pat_haps.ndim == 2)
         assert mat_haps.size == pat_haps.size
         assert np.all(pos[1:] > pos[:-1])
+        assert (eps > 0) and (eps < 0.5)
         alphas, scaler, states, karyotypes, loglik = forward_algo_sibs(
             bafs,
             pos,
@@ -617,6 +631,7 @@ class QuadHMM(AneuploidyHMM):
             pat_haps,
             states=self.states,
             karyotypes=self.karyotypes,
+            eps=eps,
             r=r,
             pi0=pi0,
             std_dev=std_dev,
@@ -632,6 +647,7 @@ class QuadHMM(AneuploidyHMM):
         pi0=(0.7, 0.7),
         std_dev=(0.15, 0.15),
         r=1e-8,
+        eps=1e-3,
     ):
         """Implement the forward algorithm for QuadHMM model.
 
@@ -659,6 +675,7 @@ class QuadHMM(AneuploidyHMM):
         assert (mat_haps.ndim == 2) and (pat_haps.ndim == 2)
         assert mat_haps.size == pat_haps.size
         assert np.all(pos[1:] > pos[:-1])
+        assert (eps > 0) and (eps < 0.5)
         alphas, scaler, states, karyotypes, loglik = backward_algo_sibs(
             bafs,
             pos,
@@ -669,6 +686,7 @@ class QuadHMM(AneuploidyHMM):
             r=r,
             pi0=pi0,
             std_dev=std_dev,
+            eps=eps,
         )
         return alphas, scaler, states, karyotypes, loglik
 
@@ -681,7 +699,7 @@ class QuadHMM(AneuploidyHMM):
         pi0=(0.7, 0.7),
         std_dev=(0.15, 0.15),
         r=1e-8,
-        a=1e-2,
+        eps=1e-3,
     ):
         """Implement the forward-backward algorithm for the QuadHMM model.
 
@@ -710,6 +728,7 @@ class QuadHMM(AneuploidyHMM):
             pi0=pi0,
             std_dev=std_dev,
             r=r,
+            eps=eps,
         )
         betas, _, _, _, _ = backward_algo_sibs(
             bafs,
@@ -721,6 +740,7 @@ class QuadHMM(AneuploidyHMM):
             pi0=pi0,
             std_dev=std_dev,
             r=r,
+            eps=eps,
         )
         gammas = (alphas + betas) - logsumexp_sp(alphas + betas, axis=0)
         return gammas, states, None
@@ -734,6 +754,7 @@ class QuadHMM(AneuploidyHMM):
         pi0=(0.7, 0.7),
         std_dev=(0.15, 0.15),
         r=1e-8,
+        eps=1e-3,
     ):
         """Viterbi algorithm definition in a QuadHMM-context.
 
@@ -763,6 +784,7 @@ class QuadHMM(AneuploidyHMM):
             pi0=pi0,
             std_dev=std_dev,
             r=r,
+            eps=eps,
         )
         return path, states, deltas, psi
 
@@ -849,6 +871,7 @@ class QuadHMM(AneuploidyHMM):
         pi0=(0.7, 0.7),
         std_dev=(0.15, 0.15),
         r=1e-8,
+        eps=1e-3,
     ):
         """Obtain the restricted Viterbi path for traceback.
 
@@ -866,7 +889,7 @@ class QuadHMM(AneuploidyHMM):
 
         """
         path, _, _, _ = self.viterbi_algorithm(
-            bafs, pos, mat_haps, pat_haps, pi0=pi0, std_dev=std_dev, r=r
+            bafs, pos, mat_haps, pat_haps, pi0=pi0, std_dev=std_dev, r=r, eps=eps
         )
         res_path = self.restrict_path(path)
         return res_path
@@ -880,6 +903,7 @@ class QuadHMM(AneuploidyHMM):
         pi0=(0.7, 0.7),
         std_dev=(0.15, 0.15),
         r=1e-8,
+        eps=1e-3,
     ):
         """Obtain the Maximum A-Posteriori Path across restricted states.
 
@@ -897,7 +921,7 @@ class QuadHMM(AneuploidyHMM):
 
         """
         gammas, _, _ = self.forward_backward(
-            bafs, pos, mat_haps, pat_haps, pi0=pi0, std_dev=std_dev, r=r
+            bafs, pos, mat_haps, pat_haps, pi0=pi0, std_dev=std_dev, r=r, eps=eps
         )
         (
             maternal_haploidentical,
@@ -1013,6 +1037,7 @@ class QuadHMM(AneuploidyHMM):
         pi0=(0.7, 0.7),
         std_dev=(0.15, 0.15),
         r=1e-8,
+        eps=1e-3,
     ):
         """Estimate the proportion of the chromosome that is shared identically across siblings.
 
@@ -1041,6 +1066,7 @@ class QuadHMM(AneuploidyHMM):
             pi0=pi0,
             std_dev=std_dev,
             r=r,
+            eps=eps,
         )
         # 2. Estimate the amount of the chromosome in haplo-identical states
         maternal_haplo_idx = np.where(cur_viterbi_path == 0)[0]
