@@ -75,7 +75,7 @@ class PGTSimBase:
         """Create switch errors to evaluate impact of poor phasing."""
         assert mat_haps.size == pat_haps.size
         assert mat_haps.ndim == 2
-        assert mat_haps.ndim == 2
+        assert pat_haps.ndim == 2
         assert (err_rate >= 0) and (err_rate < 1)
         assert seed > 0
         mat_haps_prime, m_switch = self.create_switch_errors_help(
@@ -85,6 +85,26 @@ class PGTSimBase:
             pat_haps, err_rate=err_rate, seed=seed
         )
         return mat_haps_prime, pat_haps_prime, m_switch, p_switch
+
+    def create_parental_genotyping_errors(self, haps, geno_err=0.0, seed=42):
+        """Create genotyping errors within parental haplotypes."""
+        assert seed > 0
+        assert haps.ndim == 2
+        assert haps.shape[1] > 1
+        assert haps.shape[0] == 2
+        assert (geno_err >= 0) and (geno_err < 0.5)
+        np.random.seed(seed)
+        m = haps.shape[1]
+        haps_prime = haps.copy()
+        err_idx = []
+        for i in range(m):
+            if uniform.rvs() < geno_err:
+                # Create a random error in the parental haplotype ...
+                idx = np.random.choice([0, 1])
+                haps_prime[idx, i] = 1 - haps_prime[idx, i]
+                err_idx.append([i, idx])
+        err_idx = np.array(err_idx)
+        return haps_prime, err_idx
 
     def sim_haplotype_paths(
         self, mat_haps, pat_haps, ploidy=2, rec_prob=1e-2, mat_skew=0.5, seed=42
@@ -237,21 +257,35 @@ class PGTSimBase:
         return zs_maternal, zs_paternal, mat_real_hap, pat_real_hap, aploid
 
     def sim_b_allele_freq(
-        self, mat_hap, pat_hap, ploidy=2, std_dev=0.2, mix_prop=0.3, seed=42
+        self,
+        mat_hap,
+        pat_hap,
+        ploidy=2,
+        std_dev=0.2,
+        mix_prop=0.3,
+        geno_err=0.0,
+        seed=42,
     ):
         """Simulate of B-allele frequency."""
         np.random.seed(seed)
         assert (ploidy <= 3) & (ploidy >= 0)
         assert mat_hap.size == pat_hap.size
+        assert (geno_err >= 0) & (geno_err < 0.5)
         true_geno = mat_hap + pat_hap
+        err_geno = mat_hap + pat_hap
+        geno_dict = {1: [0, 1], 2: [0, 1, 2], 3: [0, 1, 2, 3]}
         baf = np.zeros(true_geno.size)
         for i in range(baf.size):
             if ploidy == 0:
-                # I think that this might have to change ...
                 a, b = (0 - 0.5) / std_dev, (1 - 0.5) / std_dev
                 baf[i] = truncnorm.rvs(a, b, loc=0.5, scale=std_dev)
             else:
-                mu_i = true_geno[i] / ploidy
+                if uniform.rvs() < geno_err:
+                    # Create a random error (e.g. one of the parental haplotypes is off ...)
+                    err_geno[i] = np.random.choice(
+                        [p for p in geno_dict[ploidy] if p != true_geno[i]]
+                    )
+                mu_i = err_geno[i] / ploidy
                 a, b = (0 - mu_i) / std_dev, (1 - mu_i) / std_dev
                 if mu_i == 0:
                     baf[i] = (
@@ -267,7 +301,7 @@ class PGTSimBase:
                     )
                 else:
                     baf[i] = truncnorm.rvs(a, b, loc=mu_i, scale=std_dev)
-        return true_geno, baf
+        return true_geno, err_geno, baf
 
     def sim_logR_ratio(self, mat_hap, pat_hap, ploidy=2, alpha=1.0, seed=42):
         """Simulate logR-ratio conditional on ploidy.
@@ -301,7 +335,7 @@ class PGTSimBase:
         genos = []
         for i in range(nsibs):
             x = binom.rvs(1, 0.5)
-            geno, b = self.sim_b_allele_freq(
+            geno, _, b = self.sim_b_allele_freq(
                 true_haps1[x, :], haps2[0, :], seed=(i + 1) + meta_seed, **kwargs
             )
             bafs.append(b)
@@ -332,9 +366,12 @@ class PGTSim(PGTSimBase):
         mix_prop=0.3,
         alpha=1.0,
         switch_err_rate=1e-2,
+        geno_err_par=1e-2,
+        geno_err=0.0,
         seed=42,
     ):
         """Simulate a single embryo with a given ploidy status."""
+        assert seed > 0
         np.random.seed(seed)
         mat_haps, pat_haps = self.draw_parental_genotypes(afs=afs, m=m, seed=seed)
         zs_maternal, zs_paternal, mat_hap1, pat_hap1, aploid = self.sim_haplotype_paths(
@@ -345,13 +382,12 @@ class PGTSim(PGTSimBase):
             rec_prob=rec_prob,
             seed=seed,
         )
-        geno, baf = self.sim_b_allele_freq(
-            mat_hap1,
-            pat_hap1,
-            ploidy=ploidy,
-            std_dev=std_dev,
-            mix_prop=mix_prop,
-            seed=seed,
+        # Simulate error in the parental genotypes first
+        mat_haps_x, err_mat_x = self.create_parental_genotyping_errors(
+            mat_haps, geno_err=geno_err_par, seed=seed
+        )
+        pat_haps_x, err_pat_x = self.create_parental_genotyping_errors(
+            pat_haps, geno_err=geno_err_par, seed=seed
         )
         (
             mat_haps_prime,
@@ -359,7 +395,16 @@ class PGTSim(PGTSimBase):
             mat_switch,
             pat_switch,
         ) = self.create_switch_errors(
-            mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
+            mat_haps_x, pat_haps_x, err_rate=switch_err_rate, seed=seed
+        )
+        geno, err_geno, baf = self.sim_b_allele_freq(
+            mat_hap1,
+            pat_hap1,
+            ploidy=ploidy,
+            std_dev=std_dev,
+            mix_prop=mix_prop,
+            geno_err=geno_err,
+            seed=seed,
         )
         pos = np.sort(np.random.uniform(high=length, size=m))
         assert geno.size == m
@@ -368,6 +413,8 @@ class PGTSim(PGTSimBase):
         res_table = {
             "mat_haps": mat_haps,
             "pat_haps": pat_haps,
+            "err_mat": err_mat_x,
+            "err_pat": err_pat_x,
             "mat_haps_prime": mat_haps_prime,
             "pat_haps_prime": pat_haps_prime,
             "mat_switch": mat_switch,
@@ -375,6 +422,7 @@ class PGTSim(PGTSimBase):
             "zs_maternal": zs_maternal,
             "zs_paternal": zs_paternal,
             "geno_embryo": geno,
+            "geno_embryo_err": err_geno,
             "baf_embryo": baf,
             "pos": pos,
             "m": m,
@@ -400,6 +448,8 @@ class PGTSim(PGTSimBase):
         std_dev=0.15,
         mix_prop=0.3,
         switch_err_rate=1e-2,
+        geno_err_par=1e-2,
+        geno_err=0.0,
         seed=42,
     ):
         """Simulate euploid sibling embryos."""
@@ -408,23 +458,33 @@ class PGTSim(PGTSimBase):
         assert seed > 0
         assert nsibs > 0
         assert length > 0
+        assert (geno_err >= 0) and (geno_err < 0.5)
         np.random.seed(seed)
 
         res_table = {}
         mat_haps, pat_haps = self.draw_parental_genotypes(afs=None, m=m, seed=seed)
+        # Simulate error in the parental genotypes first
+        mat_haps_x, err_mat_x = self.create_parental_genotyping_errors(
+            mat_haps, geno_err=geno_err_par, seed=seed
+        )
+        pat_haps_x, err_pat_x = self.create_parental_genotyping_errors(
+            pat_haps, geno_err=geno_err_par, seed=seed
+        )
         (
             mat_haps_prime,
             pat_haps_prime,
             mat_switch,
             pat_switch,
         ) = self.create_switch_errors(
-            mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
+            mat_haps_x, pat_haps_x, err_rate=switch_err_rate, seed=seed
         )
         pos = np.sort(np.random.uniform(high=length, size=m))
         res_table["mat_haps_true"] = mat_haps
         res_table["pat_haps_true"] = pat_haps
         res_table["mat_haps_real"] = mat_haps_prime
         res_table["pat_haps_real"] = pat_haps_prime
+        res_table["err_mat"] = err_mat_x
+        res_table["err_pat"] = err_pat_x
         res_table["mat_switch"] = mat_switch
         res_table["pat_switch"] = pat_switch
         res_table["m"] = m
@@ -446,12 +506,14 @@ class PGTSim(PGTSimBase):
                 rec_prob=rec_prob,
                 seed=seed + i,
             )
-            geno, baf = self.sim_b_allele_freq(
+            # NOTE: each embryo can technically have its own errors ...
+            geno, err_geno, baf = self.sim_b_allele_freq(
                 mat_hap1,
                 pat_hap1,
                 ploidy=ploidy,
                 std_dev=std_dev,
                 mix_prop=mix_prop,
+                geno_err=geno_err,
                 seed=seed + i,
             )
 
@@ -459,6 +521,7 @@ class PGTSim(PGTSimBase):
             assert baf.size == m
             res_table[f"baf_embryo{i}"] = baf
             res_table[f"geno_embryo{i}"] = geno
+            res_table[f"geno_embryo_err{i}"] = err_geno
             res_table[f"zs_maternal{i}"] = zs_maternal
             res_table[f"zs_paternal{i}"] = zs_paternal
         return res_table
@@ -489,6 +552,8 @@ class PGTSimMosaic(PGTSimBase):
         mix_prop=0.3,
         alpha=1.0,
         switch_err_rate=1e-2,
+        geno_err_par=1e-2,
+        geno_err=0.0,
         seed=42,
     ):
         """Simulate BAF from a mixture of ploidies."""
@@ -496,13 +561,20 @@ class PGTSimMosaic(PGTSimBase):
         assert m > 0
         assert ncells > 0
         assert length > 0
+        assert (geno_err_par >= 0) & (geno_err_par < 0.5)
         if ~np.isclose(np.sum(props), 1.0):
             props /= np.sum(props)
         # 1. Simulate the parental haplotypes
         np.random.seed(seed)
         mat_haps, pat_haps = self.draw_parental_genotypes(afs=afs, m=m, seed=seed)
+        mat_haps_x, err_mat_x = self.create_parental_genotyping_errors(
+            mat_haps, geno_err=geno_err_par, seed=seed
+        )
+        pat_haps_x, err_pat_x = self.create_parental_genotyping_errors(
+            pat_haps, geno_err=geno_err_par, seed=seed
+        )
         mat_haps_prime, pat_haps_prime, _, _ = self.create_switch_errors(
-            mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
+            mat_haps_x, pat_haps_x, err_rate=switch_err_rate, seed=seed
         )
         # 2. Draw cells from a distribution of ploidies
         mix_ploidies = np.random.choice(ploidies, p=props, size=ncells)
@@ -526,12 +598,13 @@ class PGTSimMosaic(PGTSimBase):
                 rec_prob=rec_prob,
                 seed=i + 1,
             )
-            geno, baf = self.sim_b_allele_freq(
+            geno, err_geno, baf = self.sim_b_allele_freq(
                 mat_hap1,
                 pat_hap1,
                 ploidy=p,
                 std_dev=std_dev,
                 mix_prop=mix_prop,
+                geno_err=geno_err,
                 seed=i + 1,
             )
             lrr = self.sim_logR_ratio(
@@ -553,6 +626,8 @@ class PGTSimMosaic(PGTSimBase):
             "pat_haps": pat_haps,
             "mat_haps_prime": mat_haps_prime,
             "pat_haps_prime": pat_haps_prime,
+            "err_mat": err_mat_x,
+            "err_pat": err_pat_x,
             "geno_embryo_bulk": genos,
             "baf_embryo_bulk": bafs,
             "lrr_embryo_bulk": lrrs,

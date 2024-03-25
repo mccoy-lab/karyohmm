@@ -129,20 +129,24 @@ cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double
 
     NOTE: this should have some approximate error potentially?
     """
-    cdef double mu_i, x, x0, x1;
+    cdef double mu_i, x, x0, x1, n0, l0, l1;
+    n0 = truncnorm_pdf(baf, 0.0, 1.0, mu=0.5, sigma=std_dev)
     if (m == -1) & (p == -1):
-        x = truncnorm_pdf(baf, 0.0, 1.0, mu=0.5, sigma=std_dev)
-        return x
+        # x = truncnorm_pdf(baf, 0.0, 1.0, mu=0.5, sigma=std_dev)
+        return n0
     mu_i = (m + p) / k
     x = truncnorm_pdf(baf, 0.0, 1.0, mu=mu_i, sigma=std_dev)
     x0 = truncnorm_pdf(baf, 0.0, 1.0, mu=0.0, sigma=2e-3)
     x1 = truncnorm_pdf(baf, 0.0, 1.0, mu=1.0, sigma=2e-3)
+    # NOTE: this just treats error as a local "nullisomy" ...
     if mu_i == 0.0:
-        return logaddexp(log(pi0) + x0, log((1 - pi0)) + x)
+        l0 = logaddexp(log(pi0) + x0, log((1 - pi0)) + x)
+        return logaddexp(log(1 - eps) + l0, log(eps) + n0)
     if mu_i == 1.0:
-        return logaddexp(log(pi0) + x1, log((1 - pi0)) + x)
+        l1 = logaddexp(log(pi0) + x1, log((1 - pi0)) + x)
+        return logaddexp(log(1 - eps) + l1, log(eps) + n0)
     else:
-        return x
+        return logaddexp(logaddexp(log(1-eps) + x, log(eps/2) + x0), log(eps/2) + x1)
 
 cpdef double mix_loglik(double[:] bafs, double pi0=0.5, double theta=0.1, double std_dev=0.2):
     """Mixture log-likelihood for expected heterozygotes to estimate baf-deviation."""
@@ -216,7 +220,7 @@ cpdef transition_kernel(K0, K1, double d=1e3, double r=1e-8, double a=1e-2):
     return np.log(A)
 
 
-def forward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-8, double a=1e-2, double pi0=0.2, double std_dev=0.25):
+def forward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double eps=1e-3, double r=1e-8, double a=1e-2, double pi0=0.2, double std_dev=0.25):
     """Helper function for forward algorithm loop-optimization."""
     cdef int i,j,n,m;
     cdef float di;
@@ -237,6 +241,7 @@ def forward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-
                 pi0=pi0,
                 std_dev=std_dev,
                 k=ks[j],
+                eps=eps
             )
         alphas[j,0] += cur_emission
     scaler = np.zeros(n)
@@ -257,13 +262,14 @@ def forward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-
                     pi0=pi0,
                     std_dev=std_dev,
                     k=ks[j],
+                    eps=eps
                 )
             alphas[j, i] = cur_emission + logsumexp(A_hat[:, j] + alphas[:, (i - 1)])
         scaler[i] = logsumexp(alphas[:, i])
         alphas[:, i] -= scaler[i]
     return alphas, scaler, states, None, sum(scaler)
 
-def backward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-8, double a=1e-2, double pi0=0.2, double std_dev=0.25):
+def backward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double eps=1e-3, double r=1e-8, double a=1e-2, double pi0=0.2, double std_dev=0.25):
     """Helper function for backward algorithm loop-optimization."""
     cdef int i,j,n,m;
     cdef float di;
@@ -293,6 +299,7 @@ def backward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e
                     pi0=pi0,
                     std_dev=std_dev,
                     k=ks[j],
+                    eps=eps
                 )
         for j in range(m):
             # This should be the correct version here ...
@@ -309,6 +316,7 @@ def backward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e
                         pi0=pi0,
                         std_dev=std_dev,
                         k=ks[j],
+                        eps=eps
                     )
                 # Add in the initialization + first emission?
                 betas[j,i] += log(1/m) + cur_emission
@@ -317,7 +325,7 @@ def backward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e
         betas[:, i] -= scaler[i]
     return betas, scaler, states, None, sum(scaler)
 
-def viterbi_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-8, double a=1e-2, double pi0=0.2, double std_dev=0.25):
+def viterbi_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double eps=1e-3, double r=1e-8, double a=1e-2, double pi0=0.2, double std_dev=0.25):
     """Cython implementation of the Viterbi algorithm for MLE path estimation through states."""
     cdef int i,j,n,m;
     cdef float di;
@@ -342,6 +350,7 @@ def viterbi_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-
                     pi0=pi0,
                     std_dev=std_dev,
                     k=ks[j],
+                    eps=eps
                 )
             psi[j, i] = np.argmax(deltas[:, i - 1] + A_hat[:, j]).astype(int)
     path = np.zeros(n, dtype=int)
@@ -352,7 +361,7 @@ def viterbi_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-
     return path, states, deltas, psi
 
 
-def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-8, double a=1e-2, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
+def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double eps=1e-3, double r=1e-8, double a=1e-2, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
     """Compute the forward algorithm for sibling embryo HMM."""
     cdef int i,j,n,m;
     cdef float di;
@@ -378,6 +387,7 @@ def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double 
                 pi0=pi0[0],
                 std_dev=std_dev[0],
                 k=2,
+                eps=eps
             ) + emission_baf(
                 bafs[1][0],
                 m_ij1,
@@ -385,6 +395,7 @@ def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double 
                 pi0=pi0[1],
                 std_dev=std_dev[1],
                 k=2,
+                eps=eps
             )
         alphas[j,0] += cur_emission
     scaler = np.zeros(n)
@@ -408,6 +419,7 @@ def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double 
                     pi0=pi0[0],
                     std_dev=std_dev[0],
                     k=2,
+                    eps=eps
                 ) + emission_baf(
                     bafs[1][i],
                     m_ij1,
@@ -415,6 +427,7 @@ def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double 
                     pi0=pi0[1],
                     std_dev=std_dev[1],
                     k=2,
+                    eps=eps
                 )
             alphas[j, i] = cur_emission + logsumexp(A_hat[:, j] + alphas[:, i - 1])
         scaler[i] = logsumexp(alphas[:, i])
@@ -422,7 +435,7 @@ def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double 
     return alphas, scaler, states, None, sum(scaler)
 
 
-def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-8, double a=1e-2, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
+def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double eps=1e-3, double r=1e-8, double a=1e-2, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
     """Compute the backward algorithm for the sibling embryo HMM."""
     cdef int i,j,n,m;
     cdef float di;
@@ -453,6 +466,7 @@ def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double
                     pi0=pi0[0],
                     std_dev=std_dev[0],
                     k=2,
+                    eps=eps,
                 ) + emission_baf(
                     bafs[1][i + 1],
                     m_ij1,
@@ -460,6 +474,7 @@ def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double
                     pi0=pi0[1],
                     std_dev=std_dev[1],
                     k=2,
+                    eps=eps
                 )
         for j in range(m):
             betas[j,i] = logsumexp(A_hat[:, j] + cur_emissions + betas[:, (i + 1)])
@@ -477,6 +492,7 @@ def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double
                         pi0=pi0[0],
                         std_dev=std_dev[0],
                         k=2,
+                        eps=eps
                     ) + emission_baf(
                         bafs[1][i],
                         m_ij1,
@@ -484,6 +500,7 @@ def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double
                         pi0=pi0[1],
                         std_dev=std_dev[1],
                         k=2,
+                        eps=eps
                     )
                 # Add in the initialization + first emission?
                 betas[j,i] += log(1/m) + cur_emission
@@ -492,7 +509,7 @@ def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double
     return betas, scaler, states, None, sum(scaler)
 
 
-def viterbi_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-8, double a=1e-2, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
+def viterbi_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double eps=1e-3, double r=1e-8, double a=1e-2, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
     """Viterbi algorithm and path tracing through sibling embryos."""
     cdef int i,j,n,m;
     cdef float di;
@@ -520,6 +537,7 @@ def viterbi_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double 
                     pi0=pi0[0],
                     std_dev=std_dev[0],
                     k=2,
+                    eps=eps
                 ) + emission_baf(
                     bafs[1][i],
                     m_ij1,
@@ -527,6 +545,7 @@ def viterbi_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double 
                     pi0=pi0[1],
                     std_dev=std_dev[1],
                     k=2,
+                    eps=eps
                 )
             psi[j, i] = np.argmax(deltas[:, i - 1] + A_hat[:, j]).astype(int)
     path = np.zeros(n, dtype=int)
