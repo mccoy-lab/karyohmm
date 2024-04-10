@@ -1795,7 +1795,7 @@ class RecombEst(PhaseCorrect):
         switch_idx, cnts = np.unique(potential_switches, return_counts=True)
         # Choose the potential switches by the majority rule ...
         potential_switches_filt = switch_idx[cnts > (m - 1) / 2]
-        return Z, potential_switches_filt
+        return Z, llr_z, potential_switches_filt
 
     def refine_recomb_events(self, potential_switches_filt, npad=5):
         """Refine recombination estimation using the switch-clusters approach of Coop et al 2007.
