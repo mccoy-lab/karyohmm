@@ -1423,7 +1423,7 @@ class PhaseCorrect:
             n_mis[i] = np.sum((paths[:, i] != paths[:, j]))
         hap_idx1 = np.zeros(haps.shape[1], dtype=np.uint16)
         hap_idx2 = np.ones(haps.shape[1], dtype=np.uint16)
-        for i, j in zip(np.arange(m - 1), np.arange(1, m)):
+        for i in np.arange(m - 1):
             # If majority have the same switch - we swap haplotypes ...
             if n_mis[i] > (n_sib / 2):
                 hap_idx1[:i] = 1 - hap_idx1[:i]
@@ -1463,7 +1463,7 @@ class PhaseCorrect:
                     pi0=self.embryo_pi0s[j],
                     std_dev=self.embryo_sigmas[j],
                 )
-                # We collect the viterbi path estimates here ...
+                # Collect indicators of both copying the same haplotype
                 mat_paths[j, :] = np.isin(path, [0, 1])
                 pat_paths[j, :] = np.isin(path, [0, 2])
             # now we apply the minimum recombination path-switching setting ...
