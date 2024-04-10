@@ -1634,7 +1634,7 @@ class RecombEst(PhaseCorrect):
     """Class implementing the simplified algorithm for detection of crossovers of Coop et al 2007."""
 
     def __init__(self, **kwargs):
-        """Use a superclass to estimate."""
+        """Use a superclass to preserve structure for sibling embryos."""
         super(RecombEst, self).__init__(**kwargs)
 
     def informative_markers(self, paternal=True):
@@ -1657,7 +1657,6 @@ class RecombEst(PhaseCorrect):
         assert self.embryo_pi0s is not None
         assert self.embryo_sigmas is not None
         m = len(self.embryo_bafs)
-        # NOTE: we cannot apply this to simple trios ...
         assert m > 1
         assert template_embryo < m
         non_template_ids = [i for i in range(m) if i != template_embryo]
@@ -1787,6 +1786,7 @@ class RecombEst(PhaseCorrect):
             llr_z[j, :] = llrs
 
         # Now we make a rough decision rule here for the likelihood-ratio supporting one or the other class ...
+        # 1 indicates copying the same allele, 2 indicates that copying different alleles.
         Z = np.zeros(shape=llr_z.shape)
         Z[llr_z < 0] = 2
         Z[llr_z > 0] = 1
@@ -1798,7 +1798,13 @@ class RecombEst(PhaseCorrect):
         return Z, potential_switches_filt
 
     def refine_recomb_events(self, potential_switches_filt, npad=5):
-        """Refine recombination estimation using the switch-clusters approach of Coop et al 2007."""
+        """Refine recombination estimation using the switch-clusters approach of Coop et al 2007.
+
+        Arguments:
+            - potential_switches_filt (`np.array`): array of potential switches at informative markers
+            - npad (`int`): integer value of adjacent informative snps to consider as a switch cluster.
+
+        """
         assert npad > 1
         if potential_switches_filt.size > 0:
             subset_co = []
@@ -1808,7 +1814,7 @@ class RecombEst(PhaseCorrect):
                     (potential_switches_filt < i + npad)
                     & (potential_switches_filt > i - npad)
                 )
-                # Even number of crossovers it is likely not well-supported
+                # Even number of crossovers suggest it is likely not a well-supported CO
                 if n % 2 == 1:
                     subset_co.append(i)
             return subset_co
