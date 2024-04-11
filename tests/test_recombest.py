@@ -76,8 +76,7 @@ def test_rec_paternal_expected_baf_perfect_phase(sigma, pi0, nsibs, seed):
     # Obtain the true paternal recombination events for the template embryo ...
     zs_paternal0 = data["zs_paternal0"]
     n_pat_rec = np.sum(zs_paternal0[:-1] != zs_paternal0[1:])
-    _, llr_z, pat_recomb_events = recomb_est.isolate_recomb_events()
-    filt_pat_recomb_events = recomb_est.refine_recomb_events(pat_recomb_events, npad=5)
+    _, llr_z, filt_pat_recomb_events = recomb_est.isolate_recomb_events()
     # Make sure that the numbers match up for number of recombination events ...
     assert n_pat_rec == len(filt_pat_recomb_events)
 
@@ -140,8 +139,7 @@ def test_rec_paternal_inferred_baf_perfect_phase(sigma, pi0, nsibs, seed):
     # Obtain the true paternal recombination events for the template embryo ...
     zs_paternal0 = data["zs_paternal0"]
     n_pat_rec = np.sum(zs_paternal0[:-1] != zs_paternal0[1:])
-    _, llr_z, pat_recomb_events = recomb_est.isolate_recomb_events()
-    filt_pat_recomb_events = recomb_est.refine_recomb_events(pat_recomb_events, npad=5)
+    _, llr_z, filt_pat_recomb_events = recomb_est.isolate_recomb_events()
     # Make sure that the numbers match up for number of recombination events ...
     assert n_pat_rec == len(filt_pat_recomb_events)
 
@@ -209,7 +207,6 @@ def test_rec_paternal_inferred_baf_fixphase(sigma, pi0, nsibs, seed):
     # Obtain the true paternal recombination events for the template embryo under consideration ...
     zs_paternal0 = data["zs_paternal0"]
     n_pat_rec = np.sum(zs_paternal0[:-1] != zs_paternal0[1:])
-    _, llr_z, pat_recomb_events = recomb_est.isolate_recomb_events()
-    filt_pat_recomb_events = recomb_est.refine_recomb_events(pat_recomb_events, npad=5)
+    _, llr_z, filt_pat_recomb_events = recomb_est.isolate_recomb_events()
     # Make sure that the numbers match up for number of recombination events detected
     assert n_pat_rec == len(filt_pat_recomb_events)
