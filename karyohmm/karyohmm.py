@@ -547,7 +547,8 @@ class MetaHMM(AneuploidyHMM):
             dosages = np.zeros(shape=(3, pos.size), dtype=np.float32)
             for i, x in enumerate(path):
                 cur_geno = int(
-                    mat_dosage(mat_haps[:, i], x) + pat_dosage(pat_haps[:, i], x)
+                    mat_dosage(mat_haps[:, i], states[x])
+                    + pat_dosage(pat_haps[:, i], states[x])
                 )
                 assert (cur_geno >= 0) and (cur_geno <= 2)
                 dosages[cur_geno, i] = 1.0
@@ -1423,7 +1424,7 @@ class PhaseCorrect:
             # NOTE: print out that the mismatches have been minimized on both paternal & maternal chromosomes this way?
             mat_haps = fixed_mat_haps
             pat_haps = fixed_pat_haps
-        # Set the corrected haplotypes here
+        # Set the corrected haplotypes here ...
         self.mat_haps_fixed = mat_haps
         self.pat_haps_fixed = pat_haps
         return mat_haps, pat_haps, n_mis_mat_tot, n_mis_pat_tot
@@ -1435,8 +1436,8 @@ class PhaseCorrect:
         in the incorrect orientation.
 
         Arguments:
-            - maternal (`bool`): apply the function to the maternal chromosome (default: True)
-            - fixed (`bool`): apply the function to the fixed chromosome (default: False)
+            - maternal (`bool`): apply the function to the maternal haplotypes (default: True)
+            - fixed (`bool`): apply the function to the fixed haplotypes (default: False)
 
         Returns:
             - n_switches (`int`): number of switches between consecutive heterozygotes
@@ -1463,7 +1464,7 @@ class PhaseCorrect:
                 inf_haps = self.pat_haps_fixed
             else:
                 inf_haps = self.pat_haps
-        # NOTE: this is just between all consecutive hets, not
+        # NOTE: this is just between all consecutive hets ...
         geno = true_haps.sum(axis=0)
         het_idxs = np.where(geno == 1)[0]
         n_switches = 0
@@ -1491,97 +1492,10 @@ class PhaseCorrect:
             None,
         )
 
-    def estimate_switch_err_empirical(
-        self, maternal=True, fixed=False, truth=False, lod_thresh=-1, **kwargs
-    ):
-        """Use the empirical embryo BAF data to determine the switch-error rate via LOD score for B-allele Frequency.
-
-        Arguments:
-            - maternal (`bool`): estimate switch-errors from the maternal haplotypes
-            - fixed (`bool`): estimate switch-errors from the fixed haplotypes
-            - truth (`bool`): use the true haplotypes if available
-            - lod_thresh (`float`): any log-density ratio below this value will be called as a switch
-
-        Returns:
-            - n_switches (`int`): number of switches between consecutive heterozygotes
-            - n_consecutive_hets (`int`): number of consecutive heterozygotes
-            - switch_err_rate (`float`): number of switches per consecutive heterozygote
-            - switch_idx (`np.array`): snps where the variant is out of phase with its predecessor
-            - het_idx (`np.array`): locations/indexs of the heterozygotes
-            - lods (`np.array`) : lod-scores for the estimated switches (default: None)
-
-        """
-        assert self.embryo_bafs is not None
-        # haps1 is the individual that we are evaluating the switch errors for
-        haps1 = None
-        haps2 = None
-        # Make sure that only one of fixed or truth are available
-        assert (not fixed) or (not truth)
-        if maternal:
-            if fixed:
-                assert self.mat_haps_fixed is not None
-                haps1 = self.mat_haps_fixed
-                haps2 = self.pat_haps
-            elif truth:
-                assert self.mat_haps_true is not None
-                haps1 = self.mat_haps_true
-                haps2 = self.pat_haps_true
-            else:
-                haps1 = self.mat_haps
-                haps2 = self.pat_haps
-        else:
-            if fixed:
-                assert self.pat_haps_fixed is not None
-                haps1 = self.pat_haps_fixed
-                haps2 = self.mat_haps
-            elif truth:
-                assert self.pat_haps_true is not None
-                haps1 = self.pat_haps_true
-                haps2 = self.mat_haps_true
-            else:
-                haps1 = self.pat_haps
-                haps2 = self.mat_haps
-        # The variables where we store the switch information
-        n_switches = 0
-        n_consecutive_hets = 0
-        switch_idxs = []
-        lods = []
-        # NOTE: here we restrict to "phase-informative" switches ...
-        geno1 = haps1[0, :] + haps1[1, :]
-        het_idx = np.where(geno1 == 1)[0]
-        for i, j in zip(het_idx[:-1], het_idx[1:]):
-            n_consecutive_hets += 1
-            tot_phase = 0.0
-            tot_antiphase = 0.0
-            for baf in self.embryo_bafs:
-                # now we have to use the current phasing approach ...
-                cur_phase, cur_antiphase = self.lod_phase(
-                    haps1=haps1[:, [i, j]],
-                    haps2=haps2[:, [i, j]],
-                    baf=baf[[i, j]],
-                    **kwargs,
-                )
-                tot_phase += cur_phase
-                tot_antiphase += cur_antiphase
-            lods.append(tot_phase - tot_antiphase)
-            # This is the ratio between the two probability densities
-            if tot_phase - tot_antiphase < lod_thresh:
-                n_switches += 1
-                switch_idxs.append((i, j))
-        lods = np.array(lods)
-        return (
-            n_switches,
-            n_consecutive_hets,
-            n_switches / n_consecutive_hets,
-            switch_idxs,
-            het_idx,
-            lods,
-        )
-
     def solve_trio(self, cg=0, fg=0, mg=0):
         """Solve the trio setup to phase the parents.
 
-        Code taken from: https://github.com/odelaneau/makeScaffold/blob/master/src/data_mendel.cpp
+        Code originally from: https://github.com/odelaneau/makeScaffold/blob/master/src/data_mendel.cpp
         """
         phased = None
         mendel = None
@@ -1854,7 +1768,7 @@ class RecombEst(PhaseCorrect):
             )
         return info_idx
 
-    def isolate_recomb_events(self, template_embryo=0, paternal=True):
+    def isolate_recomb_events(self, template_embryo=0, paternal=True, npad=5):
         """Isolate specific recombination events."""
         assert self.embryo_bafs is not None
         assert self.embryo_pi0s is not None
@@ -1993,29 +1907,38 @@ class RecombEst(PhaseCorrect):
         Z = np.zeros(shape=llr_z.shape)
         Z[llr_z < 0] = 2
         Z[llr_z > 0] = 1
-        # Now isolate crossovers in the specific parent by the majority rule ...
-        potential_switches = np.where(Z[:, 1:] != Z[:, :-1])[1]
-        switch_idx, cnts = np.unique(potential_switches, return_counts=True)
+
+        # For each sibling embryo check its "switch-clusters"
+        isolated_switches = []
+        for i in range(len(non_template_ids)):
+            # Check the switch cluster for sibling i
+            potential_switches = np.where(Z[i, 1:] != Z[i, :-1])[0]
+            potential_switches_filt = self.refine_recomb_events(
+                potential_switches, npad=npad
+            )
+            isolated_switches.append(potential_switches_filt)
+        # Check the total isolated switches ...
+        isolated_switches = np.hstack(isolated_switches)
+        switch_idx, cnts = np.unique(isolated_switches, return_counts=True)
         # Choose the potential switches by the majority rule ...
         potential_switches_filt = switch_idx[cnts > (m - 1) / 2]
         return Z, llr_z, potential_switches_filt
 
-    def refine_recomb_events(self, potential_switches_filt, npad=5):
+    def refine_recomb_events(self, potential_switches, npad=5):
         """Refine recombination estimation using the switch-clusters approach of Coop et al 2007.
 
         Arguments:
-            - potential_switches_filt (`np.array`): array of potential switches at informative markers
+            - potential_switches (`np.array`): array of potential switches at informative markers
             - npad (`int`): integer value of adjacent informative snps to consider as a switch cluster.
 
         """
         assert npad > 1
-        if potential_switches_filt.size > 0:
+        if potential_switches.size > 0:
             subset_co = []
-            for i in potential_switches_filt:
+            for i in potential_switches:
                 # Count the number of switches within 5 informative SNPs
                 n = np.sum(
-                    (potential_switches_filt < i + npad)
-                    & (potential_switches_filt > i - npad)
+                    (potential_switches < i + npad) & (potential_switches > i - npad)
                 )
                 # Even number of crossovers suggest it is likely not a well-supported CO
                 if n % 2 == 1:
