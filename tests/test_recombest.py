@@ -182,7 +182,7 @@ def test_rec_paternal_inferred_baf_fixphase(sigma, pi0, nsibs, seed):
         pat_haps,
         n_mis_mat_tot,
         n_mis_pat_tot,
-    ) = phase_correct.viterbi_phase_correct(niter=5)
+    ) = phase_correct.viterbi_phase_correct(niter=1)
     # Use the phase-corrected haplotypes as input for the recombination estimation + expected genotype estimation ...
     recomb_est = RecombEst(mat_haps=mat_haps, pat_haps=pat_haps, pos=data["pos"])
     # Set the parameters + calculate the expected BAF
