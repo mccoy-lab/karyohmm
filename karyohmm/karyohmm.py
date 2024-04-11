@@ -507,6 +507,7 @@ class MetaHMM(AneuploidyHMM):
         r=1e-8,
         a=1e-2,
         unphased=False,
+        viterbi=False,
     ):
         """Obtain genotype dosages for a putative disomic embryo.
 
@@ -520,9 +521,10 @@ class MetaHMM(AneuploidyHMM):
             - r (`float`): intra-karyotype transition rate
             - a (`float`): inter-karyotype transition rate
             - unphased (`bool`): run the model in unphased mode
+            - viterbi (`bool`): estimate the embryo genotypes using the viterbi algorithm
 
         Returns:
-            - dossages (`np.array`): a 3 x M array of genotype probabilities (RR, RA, AA)
+            - dosages (`np.array`): a 3 x M array of genotype probabilities (RR, RA, AA)
 
         """
         if self.aploid != "disomy":
@@ -530,28 +532,48 @@ class MetaHMM(AneuploidyHMM):
                 "Obtaining non-disomic embryo genotypes is not currently supported!"
             )
         # Run the forward-backward algorithm on this ...
-        gammas, states, _ = self.forward_backward(
-            bafs=bafs,
-            pos=pos,
-            mat_haps=mat_haps,
-            pat_haps=pat_haps,
-            pi0=pi0,
-            std_dev=std_dev,
-            r=r,
-            a=a,
-            unphased=False,
-        )
-        # Calculate the genotype dosage of the alternative allele
-        dosages = np.zeros(shape=(3, pos.size), dtype=np.float32)
-        for i in range(pos.size):
-            for j, x in enumerate(states):
+        if viterbi:
+            path, states, _, _ = self.viterbi_algorithm(
+                bafs=bafs,
+                pos=pos,
+                mat_haps=mat_haps,
+                pat_haps=pat_haps,
+                pi0=pi0,
+                std_dev=std_dev,
+                r=r,
+                a=a,
+                unphased=False,
+            )
+            dosages = np.zeros(shape=(3, pos.size), dtype=np.float32)
+            for i, x in enumerate(path):
                 cur_geno = int(
                     mat_dosage(mat_haps[:, i], x) + pat_dosage(pat_haps[:, i], x)
                 )
                 assert (cur_geno >= 0) and (cur_geno <= 2)
-                # This is analogous to the PL field (but on raw scale)
-                dosages[cur_geno, i] += np.exp(gammas[j, i])
-        # Dosages are oriented towards the alt allele (bottom row is the alt/alt homozygote)
+                dosages[cur_geno, i] = 1.0
+        else:
+            gammas, states, _ = self.forward_backward(
+                bafs=bafs,
+                pos=pos,
+                mat_haps=mat_haps,
+                pat_haps=pat_haps,
+                pi0=pi0,
+                std_dev=std_dev,
+                r=r,
+                a=a,
+                unphased=False,
+            )
+            # Calculate the genotype dosage of the alternative allele
+            dosages = np.zeros(shape=(3, pos.size), dtype=np.float32)
+            for i in range(pos.size):
+                for j, x in enumerate(states):
+                    cur_geno = int(
+                        mat_dosage(mat_haps[:, i], x) + pat_dosage(pat_haps[:, i], x)
+                    )
+                    assert (cur_geno >= 0) and (cur_geno <= 2)
+                    # This is analogous to the PL field (but on raw scale)
+                    dosages[cur_geno, i] += np.exp(gammas[j, i])
+            # Dosages are oriented towards the alt allele (bottom row is the alt/alt homozygote)
         return dosages
 
 
