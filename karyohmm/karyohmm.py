@@ -1629,6 +1629,263 @@ class PhaseCorrect:
             lods,
         )
 
+    def solveTrio(self, cg=0, fg=0, mg=0):
+        """Solve the trio setup to phase the parents.
+
+        Code taken from: https://github.com/odelaneau/makeScaffold/blob/master/src/data_mendel.cpp
+        """
+        phased = 0
+        mendel = 0
+        if fg == 0 & mg == 0 & cg == 0:
+            f0 = 0
+            f1 = 0
+            m0 = 0
+            m1 = 0
+            c0 = 0
+            c1 = 0
+            mendel = 0
+            phased = 1
+        if fg == 0 & mg == 0 & cg == 1:
+            f0 = 0
+            f1 = 0
+            m0 = 0
+            m1 = 0
+            c0 = 0
+            c1 = 1
+            mendel = 1
+            phased = 0
+        if fg == 0 & mg == 0 & cg == 2:
+            f0 = 0
+            f1 = 0
+            m0 = 0
+            m1 = 0
+            c0 = 1
+            c1 = 1
+            mendel = 1
+            phased = 0
+        if fg == 0 & mg == 1 & cg == 0:
+            f0 = 0
+            f1 = 0
+            m0 = 1
+            m1 = 0
+            c0 = 0
+            c1 = 0
+            mendel = 0
+            phased = 1
+        if fg == 0 & mg == 1 & cg == 1:
+            f0 = 0
+            f1 = 0
+            m0 = 0
+            m1 = 1
+            c0 = 0
+            c1 = 1
+            mendel = 0
+            phased = 1
+        if fg == 0 & mg == 1 & cg == 2:
+            f0 = 0
+            f1 = 0
+            m0 = 0
+            m1 = 1
+            c0 = 1
+            c1 = 1
+            mendel = 1
+            phased = 0
+        if fg == 0 & mg == 2 & cg == 0:
+            f0 = 0
+            f1 = 0
+            m0 = 1
+            m1 = 1
+            c0 = 0
+            c1 = 0
+            mendel = 1
+            phased = 0
+        if fg == 0 & mg == 2 & cg == 1:
+            f0 = 0
+            f1 = 0
+            m0 = 1
+            m1 = 1
+            c0 = 0
+            c1 = 1
+            mendel = 0
+            phased = 1
+        if fg == 0 & mg == 2 & cg == 2:
+            f0 = 0
+            f1 = 0
+            m0 = 1
+            m1 = 1
+            c0 = 1
+            c1 = 1
+            mendel = 1
+            phased = 0
+        if fg == 1 & mg == 0 & cg == 0:
+            f0 = 0
+            f1 = 1
+            m0 = 0
+            m1 = 0
+            c0 = 0
+            c1 = 0
+            mendel = 0
+            phased = 1
+        if fg == 1 & mg == 0 & cg == 1:
+            f0 = 1
+            f1 = 0
+            m0 = 0
+            m1 = 0
+            c0 = 1
+            c1 = 0
+            mendel = 0
+            phased = 1
+        if fg == 1 & mg == 0 & cg == 2:
+            f0 = 1
+            f1 = 0
+            m0 = 0
+            m1 = 0
+            c0 = 1
+            c1 = 1
+            mendel = 1
+            phased = 0
+        if fg == 1 & mg == 1 & cg == 0:
+            f0 = 0
+            f1 = 1
+            m0 = 1
+            m1 = 0
+            c0 = 0
+            c1 = 0
+            mendel = 0
+            phased = 1
+        if fg == 1 & mg == 1 & cg == 1:
+            f0 = 0
+            f1 = 1
+            m0 = 0
+            m1 = 1
+            c0 = 0
+            c1 = 1
+            mendel = 0
+            phased = 0
+        if fg == 1 & mg == 1 & cg == 2:
+            f0 = 1
+            f1 = 0
+            m0 = 0
+            m1 = 1
+            c0 = 1
+            c1 = 1
+            mendel = 0
+            phased = 1
+        if fg == 1 & mg == 2 & cg == 0:
+            f0 = 0
+            f1 = 1
+            m0 = 1
+            m1 = 1
+            c0 = 0
+            c1 = 0
+            mendel = 1
+            phased = 0
+        if fg == 1 & mg == 2 & cg == 1:
+            f0 = 0
+            f1 = 1
+            m0 = 1
+            m1 = 1
+            c0 = 0
+            c1 = 1
+            mendel = 0
+            phased = 1
+        if fg == 1 & mg == 2 & cg == 2:
+            f0 = 1
+            f1 = 0
+            m0 = 1
+            m1 = 1
+            c0 = 1
+            c1 = 1
+            mendel = 0
+            phased = 1
+        if fg == 2 & mg == 0 & cg == 0:
+            f0 = 1
+            f1 = 1
+            m0 = 0
+            m1 = 0
+            c0 = 0
+            c1 = 0
+            mendel = 1
+            phased = 0
+        if fg == 2 & mg == 0 & cg == 1:
+            f0 = 1
+            f1 = 1
+            m0 = 0
+            m1 = 0
+            c0 = 1
+            c1 = 0
+            mendel = 0
+            phased = 1
+        if fg == 2 & mg == 0 & cg == 2:
+            f0 = 1
+            f1 = 1
+            m0 = 0
+            m1 = 0
+            c0 = 1
+            c1 = 1
+            mendel = 1
+            phased = 0
+        if fg == 2 & mg == 1 & cg == 0:
+            f0 = 1
+            f1 = 1
+            m0 = 0
+            m1 = 1
+            c0 = 0
+            c1 = 0
+            mendel = 1
+            phased = 0
+        if fg == 2 & mg == 1 & cg == 1:
+            f0 = 1
+            f1 = 1
+            m0 = 1
+            m1 = 0
+            c0 = 1
+            c1 = 0
+            mendel = 0
+            phased = 1
+        if fg == 2 & mg == 1 & cg == 2:
+            f0 = 1
+            f1 = 1
+            m0 = 0
+            m1 = 1
+            c0 = 1
+            c1 = 1
+            mendel = 0
+            phased = 1
+        if fg == 2 & mg == 2 & cg == 0:
+            f0 = 1
+            f1 = 1
+            m0 = 1
+            m1 = 1
+            c0 = 0
+            c1 = 0
+            mendel = 1
+            phased = 0
+        if fg == 2 & mg == 2 & cg == 1:
+            f0 = 1
+            f1 = 1
+            m0 = 1
+            m1 = 1
+            c0 = 0
+            c1 = 1
+            mendel = 1
+            phased = 0
+        if fg == 2 & mg == 2 & cg == 2:
+            f0 = 1
+            f1 = 1
+            m0 = 1
+            m1 = 1
+            c0 = 1
+            c1 = 1
+            mendel = 0
+            phased = 1
+        if mendel:
+            return True
+        else:
+            return False
+
+    # solveTrio(cg=1, fg=0, mg=2)
+
 
 class RecombEst(PhaseCorrect):
     """Class implementing the simplified algorithm for detection of crossovers of Coop et al 2007."""

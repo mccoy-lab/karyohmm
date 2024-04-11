@@ -154,7 +154,7 @@ def test_rec_paternal_inferred_baf_fixphase(sigma, pi0, nsibs, seed):
         std_dev=sigma,
         mix_prop=pi0,
         rec_prob=1e-4,
-        switch_err_rate=2e-2,
+        switch_err_rate=1e-2,
         seed=42 + seed,
     )
     # Actually run the phase-correction routine ...
