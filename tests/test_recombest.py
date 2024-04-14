@@ -76,7 +76,7 @@ def test_rec_paternal_expected_baf_perfect_phase(sigma, pi0, nsibs, seed):
     # Obtain the true paternal recombination events for the template embryo ...
     zs_paternal0 = data["zs_paternal0"]
     n_pat_rec = np.sum(zs_paternal0[:-1] != zs_paternal0[1:])
-    _, llr_z, filt_pat_recomb_events = recomb_est.isolate_recomb_events()
+    _, llr_z, filt_pat_recomb_events = recomb_est.isolate_recomb_events(maternal=False)
     # Make sure that the numbers match up for number of recombination events ...
     assert n_pat_rec == len(filt_pat_recomb_events)
 
@@ -139,7 +139,7 @@ def test_rec_paternal_inferred_baf_perfect_phase(sigma, pi0, nsibs, seed):
     # Obtain the true paternal recombination events for the template embryo ...
     zs_paternal0 = data["zs_paternal0"]
     n_pat_rec = np.sum(zs_paternal0[:-1] != zs_paternal0[1:])
-    _, llr_z, filt_pat_recomb_events = recomb_est.isolate_recomb_events()
+    _, llr_z, filt_pat_recomb_events = recomb_est.isolate_recomb_events(maternal=False)
     # Make sure that the numbers match up for number of recombination events ...
     assert n_pat_rec == len(filt_pat_recomb_events)
 
@@ -207,6 +207,141 @@ def test_rec_paternal_inferred_baf_fixphase(sigma, pi0, nsibs, seed):
     # Obtain the true paternal recombination events for the template embryo under consideration ...
     zs_paternal0 = data["zs_paternal0"]
     n_pat_rec = np.sum(zs_paternal0[:-1] != zs_paternal0[1:])
-    _, llr_z, filt_pat_recomb_events = recomb_est.isolate_recomb_events()
+    _, llr_z, filt_pat_recomb_events = recomb_est.isolate_recomb_events(maternal=False)
+    # Make sure that the numbers match up for number of recombination events detected
+    assert n_pat_rec == len(filt_pat_recomb_events)
+
+
+@pytest.mark.parametrize(
+    "sigma,pi0,nsibs,seed,m,seqlen",
+    [
+        (0.15, 0.6, 3, 2, 2000, 1e7),
+        (0.15, 0.6, 3, 3, 3000, 1e7),
+        (0.15, 0.6, 3, 4, 4000, 1e7),
+        (0.15, 0.6, 3, 5, 5000, 1e7),
+        (0.15, 0.6, 3, 42, 3983, 48e6),
+        (0.15, 0.6, 3, 43, 3983, 48e6),
+        (0.15, 0.6, 3, 44, 3983, 48e6),
+        (0.15, 0.6, 3, 45, 3983, 48e6),
+    ],
+)
+def test_rec_paternal_inferred_baf_perfect_phase_diff_density(
+    sigma, pi0, nsibs, seed, m, seqlen
+):
+    """Test that recombinations can be isolated using inferred estimates for allelic intensity.
+
+    This incorporates realistic chromosome sizes from chr21 on the cytoSNP array.
+    """
+    assert m > 0
+    assert seqlen > 0
+    e_rec = (seqlen / 1e6 * 1e-2) / m
+    data = pgt_sim.sibling_euploid_sim(
+        m=m,
+        nsibs=nsibs,
+        std_dev=sigma,
+        mix_prop=pi0,
+        length=seqlen,
+        rec_prob=e_rec,
+        switch_err_rate=0.0,
+        seed=42 + seed,
+    )
+    recomb_est = RecombEst(
+        mat_haps=data["mat_haps_true"], pat_haps=data["pat_haps_true"], pos=data["pos"]
+    )
+    # Set the parameters here ...
+    recomb_est.embryo_pi0s = np.array([pi0 for _ in range(nsibs)])
+    recomb_est.embryo_sigmas = np.array([sigma for _ in range(nsibs)])
+    expected_baf = []
+    for i in range(nsibs):
+        dosages = meta_hmm.genotype_embryo(
+            bafs=data[f"baf_embryo{i}"],
+            pos=data["pos"],
+            mat_haps=data["mat_haps_true"],
+            pat_haps=data["pat_haps_true"],
+            std_dev=recomb_est.embryo_sigmas[i],
+            pi0=recomb_est.embryo_pi0s[i],
+        )
+        # Calculate the expected BAF for that embryo ...
+        e_baf_i = (
+            dosages[0, :] * 0.0 + dosages[1, :] * 1.0 + dosages[2, :] * 2.0
+        ) / 2.0
+        expected_baf.append(e_baf_i)
+    recomb_est.add_baf(embryo_bafs=expected_baf)
+
+    # Obtain the true paternal recombination events for the template embryo ...
+    zs_paternal0 = data["zs_paternal0"]
+    n_pat_rec = np.sum(zs_paternal0[:-1] != zs_paternal0[1:])
+    _, llr_z, filt_pat_recomb_events = recomb_est.isolate_recomb_events(maternal=False)
+    # Make sure that the numbers match up for number of recombination events ...
+    assert n_pat_rec == len(filt_pat_recomb_events)
+
+
+@pytest.mark.parametrize(
+    "sigma,pi0,nsibs,seed,m,seqlen",
+    [
+        (0.15, 0.6, 3, 42, 3983, 48e6),
+        (0.15, 0.6, 3, 43, 3983, 48e6),
+        (0.15, 0.6, 3, 44, 3983, 48e6),
+        (0.15, 0.6, 3, 45, 3983, 48e6),
+    ],
+)
+def test_rec_paternal_inferred_baf_diff_density(sigma, pi0, nsibs, seed, m, seqlen):
+    """Test that recombinations can be isolated using inferred estimates for allelic intensity.
+
+    This incorporates realistic chromosome sizes from chr21 on the cytoSNP array.
+    """
+    assert m > 0
+    assert seqlen > 0
+    e_rec = (seqlen / 1e6 * 1e-2) / m
+    data = pgt_sim.sibling_euploid_sim(
+        m=m,
+        length=seqlen,
+        nsibs=nsibs,
+        std_dev=sigma,
+        mix_prop=pi0,
+        rec_prob=e_rec,
+        switch_err_rate=1.5e-2,
+        seed=42 + seed,
+    )
+    # Actually run the phase-correction routine ...
+    phase_correct = PhaseCorrect(
+        mat_haps=data["mat_haps_real"], pat_haps=data["pat_haps_real"], pos=data["pos"]
+    )
+    phase_correct.embryo_pi0s = np.array([pi0 for _ in range(nsibs)])
+    phase_correct.embryo_sigmas = np.array([sigma for _ in range(nsibs)])
+    phase_correct.add_baf(
+        embryo_bafs=[data[f"baf_embryo{i}"] for i in range(data["nsibs"])]
+    )
+    (
+        mat_haps,
+        pat_haps,
+        n_mis_mat_tot,
+        n_mis_pat_tot,
+    ) = phase_correct.viterbi_phase_correct(niter=1)
+    # Use the phase-corrected haplotypes as input for the recombination estimation + expected genotype estimation ...
+    recomb_est = RecombEst(mat_haps=mat_haps, pat_haps=pat_haps, pos=data["pos"])
+    # Set the parameters + calculate the expected BAF
+    recomb_est.embryo_pi0s = np.array([pi0 for _ in range(nsibs)])
+    recomb_est.embryo_sigmas = np.array([sigma for _ in range(nsibs)])
+    expected_baf = []
+    for i in range(nsibs):
+        dosages = meta_hmm.genotype_embryo(
+            bafs=data[f"baf_embryo{i}"],
+            pos=data["pos"],
+            mat_haps=mat_haps,
+            pat_haps=pat_haps,
+            std_dev=recomb_est.embryo_sigmas[i],
+            pi0=recomb_est.embryo_pi0s[i],
+        )
+        # Calculate the expected BAF for that embryo ...
+        e_baf_i = (
+            dosages[0, :] * 0.0 + dosages[1, :] * 1.0 + dosages[2, :] * 2.0
+        ) / 2.0
+        expected_baf.append(e_baf_i)
+    recomb_est.add_baf(embryo_bafs=expected_baf)
+    # Obtain the true paternal recombination events for the template embryo under consideration ...
+    zs_paternal0 = data["zs_paternal0"]
+    n_pat_rec = np.sum(zs_paternal0[:-1] != zs_paternal0[1:])
+    _, llr_z, filt_pat_recomb_events = recomb_est.isolate_recomb_events(maternal=False)
     # Make sure that the numbers match up for number of recombination events detected
     assert n_pat_rec == len(filt_pat_recomb_events)

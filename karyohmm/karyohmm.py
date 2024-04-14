@@ -9,7 +9,9 @@ Modules available are:
 
 - MetaHMM: module for whole chromosome aneuploidy determination via HMMs
 - QuadHMM: module leveraging multi-sibling design for evaluating crossover recombination estimation
+- MosaicEst: module for estimating mosaic cell fraction from heterozygote baf imbalance
 - PhaseCorrect: module which implements Mendelian phase correction for parental haplotypes.
+- RecombEst: module implementing simpler detection of crossover recombination based on Coop et al 2007
 
 """
 
@@ -1500,22 +1502,62 @@ class RecombEst(PhaseCorrect):
         """Use a superclass to preserve structure for sibling embryos."""
         super(RecombEst, self).__init__(**kwargs)
 
-    def informative_markers(self, paternal=True):
+    def informative_markers(self, maternal=True):
         """Identify markers where one parent is heterozygous and the other parent is homozygous."""
         mat_geno = np.sum(self.mat_haps, axis=0)
         pat_geno = np.sum(self.pat_haps, axis=0)
-        if paternal:
-            info_idx = ((pat_geno == 1) & (mat_geno == 0)) | (
-                (pat_geno == 1) & (mat_geno == 2)
-            )
-        else:
+        if maternal:
             info_idx = ((mat_geno == 1) & (pat_geno == 0)) | (
                 (mat_geno == 1) & (pat_geno == 2)
             )
+        else:
+            info_idx = ((pat_geno == 1) & (mat_geno == 0)) | (
+                (pat_geno == 1) & (mat_geno == 2)
+            )
         return info_idx
 
-    def isolate_recomb_events(self, template_embryo=0, paternal=True, npad=5):
-        """Isolate specific recombination events."""
+    def refine_recomb_events(self, potential_switches, npad=5):
+        """Refine recombination estimation using the switch-clusters approach of Coop et al 2007.
+
+        Arguments:
+            - potential_switches (`np.array`): array of potential switches at informative markers
+            - npad (`int`): integer value of adjacent informative snps to consider as a switch cluster.
+
+        Returns:
+            - subset_co (`list`): only the isolated crossovers across all non-template embryos
+
+        """
+        assert npad > 1
+        if potential_switches.size > 0:
+            subset_co = []
+            for i in potential_switches:
+                # Count the number of switches within 5 informative SNPs
+                n = np.sum(
+                    (potential_switches < i + npad) & (potential_switches > i - npad)
+                )
+                # Even number of crossovers suggest it is likely not a well-supported CO
+                if n % 2 == 1:
+                    subset_co.append(i)
+            return subset_co
+        else:
+            return []
+
+    def isolate_recomb_events(self, template_embryo=0, maternal=True, npad=5):
+        """Isolate specific recombination events.
+
+        NOTE: this uses paternal by default!
+
+        Arguments:
+            - template_embryo (`int`): index of the template embryo
+            - maternal (`bool`): indicator of estimating maternal crossovers.
+            - npad (`int`): integer value of adjacent informative snps to consider as a switch cluster.
+
+        Returns:
+            - Z (`np.array`): (m-1) x L array of switch indicators for allele copying in non-template embryos
+            - llr_z (`np.array`): raw llr values for switch indicators for allele-copying in non-template embryos
+            - potential_switches_filt (`np.array`): list of potential switches in template embryo.
+
+        """
         assert self.embryo_bafs is not None
         assert self.embryo_pi0s is not None
         assert self.embryo_sigmas is not None
@@ -1524,7 +1566,7 @@ class RecombEst(PhaseCorrect):
         assert template_embryo < m
         non_template_ids = [i for i in range(m) if i != template_embryo]
         # Get the informative snps for the specific parent
-        info_snps = self.informative_markers(paternal=paternal)
+        info_snps = self.informative_markers(maternal=maternal)
         llr_z = np.zeros(shape=(len(non_template_ids), np.sum(info_snps)))
         for j, k in enumerate(non_template_ids):
             z1s = np.zeros(np.sum(info_snps))
@@ -1533,58 +1575,58 @@ class RecombEst(PhaseCorrect):
             for p, i in enumerate(np.where(info_snps)[0]):
                 z_same = np.zeros(2)
                 z_diff = np.zeros(2)
-                if paternal:
+                if maternal:
                     # Same allele is transmitted
                     z_same[0] = emission_baf(
                         self.embryo_bafs[template_embryo][i],
-                        m=self.mat_haps[0, i],
-                        p=0,
+                        m=0,
+                        p=self.pat_haps[0, i],
                         pi0=self.embryo_pi0s[template_embryo],
                         std_dev=self.embryo_sigmas[template_embryo],
                     ) + emission_baf(
                         self.embryo_bafs[k][i],
-                        m=self.mat_haps[0, i],
-                        p=0,
+                        m=0,
+                        p=self.pat_haps[0, i],
                         pi0=self.embryo_pi0s[k],
                         std_dev=self.embryo_sigmas[k],
                     )
                     z_same[1] = emission_baf(
                         self.embryo_bafs[template_embryo][i],
-                        m=self.mat_haps[0, i],
-                        p=1,
+                        m=1,
+                        p=self.pat_haps[0, i],
                         pi0=self.embryo_pi0s[template_embryo],
                         std_dev=self.embryo_sigmas[template_embryo],
                     ) + emission_baf(
                         self.embryo_bafs[k][i],
-                        m=self.mat_haps[0, i],
-                        p=1,
+                        m=1,
+                        p=self.pat_haps[0, i],
                         pi0=self.embryo_pi0s[k],
                         std_dev=self.embryo_sigmas[k],
                     )
                     # Same allele is not transmitted ...
                     z_diff[0] = emission_baf(
                         self.embryo_bafs[template_embryo][i],
-                        m=self.mat_haps[0, i],
-                        p=0,
+                        m=0,
+                        p=self.pat_haps[0, i],
                         pi0=self.embryo_pi0s[template_embryo],
                         std_dev=self.embryo_sigmas[template_embryo],
                     ) + emission_baf(
                         self.embryo_bafs[k][i],
-                        m=self.mat_haps[0, i],
-                        p=1,
+                        m=1,
+                        p=self.pat_haps[0, i],
                         pi0=self.embryo_pi0s[k],
                         std_dev=self.embryo_sigmas[k],
                     )
                     z_diff[1] = emission_baf(
                         self.embryo_bafs[template_embryo][i],
-                        m=self.mat_haps[0, i],
-                        p=1,
+                        m=1,
+                        p=self.pat_haps[0, i],
                         pi0=self.embryo_pi0s[template_embryo],
                         std_dev=self.embryo_sigmas[template_embryo],
                     ) + emission_baf(
                         self.embryo_bafs[k][i],
-                        m=self.mat_haps[0, i],
-                        p=0,
+                        m=0,
+                        p=self.pat_haps[0, i],
                         pi0=self.embryo_pi0s[k],
                         std_dev=self.embryo_sigmas[k],
                     )
@@ -1592,54 +1634,54 @@ class RecombEst(PhaseCorrect):
                     # Same allele is transmitted
                     z_same[0] = emission_baf(
                         self.embryo_bafs[template_embryo][i],
-                        m=0,
-                        p=self.pat_haps[0, i],
+                        m=self.mat_haps[0, i],
+                        p=0,
                         pi0=self.embryo_pi0s[template_embryo],
                         std_dev=self.embryo_sigmas[template_embryo],
                     ) + emission_baf(
                         self.embryo_bafs[k][i],
-                        m=0,
-                        p=self.pat_haps[0, i],
+                        m=self.mat_haps[0, i],
+                        p=0,
                         pi0=self.embryo_pi0s[k],
                         std_dev=self.embryo_sigmas[k],
                     )
                     z_same[1] = emission_baf(
                         self.embryo_bafs[template_embryo][i],
-                        m=1,
-                        p=self.pat_haps[0, i],
+                        m=self.mat_haps[0, i],
+                        p=1,
                         pi0=self.embryo_pi0s[template_embryo],
                         std_dev=self.embryo_sigmas[template_embryo],
                     ) + emission_baf(
                         self.embryo_bafs[k][i],
-                        m=1,
-                        p=self.pat_haps[0, i],
+                        m=self.mat_haps[0, i],
+                        p=1,
                         pi0=self.embryo_pi0s[k],
                         std_dev=self.embryo_sigmas[k],
                     )
                     # Same allele is not transmitted ...
                     z_diff[0] = emission_baf(
                         self.embryo_bafs[template_embryo][i],
-                        m=0,
-                        p=self.pat_haps[0, i],
+                        m=self.mat_haps[0, i],
+                        p=0,
                         pi0=self.embryo_pi0s[template_embryo],
                         std_dev=self.embryo_sigmas[template_embryo],
                     ) + emission_baf(
                         self.embryo_bafs[k][i],
-                        m=1,
-                        p=self.pat_haps[0, i],
+                        m=self.mat_haps[0, i],
+                        p=1,
                         pi0=self.embryo_pi0s[k],
                         std_dev=self.embryo_sigmas[k],
                     )
                     z_diff[1] = emission_baf(
                         self.embryo_bafs[template_embryo][i],
-                        m=1,
-                        p=self.pat_haps[0, i],
+                        m=self.mat_haps[0, i],
+                        p=1,
                         pi0=self.embryo_pi0s[template_embryo],
                         std_dev=self.embryo_sigmas[template_embryo],
                     ) + emission_baf(
                         self.embryo_bafs[k][i],
-                        m=0,
-                        p=self.pat_haps[0, i],
+                        m=self.mat_haps[0, i],
+                        p=0,
                         pi0=self.embryo_pi0s[k],
                         std_dev=self.embryo_sigmas[k],
                     )
@@ -1669,26 +1711,3 @@ class RecombEst(PhaseCorrect):
         # Choose the potential switches by the majority rule ...
         potential_switches_filt = switch_idx[cnts > (m - 1) / 2]
         return Z, llr_z, potential_switches_filt
-
-    def refine_recomb_events(self, potential_switches, npad=5):
-        """Refine recombination estimation using the switch-clusters approach of Coop et al 2007.
-
-        Arguments:
-            - potential_switches (`np.array`): array of potential switches at informative markers
-            - npad (`int`): integer value of adjacent informative snps to consider as a switch cluster.
-
-        """
-        assert npad > 1
-        if potential_switches.size > 0:
-            subset_co = []
-            for i in potential_switches:
-                # Count the number of switches within 5 informative SNPs
-                n = np.sum(
-                    (potential_switches < i + npad) & (potential_switches > i - npad)
-                )
-                # Even number of crossovers suggest it is likely not a well-supported CO
-                if n % 2 == 1:
-                    subset_co.append(i)
-            return subset_co
-        else:
-            return []
