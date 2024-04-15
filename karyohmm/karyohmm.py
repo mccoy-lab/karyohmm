@@ -1721,7 +1721,7 @@ class RecombEst(PhaseCorrect):
         assert template_embryo < embryo_ids.size
         quad_hmm = QuadHMM()
         paths = []
-        for j in np.arange(embryo_ids):
+        for j in embryo_ids:
             if j != template_embryo:
                 bafs = [
                     self.embryo_bafs[template_embryo][start:end],
@@ -1799,7 +1799,7 @@ class RecombEst(PhaseCorrect):
         assert self.embryo_bafs is not None
         assert self.embryo_pi0s is not None
         assert self.embryo_sigmas is not None
-        Z, llr_z, potential_switches = self.isolate_recomb(
+        Z, llr_z, potential_switches = self.isolate_recomb_events(
             template_embryo=template_embryo, maternal=maternal, npad=npad
         )
         rec_loc = self.finalize_recomb_events(

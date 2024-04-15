@@ -207,9 +207,19 @@ def test_rec_paternal_inferred_baf_fixphase(sigma, pi0, nsibs, seed):
     # Obtain the true paternal recombination events for the template embryo under consideration ...
     zs_paternal0 = data["zs_paternal0"]
     n_pat_rec = np.sum(zs_paternal0[:-1] != zs_paternal0[1:])
-    _, llr_z, filt_pat_recomb_events = recomb_est.isolate_recomb_events(maternal=False)
+    filt_pat_recomb_events = recomb_est.estimate_crossovers(maternal=False)
     # Make sure that the numbers match up for number of recombination events detected
     assert n_pat_rec == len(filt_pat_recomb_events)
+    # Check that the positions are correct?
+    if n_pat_rec > 0:
+        for x in np.where(zs_paternal0[:-1] != zs_paternal0[1:])[0]:
+            found = False
+            for s,e in filt_pat_recomb_events:
+                if  (recomb_est.pos[x] >= s) and (recomb_est.pos[x] <= e):
+                    found = True
+                    break
+            assert found  
+
 
 
 @pytest.mark.parametrize(
