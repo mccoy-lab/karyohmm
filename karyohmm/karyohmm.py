@@ -1706,7 +1706,7 @@ class RecombEst(PhaseCorrect):
         isolated_switches = np.hstack(isolated_switches)
         switch_idx, cnts = np.unique(isolated_switches, return_counts=True)
         # Choose the potential switches by the majority rule ...
-        potential_switches_filt = switch_idx[cnts > (m - 1) / 2]
+        potential_switches_filt = switch_idx[cnts > (m - 1) / 2].astype(int)
         return Z, llr_z, potential_switches_filt
 
     def second_refine_recomb(
