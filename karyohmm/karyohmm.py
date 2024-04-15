@@ -952,9 +952,6 @@ class QuadHMM(AneuploidyHMM):
         """
         assert i != j
         m = -1
-        if i == 0 and j == 1:
-            # maternal haploidentity -> paternal haploidentity
-            m = 0
         if i == 0 and j == 3:
             # maternal haploidentity -> non-identity
             m = 0
@@ -965,7 +962,7 @@ class QuadHMM(AneuploidyHMM):
             # paternal haploidentity -> non-identity
             m = 1
         if i == 1 and j == 2:
-            # maternal haploidentity -> identity
+            # paternal haploidentity -> identity
             m = 0
         if i == 2 and j == 0:
             # identical -> maternal haploidentity
@@ -1700,7 +1697,7 @@ class RecombEst(PhaseCorrect):
         isolated_switches = []
         for i in range(len(non_template_ids)):
             # Check the switch cluster for sibling i
-            potential_switches = np.where(Z[i, 1:] != Z[i, :-1])[0]
+            potential_switches = np.where(Z[i, :-1] != Z[i, 1:])[0]
             potential_switches_filt = self.refine_recomb_events(
                 potential_switches, npad=npad
             )
@@ -1711,3 +1708,103 @@ class RecombEst(PhaseCorrect):
         # Choose the potential switches by the majority rule ...
         potential_switches_filt = switch_idx[cnts > (m - 1) / 2]
         return Z, llr_z, potential_switches_filt
+
+    def second_refine_recomb(
+        self, template_embryo=0, maternal=True, start=None, end=None
+    ):
+        """Second attempt to refine the recombination locations."""
+        assert (start is not None) and (end is not None)
+        assert start < self.pos.size
+        assert end < self.pos.size
+        assert start < end
+        embryo_ids = np.arange(len(self.embryo_bafs))
+        assert template_embryo < embryo_ids.size
+        quad_hmm = QuadHMM()
+        paths = []
+        for j in np.arange(embryo_ids):
+            if j != template_embryo:
+                bafs = [
+                    self.embryo_bafs[template_embryo][start:end],
+                    self.embryo_bafs[j][start:end],
+                ]
+                # Use the sibling embryo paths here ...
+                v_path = quad_hmm.viterbi_path(
+                    bafs=bafs,
+                    pos=self.pos[start:end],
+                    mat_haps=self.mat_haps[:, start:end],
+                    pat_haps=self.pat_haps[:, start:end],
+                    pi0=(self.embryo_pi0s[template_embryo], self.embryo_pi0s[j]),
+                    std_dev=(
+                        self.embryo_sigmas[template_embryo],
+                        self.embryo_sigmas[j],
+                    ),
+                )
+                paths.append(v_path)
+        # Identify places where there are switches in the local copying paths?
+        # Note that these indexes are within the shortened range now ...
+        _, _, mat_rec_dict, pat_rec_dict = quad_hmm.isolate_recomb(
+            paths[0], paths[1:], window=5
+        )
+        # They have to be at the same position across all the siblings ...
+        mat_rec = [k for k in mat_rec_dict if mat_rec_dict[k] == len(paths)]
+        pat_rec = [k for k in pat_rec_dict if pat_rec_dict[k] == len(paths)]
+        if maternal:
+            if (len(mat_rec) == 1) and (len(pat_rec) == 0):
+                het_idx = np.where((self.mat_haps.sum(axis=0) == 1))[0]
+                pos_het = self.pos[het_idx]
+                pos = self.pos[start:end][mat_rec[0]]
+                start = self.pos[np.argmax(pos_het > pos)]
+                end = self.pos[np.argmin(pos <= pos_het)]
+        else:
+            if (len(pat_rec) == 1) and (len(mat_rec) == 0):
+                het_idx = np.where((self.pat_haps.sum(axis=0) == 1))[0]
+                pos_het = self.pos[het_idx]
+                pos = self.pos[start:end][mat_rec[0]]
+                start = self.pos[np.argmax(pos_het > pos)]
+                end = self.pos[np.argmin(pos <= pos_het)]
+        return self.pos[start], self.pos[end]
+
+    def finalize_recomb_events(
+        self, potential_switches, template_embryo=0, maternal=True
+    ):
+        """See if the location of the potential switches can be further localized."""
+        if potential_switches is []:
+            return []
+        else:
+            rec_locations = []
+            # Get the locations of the informative markers
+            info_idx = np.where(self.informative_markers(maternal=maternal))[0]
+            # Get locations that are hets in at least one parent ...
+            het_idx = np.where(
+                (self.pat_haps.sum(axis=0) == 1) | (self.mat_haps.sum(axis=0))
+            )[0]
+            assert info_idx.size > 0
+            assert het_idx.size > 0
+            for p in potential_switches:
+                # This is the position of the transition at the current resolution ...
+                idx1, idx2 = info_idx[p], info_idx[p + 1]
+                assert idx1 <= idx2
+                # Small function to improve the refinement?
+                (p1, p2) = self.second_refine_recomb(
+                    template_embryo=template_embryo,
+                    maternal=maternal,
+                    start=idx1,
+                    end=idx2,
+                )
+                rec_locations.append((p1, p2))
+            return rec_locations
+
+    def estimate_crossovers(self, template_embryo=0, maternal=True, npad=5):
+        """Routine that actually does the FULL crossover estimation + interval refinement."""
+        assert self.embryo_bafs is not None
+        assert self.embryo_pi0s is not None
+        assert self.embryo_sigmas is not None
+        Z, llr_z, potential_switches = self.isolate_recomb(
+            template_embryo=template_embryo, maternal=maternal, npad=npad
+        )
+        rec_loc = self.finalize_recomb_events(
+            potential_switches, template_embryo=template_embryo, maternal=maternal
+        )
+        # We should have the same number of recombination events ...
+        assert len(rec_loc) == potential_switches.size
+        return rec_loc
