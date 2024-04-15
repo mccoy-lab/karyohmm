@@ -9,7 +9,9 @@ Modules available are:
 
 - MetaHMM: module for whole chromosome aneuploidy determination via HMMs
 - QuadHMM: module leveraging multi-sibling design for evaluating crossover recombination estimation
+- MosaicEst: module for estimating mosaic cell fraction from heterozygote baf imbalance
 - PhaseCorrect: module which implements Mendelian phase correction for parental haplotypes.
+- RecombEst: module implementing simpler detection of crossover recombination based on Coop et al 2007
 
 """
 
@@ -507,6 +509,7 @@ class MetaHMM(AneuploidyHMM):
         r=1e-8,
         a=1e-2,
         unphased=False,
+        viterbi=False,
     ):
         """Obtain genotype dosages for a putative disomic embryo.
 
@@ -520,9 +523,10 @@ class MetaHMM(AneuploidyHMM):
             - r (`float`): intra-karyotype transition rate
             - a (`float`): inter-karyotype transition rate
             - unphased (`bool`): run the model in unphased mode
+            - viterbi (`bool`): estimate the embryo genotypes using the viterbi algorithm
 
         Returns:
-            - dossages (`np.array`): a 3 x M array of genotype probabilities (RR, RA, AA)
+            - dosages (`np.array`): a 3 x M array of genotype probabilities (RR, RA, AA)
 
         """
         if self.aploid != "disomy":
@@ -530,28 +534,49 @@ class MetaHMM(AneuploidyHMM):
                 "Obtaining non-disomic embryo genotypes is not currently supported!"
             )
         # Run the forward-backward algorithm on this ...
-        gammas, states, _ = self.forward_backward(
-            bafs=bafs,
-            pos=pos,
-            mat_haps=mat_haps,
-            pat_haps=pat_haps,
-            pi0=pi0,
-            std_dev=std_dev,
-            r=r,
-            a=a,
-            unphased=False,
-        )
-        # Calculate the genotype dosage of the alternative allele
-        dosages = np.zeros(shape=(3, pos.size), dtype=np.float32)
-        for i in range(pos.size):
-            for j, x in enumerate(states):
+        if viterbi:
+            path, states, _, _ = self.viterbi_algorithm(
+                bafs=bafs,
+                pos=pos,
+                mat_haps=mat_haps,
+                pat_haps=pat_haps,
+                pi0=pi0,
+                std_dev=std_dev,
+                r=r,
+                a=a,
+                unphased=False,
+            )
+            dosages = np.zeros(shape=(3, pos.size), dtype=np.float32)
+            for i, x in enumerate(path):
                 cur_geno = int(
-                    mat_dosage(mat_haps[:, i], x) + pat_dosage(pat_haps[:, i], x)
+                    mat_dosage(mat_haps[:, i], states[x])
+                    + pat_dosage(pat_haps[:, i], states[x])
                 )
                 assert (cur_geno >= 0) and (cur_geno <= 2)
-                # This is analogous to the PL field (but on raw scale)
-                dosages[cur_geno, i] += np.exp(gammas[j, i])
-        # Dosages are oriented towards the alt allele (bottom row is the alt/alt homozygote)
+                dosages[cur_geno, i] = 1.0
+        else:
+            gammas, states, _ = self.forward_backward(
+                bafs=bafs,
+                pos=pos,
+                mat_haps=mat_haps,
+                pat_haps=pat_haps,
+                pi0=pi0,
+                std_dev=std_dev,
+                r=r,
+                a=a,
+                unphased=False,
+            )
+            # Calculate the genotype dosage of the alternative allele
+            dosages = np.zeros(shape=(3, pos.size), dtype=np.float32)
+            for i in range(pos.size):
+                for j, x in enumerate(states):
+                    cur_geno = int(
+                        mat_dosage(mat_haps[:, i], x) + pat_dosage(pat_haps[:, i], x)
+                    )
+                    assert (cur_geno >= 0) and (cur_geno <= 2)
+                    # This is analogous to the PL field (but on raw scale)
+                    dosages[cur_geno, i] += np.exp(gammas[j, i])
+            # Dosages are oriented towards the alt allele (bottom row is the alt/alt homozygote)
         return dosages
 
 
@@ -927,9 +952,6 @@ class QuadHMM(AneuploidyHMM):
         """
         assert i != j
         m = -1
-        if i == 0 and j == 1:
-            # maternal haploidentity -> paternal haploidentity
-            m = 0
         if i == 0 and j == 3:
             # maternal haploidentity -> non-identity
             m = 0
@@ -940,7 +962,7 @@ class QuadHMM(AneuploidyHMM):
             # paternal haploidentity -> non-identity
             m = 1
         if i == 1 and j == 2:
-            # maternal haploidentity -> identity
+            # paternal haploidentity -> identity
             m = 0
         if i == 2 and j == 0:
             # identical -> maternal haploidentity
@@ -1339,79 +1361,6 @@ class PhaseCorrect:
         self.embryo_pi0s = pi0_est_acc
         self.embryo_sigmas = sigma_est_acc
 
-    def lod_phase(self, haps1, haps2, baf, **kwargs):
-        """Compute the log-likelihood of being in the phase orientation.
-
-        NOTE: this marginalizes over all the possible phases
-
-        Arguments:
-            - haps1 (`np.array`): focal haplotypes to be mendelian-phased
-            - haps2 (`np.array`): ancillary haplotypes from other parent (to be marginalized over)
-            - baf (`list`): list of BAF values for embryos
-
-        Returns:
-            - phase_orientation (`float`): log-density of haps1 being in the correct phase
-            - antiphase_orientation (`float`): log-density of haps1 being in the opposite phase
-
-        """
-        assert (haps1.shape[0] == 2) and (haps1.shape[1] == 2)
-        assert (haps2.shape[0] == 2) and (haps2.shape[1] == 2)
-        assert np.all(np.sum(haps1, axis=0) == 1)
-        phase_orientation, antiphase_orientation = lod_phase(
-            haps1, haps2, baf, **kwargs
-        )
-        return phase_orientation, antiphase_orientation
-
-    def lod_phase_correct(self, maternal=True, lod_thresh=-1.0, **kwargs):
-        """Apply a phase correction for the specified parental haplotype.
-
-        Arguments:
-            - maternal (`bool`): apply phase correction on the maternal haplotypes
-            - lod_thresh (`float`): Log-odds threshold on the phase/antiphase ratio between SNPs to flip snps
-
-        """
-        assert self.embryo_bafs is not None
-        if maternal:
-            haps1 = self.mat_haps
-            haps2 = self.pat_haps
-        else:
-            haps1 = self.pat_haps
-            haps2 = self.mat_haps
-        assert (haps1.ndim == 2) and (haps2.ndim == 2)
-        assert (haps1.shape[0] == 2) and (haps2.shape[0] == 2)
-        assert haps1.shape[1] == haps2.shape[1]
-        geno1 = haps1.sum(axis=0)
-        idx_het1 = np.where(geno1 == 1)[0]
-        hap_idx1 = np.zeros(haps1.shape[1], dtype=np.uint16)
-        hap_idx2 = np.ones(haps1.shape[1], dtype=np.uint16)
-        for i, j in zip(idx_het1[:-1], idx_het1[1:]):
-            tot_phase = 0.0
-            tot_antiphase = 0.0
-            cur_hap = np.vstack(
-                [haps1[hap_idx1[i], [i, j]], haps1[hap_idx2[i], [i, j]]]
-            )
-            for baf in self.embryo_bafs:
-                # now we have to use the current phasing approach ...
-                cur_phase, cur_antiphase = self.lod_phase(
-                    haps1=cur_hap, haps2=haps2[:, [i, j]], baf=baf[[i, j]], **kwargs
-                )
-                tot_phase += cur_phase
-                tot_antiphase += cur_antiphase
-            # If we are below the log-odds threshold then we create a switch
-            if tot_phase - tot_antiphase < lod_thresh:
-                hap_idx1[j:] = 1 - hap_idx1[i]
-                hap_idx2[j:] = 1 - hap_idx2[i]
-        # Getting each index sequentially
-        fixed_hap1 = [haps1[x, i] for i, x in enumerate(hap_idx1)]
-        fixed_hap2 = [haps1[x, i] for i, x in enumerate(hap_idx2)]
-        fixed_haps = np.vstack([fixed_hap1, fixed_hap2])
-        assert fixed_haps.shape[1] == haps1.shape[1]
-        assert fixed_haps.shape[0] == 2
-        if maternal:
-            self.mat_haps_fixed = fixed_haps
-        else:
-            self.pat_haps_fixed = fixed_haps
-
     def correct_haps_viterbi(self, haps, paths):
         """Correct haplotypes using multiple copying paths + majority rule."""
         assert paths.shape[1] == haps.shape[1]
@@ -1423,7 +1372,7 @@ class PhaseCorrect:
             n_mis[i] = np.sum((paths[:, i] != paths[:, j]))
         hap_idx1 = np.zeros(haps.shape[1], dtype=np.uint16)
         hap_idx2 = np.ones(haps.shape[1], dtype=np.uint16)
-        for i, j in zip(np.arange(m - 1), np.arange(1, m)):
+        for i in np.arange(m - 1):
             # If majority have the same switch - we swap haplotypes ...
             if n_mis[i] > (n_sib / 2):
                 hap_idx1[:i] = 1 - hap_idx1[:i]
@@ -1463,7 +1412,7 @@ class PhaseCorrect:
                     pi0=self.embryo_pi0s[j],
                     std_dev=self.embryo_sigmas[j],
                 )
-                # We collect the viterbi path estimates here ...
+                # Collect indicators of both copying the same haplotype
                 mat_paths[j, :] = np.isin(path, [0, 1])
                 pat_paths[j, :] = np.isin(path, [0, 2])
             # now we apply the minimum recombination path-switching setting ...
@@ -1474,7 +1423,7 @@ class PhaseCorrect:
             # NOTE: print out that the mismatches have been minimized on both paternal & maternal chromosomes this way?
             mat_haps = fixed_mat_haps
             pat_haps = fixed_pat_haps
-        # Set the corrected haplotypes here
+        # Set the corrected haplotypes here ...
         self.mat_haps_fixed = mat_haps
         self.pat_haps_fixed = pat_haps
         return mat_haps, pat_haps, n_mis_mat_tot, n_mis_pat_tot
@@ -1486,8 +1435,8 @@ class PhaseCorrect:
         in the incorrect orientation.
 
         Arguments:
-            - maternal (`bool`): apply the function to the maternal chromosome (default: True)
-            - fixed (`bool`): apply the function to the fixed chromosome (default: False)
+            - maternal (`bool`): apply the function to the maternal haplotypes (default: True)
+            - fixed (`bool`): apply the function to the fixed haplotypes (default: False)
 
         Returns:
             - n_switches (`int`): number of switches between consecutive heterozygotes
@@ -1514,7 +1463,7 @@ class PhaseCorrect:
                 inf_haps = self.pat_haps_fixed
             else:
                 inf_haps = self.pat_haps
-        # NOTE: this is just between all consecutive hets, not
+        # NOTE: this is just between all consecutive hets ...
         geno = true_haps.sum(axis=0)
         het_idxs = np.where(geno == 1)[0]
         n_switches = 0
@@ -1542,89 +1491,316 @@ class PhaseCorrect:
             None,
         )
 
-    def estimate_switch_err_empirical(
-        self, maternal=True, fixed=False, truth=False, lod_thresh=-1, **kwargs
-    ):
-        """Use the empirical embryo BAF data to determine the switch-error rate via LOD score for B-allele Frequency.
+
+class RecombEst(PhaseCorrect):
+    """Class implementing the simplified algorithm for detection of crossovers of Coop et al 2007."""
+
+    def __init__(self, **kwargs):
+        """Use a superclass to preserve structure for sibling embryos."""
+        super(RecombEst, self).__init__(**kwargs)
+
+    def informative_markers(self, maternal=True):
+        """Identify markers where one parent is heterozygous and the other parent is homozygous."""
+        mat_geno = np.sum(self.mat_haps, axis=0)
+        pat_geno = np.sum(self.pat_haps, axis=0)
+        if maternal:
+            info_idx = ((mat_geno == 1) & (pat_geno == 0)) | (
+                (mat_geno == 1) & (pat_geno == 2)
+            )
+        else:
+            info_idx = ((pat_geno == 1) & (mat_geno == 0)) | (
+                (pat_geno == 1) & (mat_geno == 2)
+            )
+        return info_idx
+
+    def refine_recomb_events(self, potential_switches, npad=5):
+        """Refine recombination estimation using the switch-clusters approach of Coop et al 2007.
 
         Arguments:
-            - maternal (`bool`): estimate switch-errors from the maternal haplotypes
-            - fixed (`bool`): estimate switch-errors from the fixed haplotypes
-            - truth (`bool`): use the true haplotypes if available
-            - lod_thresh (`float`): any log-density ratio below this value will be called as a switch
+            - potential_switches (`np.array`): array of potential switches at informative markers
+            - npad (`int`): integer value of adjacent informative snps to consider as a switch cluster.
 
         Returns:
-            - n_switches (`int`): number of switches between consecutive heterozygotes
-            - n_consecutive_hets (`int`): number of consecutive heterozygotes
-            - switch_err_rate (`float`): number of switches per consecutive heterozygote
-            - switch_idx (`np.array`): snps where the variant is out of phase with its predecessor
-            - het_idx (`np.array`): locations/indexs of the heterozygotes
-            - lods (`np.array`) : lod-scores for the estimated switches (default: None)
+            - subset_co (`list`): only the isolated crossovers across all non-template embryos
+
+        """
+        assert npad > 1
+        if potential_switches.size > 0:
+            subset_co = []
+            for i in potential_switches:
+                # Count the number of switches within 5 informative SNPs
+                n = np.sum(
+                    (potential_switches < i + npad) & (potential_switches > i - npad)
+                )
+                # Even number of crossovers suggest it is likely not a well-supported CO
+                if n % 2 == 1:
+                    subset_co.append(i)
+            return subset_co
+        else:
+            return []
+
+    def isolate_recomb_events(self, template_embryo=0, maternal=True, npad=5):
+        """Isolate specific recombination events.
+
+        NOTE: this uses paternal by default!
+
+        Arguments:
+            - template_embryo (`int`): index of the template embryo
+            - maternal (`bool`): indicator of estimating maternal crossovers.
+            - npad (`int`): integer value of adjacent informative snps to consider as a switch cluster.
+
+        Returns:
+            - Z (`np.array`): (m-1) x L array of switch indicators for allele copying in non-template embryos
+            - llr_z (`np.array`): raw llr values for switch indicators for allele-copying in non-template embryos
+            - potential_switches_filt (`np.array`): list of potential switches in template embryo.
 
         """
         assert self.embryo_bafs is not None
-        # haps1 is the individual that we are evaluating the switch errors for
-        haps1 = None
-        haps2 = None
-        # Make sure that only one of fixed or truth are available
-        assert (not fixed) or (not truth)
-        if maternal:
-            if fixed:
-                assert self.mat_haps_fixed is not None
-                haps1 = self.mat_haps_fixed
-                haps2 = self.pat_haps
-            elif truth:
-                assert self.mat_haps_true is not None
-                haps1 = self.mat_haps_true
-                haps2 = self.pat_haps_true
+        assert self.embryo_pi0s is not None
+        assert self.embryo_sigmas is not None
+        m = len(self.embryo_bafs)
+        assert m > 1
+        assert template_embryo < m
+        non_template_ids = [i for i in range(m) if i != template_embryo]
+        # Get the informative snps for the specific parent
+        info_snps = self.informative_markers(maternal=maternal)
+        llr_z = np.zeros(shape=(len(non_template_ids), np.sum(info_snps)))
+        for j, k in enumerate(non_template_ids):
+            z1s = np.zeros(np.sum(info_snps))
+            z2s = np.zeros(np.sum(info_snps))
+            # NOTE: we use a signed-version of the log-likelihood ratio ...
+            for p, i in enumerate(np.where(info_snps)[0]):
+                z_same = np.zeros(2)
+                z_diff = np.zeros(2)
+                if maternal:
+                    # Same allele is transmitted
+                    z_same[0] = emission_baf(
+                        self.embryo_bafs[template_embryo][i],
+                        m=0,
+                        p=self.pat_haps[0, i],
+                        pi0=self.embryo_pi0s[template_embryo],
+                        std_dev=self.embryo_sigmas[template_embryo],
+                    ) + emission_baf(
+                        self.embryo_bafs[k][i],
+                        m=0,
+                        p=self.pat_haps[0, i],
+                        pi0=self.embryo_pi0s[k],
+                        std_dev=self.embryo_sigmas[k],
+                    )
+                    z_same[1] = emission_baf(
+                        self.embryo_bafs[template_embryo][i],
+                        m=1,
+                        p=self.pat_haps[0, i],
+                        pi0=self.embryo_pi0s[template_embryo],
+                        std_dev=self.embryo_sigmas[template_embryo],
+                    ) + emission_baf(
+                        self.embryo_bafs[k][i],
+                        m=1,
+                        p=self.pat_haps[0, i],
+                        pi0=self.embryo_pi0s[k],
+                        std_dev=self.embryo_sigmas[k],
+                    )
+                    # Same allele is not transmitted ...
+                    z_diff[0] = emission_baf(
+                        self.embryo_bafs[template_embryo][i],
+                        m=0,
+                        p=self.pat_haps[0, i],
+                        pi0=self.embryo_pi0s[template_embryo],
+                        std_dev=self.embryo_sigmas[template_embryo],
+                    ) + emission_baf(
+                        self.embryo_bafs[k][i],
+                        m=1,
+                        p=self.pat_haps[0, i],
+                        pi0=self.embryo_pi0s[k],
+                        std_dev=self.embryo_sigmas[k],
+                    )
+                    z_diff[1] = emission_baf(
+                        self.embryo_bafs[template_embryo][i],
+                        m=1,
+                        p=self.pat_haps[0, i],
+                        pi0=self.embryo_pi0s[template_embryo],
+                        std_dev=self.embryo_sigmas[template_embryo],
+                    ) + emission_baf(
+                        self.embryo_bafs[k][i],
+                        m=0,
+                        p=self.pat_haps[0, i],
+                        pi0=self.embryo_pi0s[k],
+                        std_dev=self.embryo_sigmas[k],
+                    )
+                else:
+                    # Same allele is transmitted
+                    z_same[0] = emission_baf(
+                        self.embryo_bafs[template_embryo][i],
+                        m=self.mat_haps[0, i],
+                        p=0,
+                        pi0=self.embryo_pi0s[template_embryo],
+                        std_dev=self.embryo_sigmas[template_embryo],
+                    ) + emission_baf(
+                        self.embryo_bafs[k][i],
+                        m=self.mat_haps[0, i],
+                        p=0,
+                        pi0=self.embryo_pi0s[k],
+                        std_dev=self.embryo_sigmas[k],
+                    )
+                    z_same[1] = emission_baf(
+                        self.embryo_bafs[template_embryo][i],
+                        m=self.mat_haps[0, i],
+                        p=1,
+                        pi0=self.embryo_pi0s[template_embryo],
+                        std_dev=self.embryo_sigmas[template_embryo],
+                    ) + emission_baf(
+                        self.embryo_bafs[k][i],
+                        m=self.mat_haps[0, i],
+                        p=1,
+                        pi0=self.embryo_pi0s[k],
+                        std_dev=self.embryo_sigmas[k],
+                    )
+                    # Same allele is not transmitted ...
+                    z_diff[0] = emission_baf(
+                        self.embryo_bafs[template_embryo][i],
+                        m=self.mat_haps[0, i],
+                        p=0,
+                        pi0=self.embryo_pi0s[template_embryo],
+                        std_dev=self.embryo_sigmas[template_embryo],
+                    ) + emission_baf(
+                        self.embryo_bafs[k][i],
+                        m=self.mat_haps[0, i],
+                        p=1,
+                        pi0=self.embryo_pi0s[k],
+                        std_dev=self.embryo_sigmas[k],
+                    )
+                    z_diff[1] = emission_baf(
+                        self.embryo_bafs[template_embryo][i],
+                        m=self.mat_haps[0, i],
+                        p=1,
+                        pi0=self.embryo_pi0s[template_embryo],
+                        std_dev=self.embryo_sigmas[template_embryo],
+                    ) + emission_baf(
+                        self.embryo_bafs[k][i],
+                        m=self.mat_haps[0, i],
+                        p=0,
+                        pi0=self.embryo_pi0s[k],
+                        std_dev=self.embryo_sigmas[k],
+                    )
+                z1s[p] = logsumexp(z_same)
+                z2s[p] = logsumexp(z_diff)
+            llrs = np.array(z1s) - np.array(z2s)
+            llr_z[j, :] = llrs
+
+        # Now we make a rough decision rule here for the likelihood-ratio supporting one or the other class ...
+        # 1 indicates copying the same allele, 2 indicates that copying different alleles.
+        Z = np.zeros(shape=llr_z.shape)
+        Z[llr_z < 0] = 2
+        Z[llr_z > 0] = 1
+
+        # For each sibling embryo check its "switch-clusters"
+        isolated_switches = []
+        for i in range(len(non_template_ids)):
+            # Check the switch cluster for sibling i
+            potential_switches = np.where(Z[i, :-1] != Z[i, 1:])[0]
+            potential_switches_filt = self.refine_recomb_events(
+                potential_switches, npad=npad
+            )
+            isolated_switches.append(potential_switches_filt)
+        # Check the total isolated switches ...
+        isolated_switches = np.hstack(isolated_switches)
+        switch_idx, cnts = np.unique(isolated_switches, return_counts=True)
+        # Choose the potential switches by the majority rule ...
+        potential_switches_filt = switch_idx[cnts > (m - 1) / 2]
+        return Z, llr_z, potential_switches_filt
+
+    def second_refine_recomb(
+        self, template_embryo=0, maternal=True, start=None, end=None
+    ):
+        """Second attempt to refine the recombination locations."""
+        assert (start is not None) and (end is not None)
+        assert start < self.pos.size
+        assert end < self.pos.size
+        assert start < end
+        embryo_ids = np.arange(len(self.embryo_bafs))
+        assert template_embryo < embryo_ids.size
+        # Make sure there are intermediate SNPs for refinement if necessary ...
+        if end - start > 2:
+            quad_hmm = QuadHMM()
+            paths = []
+            for j in embryo_ids:
+                if j != template_embryo:
+                    bafs = [
+                        self.embryo_bafs[template_embryo][start:end],
+                        self.embryo_bafs[j][start:end],
+                    ]
+                    # Use the sibling embryo paths here ...
+                    v_path = quad_hmm.viterbi_path(
+                        bafs=bafs,
+                        pos=self.pos[start:end],
+                        mat_haps=self.mat_haps[:, start:end],
+                        pat_haps=self.pat_haps[:, start:end],
+                        pi0=(self.embryo_pi0s[template_embryo], self.embryo_pi0s[j]),
+                        std_dev=(
+                            self.embryo_sigmas[template_embryo],
+                            self.embryo_sigmas[j],
+                        ),
+                    )
+                    paths.append(v_path)
+            # Identify places where there are switches in the local copying paths?
+            # Note that these indexes are within the shortened range now ...
+            _, _, mat_rec_dict, pat_rec_dict = quad_hmm.isolate_recomb(
+                paths[0], paths[1:], window=5
+            )
+            # They have to be at the same position across all the siblings ...
+            mat_rec = [k for k in mat_rec_dict if mat_rec_dict[k] == len(paths)]
+            pat_rec = [k for k in pat_rec_dict if pat_rec_dict[k] == len(paths)]
+            if maternal:
+                if (len(mat_rec) == 1) and (len(pat_rec) == 0):
+                    het_idx = np.where((self.mat_haps.sum(axis=0) == 1))[0]
+                    pos_het = self.pos[het_idx]
+                    pos = self.pos[start:end][mat_rec[0]]
+                    start = self.pos[np.argmax(pos_het > pos)]
+                    end = self.pos[np.argmin(pos <= pos_het)]
             else:
-                haps1 = self.mat_haps
-                haps2 = self.pat_haps
+                if (len(pat_rec) == 1) and (len(mat_rec) == 0):
+                    het_idx = np.where((self.pat_haps.sum(axis=0) == 1))[0]
+                    pos_het = self.pos[het_idx]
+                    pos = self.pos[start:end][mat_rec[0]]
+                    start = self.pos[np.argmax(pos_het > pos)]
+                    end = self.pos[np.argmin(pos <= pos_het)]
+        return self.pos[start], self.pos[end]
+
+    def finalize_recomb_events(
+        self, potential_switches, template_embryo=0, maternal=True
+    ):
+        """See if the location of the potential switches can be further localized."""
+        if potential_switches is []:
+            return []
         else:
-            if fixed:
-                assert self.pat_haps_fixed is not None
-                haps1 = self.pat_haps_fixed
-                haps2 = self.mat_haps
-            elif truth:
-                assert self.pat_haps_true is not None
-                haps1 = self.pat_haps_true
-                haps2 = self.mat_haps_true
-            else:
-                haps1 = self.pat_haps
-                haps2 = self.mat_haps
-        # The variables where we store the switch information
-        n_switches = 0
-        n_consecutive_hets = 0
-        switch_idxs = []
-        lods = []
-        # NOTE: here we restrict to "phase-informative" switches ...
-        geno1 = haps1[0, :] + haps1[1, :]
-        het_idx = np.where(geno1 == 1)[0]
-        for i, j in zip(het_idx[:-1], het_idx[1:]):
-            n_consecutive_hets += 1
-            tot_phase = 0.0
-            tot_antiphase = 0.0
-            for baf in self.embryo_bafs:
-                # now we have to use the current phasing approach ...
-                cur_phase, cur_antiphase = self.lod_phase(
-                    haps1=haps1[:, [i, j]],
-                    haps2=haps2[:, [i, j]],
-                    baf=baf[[i, j]],
-                    **kwargs,
+            rec_locations = []
+            # Get the locations of the informative markers
+            info_idx = np.where(self.informative_markers(maternal=maternal))[0]
+            assert info_idx.size > 0
+            for p in potential_switches:
+                # This is the position of the transition at the current resolution ...
+                idx1, idx2 = info_idx[p], info_idx[p + 1]
+                assert idx1 <= idx2
+                (p1, p2) = self.second_refine_recomb(
+                    template_embryo=template_embryo,
+                    maternal=maternal,
+                    start=idx1,
+                    end=idx2,
                 )
-                tot_phase += cur_phase
-                tot_antiphase += cur_antiphase
-            lods.append(tot_phase - tot_antiphase)
-            # This is the ratio between the two probability densities
-            if tot_phase - tot_antiphase < lod_thresh:
-                n_switches += 1
-                switch_idxs.append((i, j))
-        lods = np.array(lods)
-        return (
-            n_switches,
-            n_consecutive_hets,
-            n_switches / n_consecutive_hets,
-            switch_idxs,
-            het_idx,
-            lods,
+                rec_locations.append((p1, p2))
+            return rec_locations
+
+    def estimate_crossovers(self, template_embryo=0, maternal=True, npad=5):
+        """Routine that actually does the FULL crossover estimation + interval refinement."""
+        assert self.embryo_bafs is not None
+        assert self.embryo_pi0s is not None
+        assert self.embryo_sigmas is not None
+        Z, llr_z, potential_switches = self.isolate_recomb_events(
+            template_embryo=template_embryo, maternal=maternal, npad=npad
         )
+        rec_loc = self.finalize_recomb_events(
+            potential_switches, template_embryo=template_embryo, maternal=maternal
+        )
+        # We should have the same number of recombination events ...
+        assert len(rec_loc) == potential_switches.size
+        return rec_loc
