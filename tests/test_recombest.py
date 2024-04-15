@@ -15,6 +15,24 @@ data_disomy_sibs_null = pgt_sim.sibling_euploid_sim(
 )
 
 
+def check_num_and_pos(
+    zs,
+    pos,
+    rec_events=[],
+):
+    """Check the number and positioning of crossover events."""
+    nrec = np.sum(zs[:-1] != zs[1:])
+    assert len(rec_events) == nrec
+    if nrec > 0:
+        for x in np.where(zs[:-1] != zs[1:])[0]:
+            found = False
+            for s, e in rec_events:
+                if (pos[x] >= s) and (pos[x] <= e):
+                    found = True
+                    break
+            assert found
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -75,10 +93,8 @@ def test_rec_paternal_expected_baf_perfect_phase(sigma, pi0, nsibs, seed):
     recomb_est.embryo_sigmas = np.array([sigma for _ in range(nsibs)])
     # Obtain the true paternal recombination events for the template embryo ...
     zs_paternal0 = data["zs_paternal0"]
-    n_pat_rec = np.sum(zs_paternal0[:-1] != zs_paternal0[1:])
-    _, llr_z, filt_pat_recomb_events = recomb_est.isolate_recomb_events(maternal=False)
-    # Make sure that the numbers match up for number of recombination events ...
-    assert n_pat_rec == len(filt_pat_recomb_events)
+    filt_pat_recomb_events = recomb_est.estimate_crossovers(maternal=False)
+    check_num_and_pos(zs_paternal0, recomb_est.pos, rec_events=filt_pat_recomb_events)
 
 
 @pytest.mark.parametrize(
@@ -138,10 +154,8 @@ def test_rec_paternal_inferred_baf_perfect_phase(sigma, pi0, nsibs, seed):
 
     # Obtain the true paternal recombination events for the template embryo ...
     zs_paternal0 = data["zs_paternal0"]
-    n_pat_rec = np.sum(zs_paternal0[:-1] != zs_paternal0[1:])
-    _, llr_z, filt_pat_recomb_events = recomb_est.isolate_recomb_events(maternal=False)
-    # Make sure that the numbers match up for number of recombination events ...
-    assert n_pat_rec == len(filt_pat_recomb_events)
+    filt_pat_recomb_events = recomb_est.estimate_crossovers(maternal=False)
+    check_num_and_pos(zs_paternal0, recomb_est.pos, rec_events=filt_pat_recomb_events)
 
 
 @pytest.mark.parametrize(
@@ -206,20 +220,8 @@ def test_rec_paternal_inferred_baf_fixphase(sigma, pi0, nsibs, seed):
     recomb_est.add_baf(embryo_bafs=expected_baf)
     # Obtain the true paternal recombination events for the template embryo under consideration ...
     zs_paternal0 = data["zs_paternal0"]
-    n_pat_rec = np.sum(zs_paternal0[:-1] != zs_paternal0[1:])
     filt_pat_recomb_events = recomb_est.estimate_crossovers(maternal=False)
-    # Make sure that the numbers match up for number of recombination events detected
-    assert n_pat_rec == len(filt_pat_recomb_events)
-    # Check that the positions are correct?
-    if n_pat_rec > 0:
-        for x in np.where(zs_paternal0[:-1] != zs_paternal0[1:])[0]:
-            found = False
-            for s,e in filt_pat_recomb_events:
-                if  (recomb_est.pos[x] >= s) and (recomb_est.pos[x] <= e):
-                    found = True
-                    break
-            assert found  
-
+    check_num_and_pos(zs_paternal0, recomb_est.pos, rec_events=filt_pat_recomb_events)
 
 
 @pytest.mark.parametrize(
@@ -280,10 +282,8 @@ def test_rec_paternal_inferred_baf_perfect_phase_diff_density(
 
     # Obtain the true paternal recombination events for the template embryo ...
     zs_paternal0 = data["zs_paternal0"]
-    n_pat_rec = np.sum(zs_paternal0[:-1] != zs_paternal0[1:])
-    _, llr_z, filt_pat_recomb_events = recomb_est.isolate_recomb_events(maternal=False)
-    # Make sure that the numbers match up for number of recombination events ...
-    assert n_pat_rec == len(filt_pat_recomb_events)
+    filt_pat_recomb_events = recomb_est.estimate_crossovers(maternal=False)
+    check_num_and_pos(zs_paternal0, recomb_est.pos, rec_events=filt_pat_recomb_events)
 
 
 @pytest.mark.parametrize(
@@ -351,7 +351,5 @@ def test_rec_paternal_inferred_baf_diff_density(sigma, pi0, nsibs, seed, m, seql
     recomb_est.add_baf(embryo_bafs=expected_baf)
     # Obtain the true paternal recombination events for the template embryo under consideration ...
     zs_paternal0 = data["zs_paternal0"]
-    n_pat_rec = np.sum(zs_paternal0[:-1] != zs_paternal0[1:])
-    _, llr_z, filt_pat_recomb_events = recomb_est.isolate_recomb_events(maternal=False)
-    # Make sure that the numbers match up for number of recombination events detected
-    assert n_pat_rec == len(filt_pat_recomb_events)
+    filt_pat_recomb_events = recomb_est.estimate_crossovers(maternal=False)
+    check_num_and_pos(zs_paternal0, recomb_est.pos, rec_events=filt_pat_recomb_events)
