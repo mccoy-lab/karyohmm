@@ -93,7 +93,7 @@ def test_rec_paternal_expected_baf_perfect_phase(sigma, pi0, nsibs, seed):
     recomb_est.embryo_sigmas = np.array([sigma for _ in range(nsibs)])
     # Obtain the true paternal recombination events for the template embryo ...
     zs_paternal0 = data["zs_paternal0"]
-    filt_pat_recomb_events = recomb_est.estimate_crossovers(maternal=False)
+    filt_pat_recomb_events, _ = recomb_est.estimate_crossovers(maternal=False)
     check_num_and_pos(zs_paternal0, recomb_est.pos, rec_events=filt_pat_recomb_events)
 
 
@@ -154,7 +154,7 @@ def test_rec_paternal_inferred_baf_perfect_phase(sigma, pi0, nsibs, seed):
 
     # Obtain the true paternal recombination events for the template embryo ...
     zs_paternal0 = data["zs_paternal0"]
-    filt_pat_recomb_events = recomb_est.estimate_crossovers(maternal=False)
+    filt_pat_recomb_events, _ = recomb_est.estimate_crossovers(maternal=False)
     check_num_and_pos(zs_paternal0, recomb_est.pos, rec_events=filt_pat_recomb_events)
 
 
@@ -220,7 +220,7 @@ def test_rec_paternal_inferred_baf_fixphase(sigma, pi0, nsibs, seed):
     recomb_est.add_baf(embryo_bafs=expected_baf)
     # Obtain the true paternal recombination events for the template embryo under consideration ...
     zs_paternal0 = data["zs_paternal0"]
-    filt_pat_recomb_events = recomb_est.estimate_crossovers(maternal=False)
+    filt_pat_recomb_events, _ = recomb_est.estimate_crossovers(maternal=False)
     check_num_and_pos(zs_paternal0, recomb_est.pos, rec_events=filt_pat_recomb_events)
 
 
@@ -282,7 +282,7 @@ def test_rec_paternal_inferred_baf_perfect_phase_diff_density(
 
     # Obtain the true paternal recombination events for the template embryo ...
     zs_paternal0 = data["zs_paternal0"]
-    filt_pat_recomb_events = recomb_est.estimate_crossovers(maternal=False)
+    filt_pat_recomb_events, _ = recomb_est.estimate_crossovers(maternal=False)
     check_num_and_pos(zs_paternal0, recomb_est.pos, rec_events=filt_pat_recomb_events)
 
 
@@ -351,5 +351,5 @@ def test_rec_paternal_inferred_baf_diff_density(sigma, pi0, nsibs, seed, m, seql
     recomb_est.add_baf(embryo_bafs=expected_baf)
     # Obtain the true paternal recombination events for the template embryo under consideration ...
     zs_paternal0 = data["zs_paternal0"]
-    filt_pat_recomb_events = recomb_est.estimate_crossovers(maternal=False)
+    filt_pat_recomb_events, _ = recomb_est.estimate_crossovers(maternal=False)
     check_num_and_pos(zs_paternal0, recomb_est.pos, rec_events=filt_pat_recomb_events)

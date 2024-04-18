@@ -1707,7 +1707,8 @@ class RecombEst(PhaseCorrect):
         switch_idx, cnts = np.unique(isolated_switches, return_counts=True)
         # Choose the potential switches by the majority rule ...
         potential_switches_filt = switch_idx[cnts > (m - 1) / 2].astype(int)
-        return Z, llr_z, potential_switches_filt
+        switch_cnts_filt = cnts[cnts > (m - 1) / 2].astype(int)
+        return Z, llr_z, potential_switches_filt, switch_cnts_filt
 
     def second_refine_recomb(
         self, template_embryo=0, maternal=True, start=None, end=None
@@ -1795,7 +1796,7 @@ class RecombEst(PhaseCorrect):
         assert self.embryo_bafs is not None
         assert self.embryo_pi0s is not None
         assert self.embryo_sigmas is not None
-        Z, llr_z, potential_switches = self.isolate_recomb_events(
+        Z, llr_z, potential_switches, switch_cnts = self.isolate_recomb_events(
             template_embryo=template_embryo, maternal=maternal, npad=npad
         )
         rec_loc = self.finalize_recomb_events(
@@ -1803,4 +1804,4 @@ class RecombEst(PhaseCorrect):
         )
         # We should have the same number of recombination events ...
         assert len(rec_loc) == potential_switches.size
-        return rec_loc
+        return rec_loc, switch_cnts
