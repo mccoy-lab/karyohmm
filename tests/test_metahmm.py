@@ -353,7 +353,6 @@ def test_ploidy_correctness_mle(data):
     assert post_dict[data["aploid"]] == max_post
     assert post_dict[data["aploid"]] > 0.95
 
-
 @pytest.mark.parametrize("data", [data_disomy])
 def test_embryo_genotype(data):
     """Test that the embryo genotyping works as intended."""
