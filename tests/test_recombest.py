@@ -118,6 +118,55 @@ def test_rec_paternal_expected_baf_perfect_phase(sigma, pi0, nsibs, seed):
         (0.2, 0.8, 3, 8),
     ],
 )
+def test_norec_paternal_expected_baf_perfect_phase(sigma, pi0, nsibs, seed):
+    """Test that no false recombinations are introduced here."""
+    data = pgt_sim.sibling_euploid_sim(
+        m=4000,
+        nsibs=nsibs,
+        std_dev=sigma,
+        mix_prop=pi0,
+        rec_prob=1e-10,
+        switch_err_rate=0.0,
+        seed=seed,
+    )
+    recomb_est = RecombEst(
+        mat_haps=data["mat_haps_true"], pat_haps=data["pat_haps_true"], pos=data["pos"]
+    )
+    # Add in the expected BAF ...
+    recomb_est.add_baf(
+        embryo_bafs=[data[f"geno_embryo{i}"] / 2.0 for i in range(data["nsibs"])]
+    )
+    # Set the parameters here ...
+    recomb_est.embryo_pi0s = np.array([pi0 for _ in range(nsibs)])
+    recomb_est.embryo_sigmas = np.array([sigma for _ in range(nsibs)])
+    # Obtain the true paternal recombination events for the template embryo ...
+    zs_paternal0 = data["zs_paternal0"]
+    assert np.all(zs_paternal0[1:] == zs_paternal0[0])
+    filt_pat_recomb_events, _ = recomb_est.estimate_crossovers(maternal=False)
+    check_num_and_pos(zs_paternal0, recomb_est.pos, rec_events=filt_pat_recomb_events)
+
+
+@pytest.mark.parametrize(
+    "sigma,pi0,nsibs,seed",
+    [
+        (0.05, 0.2, 3, 1),
+        (0.05, 0.4, 3, 2),
+        (0.05, 0.6, 3, 3),
+        (0.05, 0.8, 3, 4),
+        (0.1, 0.2, 3, 5),
+        (0.1, 0.4, 3, 6),
+        (0.1, 0.6, 3, 7),
+        (0.1, 0.8, 3, 8),
+        (0.175, 0.2, 3, 1),
+        (0.175, 0.4, 3, 2),
+        (0.175, 0.6, 3, 3),
+        (0.175, 0.8, 3, 4),
+        (0.2, 0.2, 3, 5),
+        (0.2, 0.4, 3, 6),
+        (0.2, 0.6, 3, 7),
+        (0.2, 0.8, 3, 8),
+    ],
+)
 def test_rec_paternal_inferred_baf_perfect_phase(sigma, pi0, nsibs, seed):
     """Test that recombinations can be isolated using inferred estimates for allelic intensity."""
     data = pgt_sim.sibling_euploid_sim(
