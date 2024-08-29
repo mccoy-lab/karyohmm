@@ -204,71 +204,76 @@ def test_est_pi0_sigma_bad_sigma_bounds(data, sigma_bounds):
         )
 
 
-# @pytest.mark.parametrize(
-#     "data,algo",
-#     [(data_disomy, "Powell"), (data_disomy, "L-BFGS-B"), (data_disomy, "Nelder-Mead")],
-# )
-# def test_est_pi0_sigma_algos(data, algo):
-#     """Test optimization of parameter estimates using different algorithms."""
-#     hmm = DuoHMM()
-#     pi0_est, sigma_est = hmm.est_sigma_pi0(
-#         bafs=data["baf_embryo"],
-#         pos=data["pos"],
-#         mat_haps=data["mat_haps"],
-#         pat_haps=data["pat_haps"],
-#         algo=algo,
-#     )
-#     assert (pi0_est > 0) and (pi0_est < 1.0)
-#     assert (sigma_est > 0) and (sigma_est < 1.0)
+def test_string_rep():
+    """Test that the string representation of states makes sense."""
+    hmm = DuoHMM()
+    for s in hmm.states:
+        x = hmm.get_state_str(s)
+        m = sum([j >= 0 for j in s])
+        if m == 0:
+            assert x == "0"
+        elif m == 1:
+            if x[0] == "m":
+                assert s in hmm.m_monosomy_states
+            else:
+                assert s in hmm.p_monosomy_states
+        elif m == 2:
+            assert len(x) == 2 * m
+            assert x in ["m0p0", "m0p1", "m1p0", "m1p1"]
+        else:
+            assert len(x) == 2 * m
+            assert (
+                ("m0m1" in x)
+                | ("p0p1" in x)
+                | ("m0m0" in x)
+                | ("m1m1" in x)
+                | ("p0p0" in x)
+                | ("p1p1" in x)
+            )
 
 
-# def test_string_rep():
-#     """Test that the string representation of states makes sense."""
-#     hmm = DuoHMM()
-#     for s in hmm.states:
-#         x = hmm.get_state_str(s)
-#         m = sum([j >= 0 for j in s])
-#         if m == 0:
-#             assert x == "0"
-#         elif m == 1:
-#             if x[0] == "m":
-#                 assert s in hmm.m_monosomy_states
-#             else:
-#                 assert s in hmm.p_monosomy_states
-#         elif m == 2:
-#             assert len(x) == 2 * m
-#             assert x in ["m0p0", "m0p1", "m1p0", "m1p1"]
-#         else:
-#             assert len(x) == 2 * m
-#             assert (
-#                 ("m0m1" in x)
-#                 | ("p0p1" in x)
-#                 | ("m0m0" in x)
-#                 | ("m1m1" in x)
-#                 | ("p0p0" in x)
-#                 | ("p1p1" in x)
-#             )
+@pytest.mark.parametrize("r,a", [(1e-8, 1e-2), (1e-8, 1e-4), (1e-8, 1e-6)])
+def test_transition_matrices(r, a):
+    """Test that transition matrices obey the rules."""
+    hmm = DuoHMM()
+    K0, K1 = create_index_arrays(hmm.karyotypes)
+    A = transition_kernel(K0, K1, r=r, a=a)
+    for i in range(A.shape[0]):
+        assert np.isclose(np.exp(logsumexp_sp(A[i, :])), 1.0)
 
 
-# @pytest.mark.parametrize("r,a", [(1e-8, 1e-2), (1e-8, 1e-4), (1e-8, 1e-6)])
-# def test_transition_matrices(r, a):
-#     """Test that transition matrices obey the rules."""
-#     hmm = DuoHMM()
-#     K0, K1 = create_index_arrays(hmm.karyotypes)
-#     A = transition_kernel(K0, K1, r=r, a=a)
-#     for i in range(A.shape[0]):
-#         assert np.isclose(np.exp(logsumexp_sp(A[i, :])), 1.0)
+@pytest.mark.parametrize(
+    "r,a,d",
+    [(1e-8, 1e-2, 1e5), (1e-8, 1e-3, 1e4), (1e-8, 1e-2, 1e3), (1e-8, 1e-1, 1e8)],
+)
+def test_transition_matrices_dist(r, a, d):
+    """Test how transition matrices scale with distance."""
+    assert r < a
+    hmm = DuoHMM()
+    K0, K1 = create_index_arrays(hmm.karyotypes)
+    A = transition_kernel(K0, K1, d=d, r=r, a=a)
+    for i in range(A.shape[0]):
+        assert np.isclose(np.exp(logsumexp_sp(A[i, :])), 1.0)
 
 
-# @pytest.mark.parametrize(
-#     "r,a,d",
-#     [(1e-8, 1e-2, 1e5), (1e-8, 1e-3, 1e4), (1e-8, 1e-2, 1e3), (1e-8, 1e-1, 1e8)],
-# )
-# def test_transition_matrices_dist(r, a, d):
-#     """Test how transition matrices scale with distance."""
-#     assert r < a
-#     hmm = DuoHMM()
-#     K0, K1 = create_index_arrays(hmm.karyotypes)
-#     A = transition_kernel(K0, K1, d=d, r=r, a=a)
-#     for i in range(A.shape[0]):
-#         assert np.isclose(np.exp(logsumexp_sp(A[i, :])), 1.0)
+@pytest.mark.parametrize(
+    "data", [data_disomy, data_trisomy, data_monosomy, data_nullisomy]
+)
+def test_ploidy_correctness(data):
+    """This actually tests that the posterior inference of whole-chromosome aneuploidies is correct here."""
+    hmm = DuoHMM()
+    gammas, _, karyotypes = hmm.forward_backward(
+        bafs=data["baf_embryo"],
+        pos=data["pos"],
+        haps=data["mat_haps"],
+        pi0=0.3,
+        std_dev=0.15,
+    )
+    # all of the columns must have a sum to 1
+    assert np.all(np.isclose(np.sum(np.exp(gammas), axis=0), 1.0))
+    post_dict = hmm.posterior_karyotypes(gammas, karyotypes)
+    max_post = np.max([post_dict[p] for p in post_dict])
+    for x in ["0", "1m", "1p", "2", "3m", "3p"]:
+        assert x in post_dict
+    assert post_dict[data["aploid"]] == max_post
+    assert post_dict[data["aploid"]] > 0.95
