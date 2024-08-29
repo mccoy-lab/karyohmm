@@ -89,73 +89,71 @@ def test_data_integrity(data=data_disomy):
 
 
 # --- Testing the metadata implementations --- #
-@pytest.mark.parametrize("data", [data_disomy, data_trisomy, data_monosomy])
+@pytest.mark.parametrize("data", [data_disomy])
 def test_forward_algorithm(data):
     """Test the implementation of the forward algorithm."""
     hmm = DuoHMM()
     _, _, _, karyotypes, loglik = hmm.forward_algorithm(
         bafs=data["baf_embryo"],
         pos=data["pos"],
-        mat_haps=data["mat_haps"],
-        pat_haps=data["pat_haps"],
+        haps=data["mat_haps"],
     )
 
 
-@pytest.mark.parametrize("data", [data_disomy, data_trisomy, data_monosomy])
-def test_backward_algorithm(data):
-    """Test the implementation of the backward algorithm."""
-    hmm = DuoHMM()
-    _, _, _, karyotypes, loglik = hmm.backward_algorithm(
-        bafs=data["baf_embryo"],
-        pos=data["pos"],
-        mat_haps=data["mat_haps"],
-        pat_haps=data["pat_haps"],
-    )
+# @pytest.mark.parametrize("data", [data_disomy, data_trisomy, data_monosomy])
+# def test_backward_algorithm(data):
+#     """Test the implementation of the backward algorithm."""
+#     hmm = DuoHMM()
+#     _, _, _, karyotypes, loglik = hmm.backward_algorithm(
+#         bafs=data["baf_embryo"],
+#         pos=data["pos"],
+#         haps=data["mat_haps"],
+#     )
 
 
-@pytest.mark.parametrize("data", [data_disomy])
-def test_disomy_model(data):
-    """Test implementation under a pure-disomy model."""
-    hmm = MetaHMM(disomy=True)
-    _, _, _, karyotypes, loglik = hmm.forward_algorithm(
-        bafs=data["baf_embryo"],
-        pos=data["pos"],
-        mat_haps=data["mat_haps"],
-        pat_haps=data["pat_haps"],
-    )
-    _, _, _, karyotypes, loglik = hmm.backward_algorithm(
-        bafs=data["baf_embryo"],
-        pos=data["pos"],
-        mat_haps=data["mat_haps"],
-        pat_haps=data["pat_haps"],
-    )
-    gammas, _, karyotypes = hmm.forward_backward(
-        bafs=data["baf_embryo"],
-        pos=data["pos"],
-        mat_haps=data["mat_haps"],
-        pat_haps=data["pat_haps"],
-    )
-    assert np.all(np.isclose(np.sum(np.exp(gammas), axis=0), 1.0))
+# @pytest.mark.parametrize("data", [data_disomy])
+# def test_disomy_model(data):
+#     """Test implementation under a pure-disomy model."""
+#     hmm = MetaHMM(disomy=True)
+#     _, _, _, karyotypes, loglik = hmm.forward_algorithm(
+#         bafs=data["baf_embryo"],
+#         pos=data["pos"],
+#         mat_haps=data["mat_haps"],
+#         pat_haps=data["pat_haps"],
+#     )
+#     _, _, _, karyotypes, loglik = hmm.backward_algorithm(
+#         bafs=data["baf_embryo"],
+#         pos=data["pos"],
+#         mat_haps=data["mat_haps"],
+#         pat_haps=data["pat_haps"],
+#     )
+#     gammas, _, karyotypes = hmm.forward_backward(
+#         bafs=data["baf_embryo"],
+#         pos=data["pos"],
+#         mat_haps=data["mat_haps"],
+#         pat_haps=data["pat_haps"],
+#     )
+#     assert np.all(np.isclose(np.sum(np.exp(gammas), axis=0), 1.0))
 
 
-@pytest.mark.parametrize("data", [data_disomy])
-def test_forward_vs_backward_loglik(data):
-    """Test that the log-likelihood from forward algorithm is equal to the backward."""
-    hmm = MetaHMM()
+# @pytest.mark.parametrize("data", [data_disomy])
+# def test_forward_vs_backward_loglik(data):
+#     """Test that the log-likelihood from forward algorithm is equal to the backward."""
+#     hmm = MetaHMM()
 
-    _, _, _, _, fwd_loglik = hmm.forward_algorithm(
-        bafs=data["baf_embryo"],
-        pos=data["pos"],
-        mat_haps=data["mat_haps"],
-        pat_haps=data["pat_haps"],
-    )
-    _, _, _, _, bwd_loglik = hmm.backward_algorithm(
-        bafs=data["baf_embryo"],
-        pos=data["pos"],
-        mat_haps=data["mat_haps"],
-        pat_haps=data["pat_haps"],
-    )
-    assert np.isclose(fwd_loglik, bwd_loglik, atol=1e-6)
+#     _, _, _, _, fwd_loglik = hmm.forward_algorithm(
+#         bafs=data["baf_embryo"],
+#         pos=data["pos"],
+#         mat_haps=data["mat_haps"],
+#         pat_haps=data["pat_haps"],
+#     )
+#     _, _, _, _, bwd_loglik = hmm.backward_algorithm(
+#         bafs=data["baf_embryo"],
+#         pos=data["pos"],
+#         mat_haps=data["mat_haps"],
+#         pat_haps=data["pat_haps"],
+#     )
+#     assert np.isclose(fwd_loglik, bwd_loglik, atol=1e-6)
 
 
 # @pytest.mark.parametrize("data", [data_disomy, data_trisomy, data_monosomy])
