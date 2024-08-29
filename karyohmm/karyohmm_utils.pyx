@@ -636,7 +636,6 @@ def backward_algo_duo(bafs, pos, haps, freqs, states, karyotypes, bint maternal=
                         std_dev=std_dev,
                         k=ks[j],
                     ) + log(p)
-            # This is in log-space as well (need to logsumexp after marginalizing)
             cur_emissions[j] = logsumexp(cur_emission)
         for j in range(m):
             # This should be the correct version here ...

@@ -156,57 +156,52 @@ def test_fwd_bwd_algorithm(data):
     assert np.isclose(sum([post_dict[k] for k in post_dict]), 1.0)
 
 
-# @pytest.mark.parametrize("data", [data_disomy, data_trisomy, data_monosomy])
-# def test_est_pi0_sigma(data):
-#     """Test the optimization routine on the forward-algorithm likelihood."""
-#     hmm = DuoHMM()
-#     pi0_est, sigma_est = hmm.est_sigma_pi0(
-#         bafs=data["baf_embryo"],
-#         pos=data["pos"],
-#         mat_haps=data["mat_haps"],
-#         pat_haps=data["pat_haps"],
-#     )
-#     assert (pi0_est > 0) and (pi0_est < 1.0)
-#     assert (sigma_est > 0) and (sigma_est < 1.0)
+@pytest.mark.parametrize("data", [data_disomy])
+def test_est_pi0_sigma(data):
+    """Test the optimization routine on the forward-algorithm likelihood."""
+    hmm = DuoHMM()
+    pi0_est, sigma_est = hmm.est_sigma_pi0(
+        bafs=data["baf_embryo"], pos=data["pos"], haps=data["mat_haps"]
+    )
+    assert (pi0_est > 0) and (pi0_est < 1.0)
+    assert (sigma_est > 0) and (sigma_est < 1.0)
 
 
-# @pytest.mark.parametrize(
-#     "data,pi0_bounds",
-#     [
-#         (data_disomy, (0, 1)),
-#         (data_disomy, 0.1),
-#         (data_disomy, (0.1, 0.5, 0.9)),
-#         (data_disomy, (0.99, 0.01)),
-#     ],
-# )
-# def test_est_pi0_sigma_bad_pi0_bounds(data, pi0_bounds):
-#     """Test the pi0 bounds as input to the MLE estimation."""
-#     with pytest.raises(Exception):
-#         hmm = DuoHMM()
-#         pi0_est, sigma_est = hmm.est_sigma_pi0(
-#             bafs=data["baf_embryo"],
-#             pos=data["pos"],
-#             mat_haps=data["mat_haps"],
-#             pat_haps=data["pat_haps"],
-#             pi0_bounds=pi0_bounds,
-#         )
+@pytest.mark.parametrize(
+    "data,pi0_bounds",
+    [
+        (data_disomy, (0, 1)),
+        (data_disomy, 0.1),
+        (data_disomy, (0.1, 0.5, 0.9)),
+        (data_disomy, (0.99, 0.01)),
+    ],
+)
+def test_est_pi0_sigma_bad_pi0_bounds(data, pi0_bounds):
+    """Test the pi0 bounds as input to the MLE estimation."""
+    with pytest.raises(Exception):
+        hmm = DuoHMM()
+        pi0_est, sigma_est = hmm.est_sigma_pi0(
+            bafs=data["baf_embryo"],
+            pos=data["pos"],
+            haps=data["mat_haps"],
+            pi0_bounds=pi0_bounds,
+        )
 
 
-# @pytest.mark.parametrize(
-#     "data,sigma_bounds",
-#     [(data_disomy, (0, 1)), (data_disomy, 0.1), (data_disomy, (0.99, 0.01))],
-# )
-# def test_est_pi0_sigma_bad_sigma_bounds(data, sigma_bounds):
-#     """Test the sigma bounds as input to the MLE estimation."""
-#     with pytest.raises(Exception):
-#         hmm = DuoHMM()
-#         pi0_est, sigma_est = hmm.est_sigma_pi0(
-#             bafs=data["baf_embryo"],
-#             pos=data["pos"],
-#             mat_haps=data["mat_haps"],
-#             pat_haps=data["pat_haps"],
-#             sigma_bounds=sigma_bounds,
-#         )
+@pytest.mark.parametrize(
+    "data,sigma_bounds",
+    [(data_disomy, (0, 1)), (data_disomy, 0.1), (data_disomy, (0.99, 0.01))],
+)
+def test_est_pi0_sigma_bad_sigma_bounds(data, sigma_bounds):
+    """Test the sigma bounds as input to the MLE estimation."""
+    with pytest.raises(Exception):
+        hmm = DuoHMM()
+        pi0_est, sigma_est = hmm.est_sigma_pi0(
+            bafs=data["baf_embryo"],
+            pos=data["pos"],
+            haps=data["mat_haps"],
+            sigma_bounds=sigma_bounds,
+        )
 
 
 # @pytest.mark.parametrize(

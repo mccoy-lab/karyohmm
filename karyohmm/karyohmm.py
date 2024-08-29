@@ -1102,7 +1102,7 @@ class DuoHMM(MetaHMM):
         bafs,
         pos,
         haps,
-        freqs,
+        freqs=None,
         maternal=True,
         algo="Powell",
         pi0_bounds=(0.01, 0.99),
