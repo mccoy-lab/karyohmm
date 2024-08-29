@@ -1088,6 +1088,26 @@ class QuadHMM(AneuploidyHMM):
         return mat_haplo_len, pat_haplo_len, both_haplo_len, tot_len
 
 
+class DuoHMM(MetaHMM):
+    """Class for estimating ploidy variation in duo-based data."""
+
+    def __init__(self, disomy=False):
+        """Initialize the HMM."""
+        super().__init__()
+
+    def forward_algorithm():
+        """Forward algorithm for duos."""
+        pass
+
+    def backward_algorithm():
+        """Backward algorithm for duos."""
+        pass
+
+    def forward_backward():
+        """Forward-backward algorithm for duos."""
+        pass
+
+
 class MosaicEst:
     """Class to perform estimation of mosaic rates."""
 

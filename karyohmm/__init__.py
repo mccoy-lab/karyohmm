@@ -10,14 +10,15 @@ Modules exported are:
 
 * MetaHMM: module for whole chromosome aneuploidy determination via HMMs.
 * QuadHMM: module leveraging multi-sibling HMM for evaluating crossover recombination estimation.
-* RecombEsst: module for heuristic estimation of crossover recombination based on Coop et al 2007.
+* DuoHMM: module for aneuploidy determination in duo family array data.
+* RecombEst: module for heuristic estimation of crossover recombination based on Coop et al 2007.
 * PhaseCorrect: module implementing Mendelian phase correction for parental haplotypes.
 * MosaicEst: module for estimating mosaic cell fraction from shifts in BAF
 * PGTSim: module to generate synthetic PGT data for full aneuploidies
 * PGTSimMosaic: module to generate synthetic PGT data for a mosaic biopsy
 """
 
-__version__ = "0.3.2a"
+__version__ = "0.3.3a"
 
 from .karyohmm import MetaHMM, MosaicEst, PhaseCorrect, QuadHMM, RecombEst
 from .simulator import PGTSim, PGTSimMosaic
