@@ -20,5 +20,5 @@ Modules exported are:
 
 __version__ = "0.3.3a"
 
-from .karyohmm import MetaHMM, MosaicEst, PhaseCorrect, QuadHMM, RecombEst
+from .karyohmm import DuoHMM, MetaHMM, MosaicEst, PhaseCorrect, QuadHMM, RecombEst
 from .simulator import PGTSim, PGTSimMosaic

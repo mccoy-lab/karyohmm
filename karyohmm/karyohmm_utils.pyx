@@ -540,7 +540,7 @@ def viterbi_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double 
 
 def forward_algo_duo(bafs, pos, haps, freqs, states, karyotypes, bool maternal=True, double r=1e-8, double a=1e-2, double pi0=0.8, double std_dev=0.2):
     """Helper function for optimization for forward algorithm in the duo setting."""
-    cdef int i,j,k,n,m;
+    cdef int i,j,k,f,n,m;
     cdef float di;
     n = bafs.size
     m = len(states)
@@ -548,25 +548,27 @@ def forward_algo_duo(bafs, pos, haps, freqs, states, karyotypes, bool maternal=T
     K0,K1 = create_index_arrays(karyotypes)
     alphas = np.zeros(shape=(m, n))
     alphas[:, 0] = log(1.0 / m)
-    geno = [[0,0], [0,1], [1,1]]
+    geno = [[0,0], [0,1], [1,0], [1,1]]
     for j in range(m):
-        for x,p in zip(geno, ((1 - freqs[0])**2, 2*freqs[0]*(1 - freqs[0]), (1 - freqs[0])**2)):
+        # Need to marginalize over all the haplotypes?
+        cur_emission = []
+        f = freqs[0]
+        for x,p in zip(geno, ((1 - f)**2, 2*freqs[0]*(1 - freqs[0]), (1 - freqs[0])**2)):
             if maternal:
                 m_ij = mat_dosage(haps[:, 0], states[j])
                 p_ij = pat_dosage(x, states[j])
             else:
                 m_ij = mat_dosage(x, states[j])
                 p_ij = pat_dosage(haps, states[j])
-            # We should have to logsumexp ...
-            cur_emission = emission_baf(
+            cur_emission.append(emission_baf(
                     bafs[0],
                     m_ij,
                     p_ij,
                     pi0=pi0,
                     std_dev=std_dev,
                     k=ks[j],
-                ) + p
-        alphas[j,0] += cur_emission
+                ) + p)
+        alphas[j,0] = logsumexp(cur_emission)
     scaler = np.zeros(n)
     scaler[0] = logsumexp(alphas[:, 0])
     alphas[:, 0] -= scaler[0]
@@ -575,18 +577,25 @@ def forward_algo_duo(bafs, pos, haps, freqs, states, karyotypes, bool maternal=T
         # This should get the distance dependent transition models ...
         A_hat = transition_kernel(K0, K1, d=di, r=r, a=a)
         for j in range(m):
-            m_ij = mat_dosage(mat_haps[:, i], states[j])
-            p_ij = pat_dosage(pat_haps[:, i], states[j])
-            # This is in log-space ...
-            cur_emission = emission_baf(
-                    bafs[i],
-                    m_ij,
-                    p_ij,
-                    pi0=pi0,
-                    std_dev=std_dev,
-                    k=ks[j],
-                )
-            alphas[j, i] = cur_emission + logsumexp(A_hat[:, j] + alphas[:, (i - 1)])
+            cur_emission = []
+            f = freqs[i]
+            for x,p in zip(geno, ((1 - f)**2, 2*f*(1 - f), (1 - f)**2)):
+                if maternal:
+                    m_ij = mat_dosage(haps[:, 0], states[j])
+                    p_ij = pat_dosage(x, states[j])
+                else:
+                    m_ij = mat_dosage(x, states[j])
+                    p_ij = pat_dosage(haps, states[j])
+                # Build up the summed emission model?
+                cur_emission.append(emission_baf(
+                        bafs[i],
+                        m_ij,
+                        p_ij,
+                        pi0=pi0,
+                        std_dev=std_dev,
+                        k=ks[j],
+                    ) + p)
+            alphas[j, i] = logsumexp(cur_emission) + logsumexp(A_hat[:, j] + alphas[:, (i - 1)])
         scaler[i] = logsumexp(alphas[:, i])
         alphas[:, i] -= scaler[i]
     return alphas, scaler, states, None, sum(scaler)

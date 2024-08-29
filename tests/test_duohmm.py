@@ -4,7 +4,7 @@ import pytest
 from karyohmm_utils import create_index_arrays, transition_kernel
 from scipy.special import logsumexp as logsumexp_sp
 
-from karyohmm import MetaHMM, PGTSim
+from karyohmm import DuoHMM, MetaHMM, PGTSim
 
 # --- Generating test data for applications --- #
 pgt_sim = PGTSim()
