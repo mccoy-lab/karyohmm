@@ -129,47 +129,31 @@ def test_forward_vs_backward_loglik(data):
     assert np.isclose(fwd_loglik, bwd_loglik, atol=1e-6)
 
 
-# @pytest.mark.parametrize("data", [data_disomy])
-# def test_disomy_model(data):
-#     """Test implementation under a pure-disomy model."""
-#     hmm = MetaHMM(disomy=True)
-#     _, _, _, karyotypes, loglik = hmm.forward_algorithm(
-#         bafs=data["baf_embryo"],
-#         pos=data["pos"],
-#         mat_haps=data["mat_haps"],
-#         pat_haps=data["pat_haps"],
-#     )
-#     _, _, _, karyotypes, loglik = hmm.backward_algorithm(
-#         bafs=data["baf_embryo"],
-#         pos=data["pos"],
-#         mat_haps=data["mat_haps"],
-#         pat_haps=data["pat_haps"],
-#     )
-#     gammas, _, karyotypes = hmm.forward_backward(
-#         bafs=data["baf_embryo"],
-#         pos=data["pos"],
-#         mat_haps=data["mat_haps"],
-#         pat_haps=data["pat_haps"],
-#     )
-#     assert np.all(np.isclose(np.sum(np.exp(gammas), axis=0), 1.0))
+@pytest.mark.parametrize("data", [data_disomy])
+def test_disomy_model(data):
+    """Test implementation under a pure-disomy model."""
+    hmm = DuoHMM(disomy=True)
+    gammas, _, karyotypes = hmm.forward_backward(
+        bafs=data["baf_embryo"], pos=data["pos"], haps=data["mat_haps"]
+    )
+    assert np.all(np.isclose(np.sum(np.exp(gammas), axis=0), 1.0))
 
 
-# @pytest.mark.parametrize("data", [data_disomy, data_trisomy, data_monosomy])
-# def test_fwd_bwd_algorithm(data):
-#     """Test the properties of the output from the fwd-bwd algorithm."""
-#     hmm = DuoHMM()
-#     gammas, _, karyotypes = hmm.forward_backward(
-#         bafs=data["baf_embryo"],
-#         pos=data["pos"],
-#         mat_haps=data["mat_haps"],
-#         pat_haps=data["pat_haps"],
-#     )
-#     # all of the columns must have a sum to 1
-#     assert np.all(np.isclose(np.sum(np.exp(gammas), axis=0), 1.0))
-#     post_dict = hmm.posterior_karyotypes(gammas, karyotypes)
-#     for x in ["0", "1m", "1p", "2", "3m", "3p"]:
-#         assert x in post_dict
-#     assert np.isclose(sum([post_dict[k] for k in post_dict]), 1.0)
+@pytest.mark.parametrize("data", [data_disomy, data_trisomy, data_monosomy])
+def test_fwd_bwd_algorithm(data):
+    """Test the properties of the output from the fwd-bwd algorithm."""
+    hmm = DuoHMM()
+    gammas, _, karyotypes = hmm.forward_backward(
+        bafs=data["baf_embryo"],
+        pos=data["pos"],
+        haps=data["mat_haps"],
+    )
+    # all of the columns must have a sum to 1
+    assert np.all(np.isclose(np.sum(np.exp(gammas), axis=0), 1.0))
+    post_dict = hmm.posterior_karyotypes(gammas, karyotypes)
+    for x in ["0", "1m", "1p", "2", "3m", "3p"]:
+        assert x in post_dict
+    assert np.isclose(sum([post_dict[k] for k in post_dict]), 1.0)
 
 
 # @pytest.mark.parametrize("data", [data_disomy, data_trisomy, data_monosomy])
