@@ -601,7 +601,7 @@ def forward_algo_duo(bafs, pos, haps, freqs, states, karyotypes, bint maternal=T
 def backward_algo_duo(bafs, pos, haps, freqs, states, karyotypes, bint maternal=True, double r=1e-8, double a=1e-2, double pi0=0.2, double std_dev=0.25):
     """Helper function for backward algorithm loop-optimization."""
     cdef int i,j,k,n,m;
-    cdef float di, f, p;
+    cdef float di,f, p;
     n = bafs.size
     m = len(states)
     ks = [sum([s >= 0 for s in state]) for state in states]
@@ -629,7 +629,7 @@ def backward_algo_duo(bafs, pos, haps, freqs, states, karyotypes, bint maternal=
                     m_ij = mat_dosage(x, states[j])
                     p_ij = pat_dosage(haps[:, i+1], states[j])
                 cur_emission[k] = emission_baf(
-                        bafs[i],
+                        bafs[i+1],
                         m_ij,
                         p_ij,
                         pi0=pi0,
