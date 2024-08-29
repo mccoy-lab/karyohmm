@@ -18,9 +18,11 @@ Modules available are:
 import numpy as np
 from karyohmm_utils import (
     backward_algo,
+    backward_algo_duo,
     backward_algo_sibs,
     emission_baf,
     forward_algo,
+    forward_algo_duo,
     forward_algo_sibs,
     lod_phase,
     logsumexp,
@@ -1095,17 +1097,194 @@ class DuoHMM(MetaHMM):
         """Initialize the HMM."""
         super().__init__()
 
-    def forward_algorithm():
-        """Forward algorithm for duos."""
-        pass
+    def forward_algorithm(
+        self,
+        bafs,
+        pos,
+        haps,
+        freqs=None,
+        maternal=True,
+        pi0=0.2,
+        std_dev=0.25,
+        r=1e-8,
+        a=1e-2,
+        unphased=False,
+    ):
+        """Forward algorithm for duos.
 
-    def backward_algorithm():
-        """Backward algorithm for duos."""
-        pass
+        Arguments:
+            - bafs (`np.array`): B-allele frequencies across the all m sites
+            - pos (`np.array`): m-length vector of basepair positions for sites
+            - haps (`np.array`): a 2 x m array of 0/1 parental haplotypes
+            - freqs (`np.array`): an m-length array of freqs
+            - pi0 (`float`): sparsity parameter for B-allele emission model
+            - std_dev (`float`): standard deviation for B-allele emission model
+            - r (`float`): intra-karyotype transition rate (recombination)
+            - a (`float`): inter-karyotype transition rate
+            - unphased (`bool`): run the model in unphased mode
 
-    def forward_backward():
-        """Forward-backward algorithm for duos."""
-        pass
+        Returns:
+            - alphas (`np.array`): forward variable from hmm across k states
+            - scaler (`np.array`): m-length array of scale parameters
+            - states (`list`): tuple representation of states
+            - karyotypes (`np.array`):  array of karyotypes in the MetaHMM model
+            - loglik (`float`): total log-likelihood of B-allele frequency
+
+        """
+        assert bafs.ndim == 1
+        assert pos.ndim == 1
+        assert haps.ndim == 2
+        assert (pi0 > 0) & (pi0 < 1.0)
+        assert std_dev > 0
+        assert bafs.size == haps.shape[1]
+        assert bafs.size == pos.size
+        assert np.all(pos[1:] > pos[:-1])
+        assert r < 0.5 and r > 0
+        assert a < 0.5 and a > 0
+        if freqs is not None:
+            assert freqs.size == bafs.size
+        else:
+            # NOTE: This is not a uniform sampling across the genotypes ...
+            freqs = np.repeat(0.5, bafs.size)
+        alphas, scaler, _, _, loglik = forward_algo_duo(
+            bafs,
+            pos,
+            haps,
+            freqs,
+            self.states,
+            self.karyotypes,
+            maternal=maternal,
+            r=r,
+            a=a,
+            pi0=pi0,
+            std_dev=std_dev,
+        )
+        return alphas, scaler, self.states, self.karyotypes, loglik
+
+    def backward_algorithm(
+        self,
+        bafs,
+        pos,
+        haps,
+        freqs=None,
+        maternal=True,
+        pi0=0.2,
+        std_dev=0.25,
+        r=1e-8,
+        a=1e-2,
+        unphased=False,
+    ):
+        """Backward algorithm for duos.
+
+        Arguments:
+            - bafs (`np.array`): B-allele frequencies across the all m sites
+            - pos (`np.array`): m-length vector of basepair positions for sites
+            - haps (`np.array`): a 2 x m array of 0/1 parental haplotypes
+            - freqs (`np.array`): an m-length array of freqs
+            - pi0 (`float`): sparsity parameter for B-allele emission model
+            - std_dev (`float`): standard deviation for B-allele emission model
+            - r (`float`): intra-karyotype transition rate (recombination)
+            - a (`float`): inter-karyotype transition rate
+            - unphased (`bool`): run the model in unphased mode
+
+        Returns:
+            - alphas (`np.array`): forward variable from hmm across k states
+            - scaler (`np.array`): m-length array of scale parameters
+            - states (`list`): tuple representation of states
+            - karyotypes (`np.array`):  array of karyotypes in the MetaHMM model
+            - loglik (`float`): total log-likelihood of B-allele frequency
+
+        """
+        assert bafs.ndim == 1
+        assert pos.ndim == 1
+        assert haps.ndim == 2
+        assert (pi0 > 0) & (pi0 < 1.0)
+        assert std_dev > 0
+        assert bafs.size == haps.shape[1]
+        assert bafs.size == pos.size
+        assert np.all(pos[1:] > pos[:-1])
+        assert r < 0.5 and r > 0
+        assert a < 0.5 and a > 0
+        if freqs is not None:
+            assert freqs.size == bafs.size
+        else:
+            # NOTE: This is not a uniform sampling across the genotypes ...
+            freqs = np.repeat(0.5, bafs.size)
+        betas, scaler, _, _, loglik = backward_algo_duo(
+            bafs,
+            pos,
+            haps,
+            freqs,
+            self.states,
+            self.karyotypes,
+            maternal=maternal,
+            r=r,
+            a=a,
+            pi0=pi0,
+            std_dev=std_dev,
+        )
+        return betas, scaler, self.states, self.karyotypes, loglik
+
+    def forward_backward(
+        self,
+        bafs,
+        pos,
+        haps,
+        freqs=None,
+        maternal=True,
+        pi0=0.2,
+        std_dev=0.25,
+        r=1e-8,
+        a=1e-2,
+        unphased=False,
+    ):
+        """Forward-backward algorithm for duos.
+
+        Arguments:
+            - bafs (`np.array`): B-allele frequencies across the all m sites
+            - pos (`np.array`): m-length vector of basepair positions for sites
+            - haps (`np.array`): a 2 x m array of 0/1 parental haplotypes
+            - freqs (`np.array`): an m-length array of freqs
+            - pi0 (`float`): sparsity parameter for B-allele emission model
+            - std_dev (`float`): standard deviation for B-allele emission model
+            - r (`float`): intra-karyotype transition rate (recombination)
+            - a (`float`): inter-karyotype transition rate
+            - unphased (`bool`): run the model in unphased mode
+
+        Returns:
+            - alphas (`np.array`): forward variable from hmm across k states
+            - scaler (`np.array`): m-length array of scale parameters
+            - states (`list`): tuple representation of states
+            - karyotypes (`np.array`):  array of karyotypes in the MetaHMM model
+            - loglik (`float`): total log-likelihood of B-allele frequency
+
+        """
+        alphas, _, states, karyotypes, _ = self.forward_algorithm(
+            bafs,
+            pos,
+            haps,
+            freqs,
+            maternal=maternal,
+            pi0=pi0,
+            std_dev=std_dev,
+            r=r,
+            a=a,
+            unphased=unphased,
+        )
+        betas, _, _, _, _ = self.backward_algorithm(
+            bafs,
+            pos,
+            haps,
+            freqs,
+            maternal=maternal,
+            pi0=pi0,
+            std_dev=std_dev,
+            r=r,
+            a=a,
+            unphased=unphased,
+        )
+        gammas = (alphas + betas) - logsumexp_sp(alphas + betas, axis=0)
+        return gammas, states, karyotypes
 
 
 class MosaicEst:
