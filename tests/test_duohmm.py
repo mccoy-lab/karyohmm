@@ -110,6 +110,7 @@ def test_backward_algorithm(data):
         haps=data["mat_haps"],
     )
 
+
 @pytest.mark.parametrize("data", [data_disomy])
 def test_forward_vs_backward_loglik(data):
     """Test that the log-likelihood from forward algorithm is equal to the backward."""
@@ -151,9 +152,6 @@ def test_forward_vs_backward_loglik(data):
 #         pat_haps=data["pat_haps"],
 #     )
 #     assert np.all(np.isclose(np.sum(np.exp(gammas), axis=0), 1.0))
-
-
-
 
 
 # @pytest.mark.parametrize("data", [data_disomy, data_trisomy, data_monosomy])

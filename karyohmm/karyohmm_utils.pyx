@@ -565,7 +565,7 @@ def forward_algo_duo(bafs, pos, haps, freqs, states, karyotypes, bint maternal=T
                     pi0=pi0,
                     std_dev=std_dev,
                     k=ks[j],
-                ) + p
+                ) + log(p)
         alphas[j,0] = logsumexp(cur_emission)
     scaler = np.zeros(n)
     scaler[0] = logsumexp(alphas[:, 0])
@@ -592,7 +592,7 @@ def forward_algo_duo(bafs, pos, haps, freqs, states, karyotypes, bint maternal=T
                         pi0=pi0,
                         std_dev=std_dev,
                         k=ks[j],
-                    ) + p
+                    ) + log(p)
             alphas[j, i] = logsumexp(cur_emission) + logsumexp(A_hat[:, j] + alphas[:, (i - 1)])
         scaler[i] = logsumexp(alphas[:, i])
         alphas[:, i] -= scaler[i]
@@ -635,7 +635,7 @@ def backward_algo_duo(bafs, pos, haps, freqs, states, karyotypes, bint maternal=
                         pi0=pi0,
                         std_dev=std_dev,
                         k=ks[j],
-                    ) + p
+                    ) + log(p)
             # This is in log-space as well (need to logsumexp after marginalizing)
             cur_emissions[j] = logsumexp(cur_emission)
         for j in range(m):
@@ -659,7 +659,7 @@ def backward_algo_duo(bafs, pos, haps, freqs, states, karyotypes, bint maternal=
                             pi0=pi0,
                             std_dev=std_dev,
                             k=ks[j],
-                        ) + p
+                        ) + log(p)
                 # This is in log-space as well ...
                 cur_emissions = logsumexp(cur_emission)
                 # Add in the initialization + first emission?
