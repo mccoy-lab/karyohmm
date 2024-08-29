@@ -9,9 +9,9 @@ from karyohmm import DuoHMM, MetaHMM, PGTSim
 # --- Generating test data for applications --- #
 pgt_sim = PGTSim()
 data_disomy = pgt_sim.full_ploidy_sim(m=2000, seed=42)
-data_trisomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=3, mat_skew=0, seed=42)
-data_monosomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=1, mat_skew=0, seed=42)
-data_nullisomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=0, mat_skew=0, seed=42)
+data_trisomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=3, mat_skew=1.0, seed=42)
+data_monosomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=1, mat_skew=1.0, seed=42)
+data_nullisomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=0, mat_skew=1.0, seed=42)
 
 
 def bph(states):
