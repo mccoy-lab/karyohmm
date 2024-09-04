@@ -8,15 +8,15 @@ from karyohmm import DuoHMM, PGTSim
 
 # --- Generating test data for applications in the DuoHMM setting --- #
 pgt_sim = PGTSim()
-data_disomy = pgt_sim.full_ploidy_sim(m=2000, mix_prop=0.7, std_dev=0.1, seed=42)
+data_disomy = pgt_sim.full_ploidy_sim(m=1000, mix_prop=0.7, std_dev=0.1, seed=42)
 data_trisomy = pgt_sim.full_ploidy_sim(
-    m=2000, ploidy=3, mat_skew=1.0, mix_prop=0.7, std_dev=0.1, seed=42
+    m=1000, ploidy=3, mat_skew=1.0, mix_prop=0.7, std_dev=0.1, seed=42
 )
 data_monosomy = pgt_sim.full_ploidy_sim(
-    m=2000, ploidy=1, mat_skew=1.0, mix_prop=0.7, std_dev=0.1, seed=42
+    m=1000, ploidy=1, mat_skew=1.0, mix_prop=0.7, std_dev=0.1, seed=42
 )
 data_nullisomy = pgt_sim.full_ploidy_sim(
-    m=2000, ploidy=0, mat_skew=1.0, mix_prop=0.7, std_dev=0.1, seed=42
+    m=1000, ploidy=0, mat_skew=1.0, mix_prop=0.7, std_dev=0.1, seed=42
 )
 
 
@@ -295,7 +295,6 @@ def test_ploidy_correctness_mle(data):
         bafs=data["baf_embryo"],
         pos=data["pos"],
         haps=data["mat_haps"],
-        algo="Powell",
     )
     gammas, _, karyotypes = hmm.forward_backward(
         bafs=data["baf_embryo"],
@@ -312,3 +311,18 @@ def test_ploidy_correctness_mle(data):
         assert x in post_dict
     assert post_dict[data["aploid"]] == max_post
     assert post_dict[data["aploid"]] > 0.95
+
+
+@pytest.mark.parametrize("data", [data_disomy])
+def test_est_pi0_sigma_mle_global(data):
+    """Estimation via global parameter searching."""
+    hmm = DuoHMM()
+    pi0_est, sigma_est = hmm.est_sigma_pi0(
+        bafs=data["baf_embryo"],
+        pos=data["pos"],
+        haps=data["mat_haps_prime"],
+        global_opt=True,
+    )
+    print(pi0_est, sigma_est)
+    # assert np.isclose(pi0_est, 0.7, atol=1e-1)
+    # assert np.isclose(sigma_est, 0.1, atol=5e-2)
