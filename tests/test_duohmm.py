@@ -1,17 +1,23 @@
-"""Test suite for karyoHMM MetaHMM."""
+"""Test suite for karyoHMM DuoHMM."""
 import numpy as np
 import pytest
 from karyohmm_utils import create_index_arrays, transition_kernel
 from scipy.special import logsumexp as logsumexp_sp
 
-from karyohmm import DuoHMM, MetaHMM, PGTSim
+from karyohmm import DuoHMM, PGTSim
 
-# --- Generating test data for applications --- #
+# --- Generating test data for applications in the DuoHMM setting --- #
 pgt_sim = PGTSim()
-data_disomy = pgt_sim.full_ploidy_sim(m=2000, seed=42)
-data_trisomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=3, mat_skew=1.0, seed=42)
-data_monosomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=1, mat_skew=1.0, seed=42)
-data_nullisomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=0, mat_skew=1.0, seed=42)
+data_disomy = pgt_sim.full_ploidy_sim(m=2000, mix_prop=0.7, std_dev=0.1, seed=42)
+data_trisomy = pgt_sim.full_ploidy_sim(
+    m=2000, ploidy=3, mat_skew=1.0, mix_prop=0.7, std_dev=0.1, seed=42
+)
+data_monosomy = pgt_sim.full_ploidy_sim(
+    m=2000, ploidy=1, mat_skew=1.0, mix_prop=0.7, std_dev=0.1, seed=42
+)
+data_nullisomy = pgt_sim.full_ploidy_sim(
+    m=2000, ploidy=0, mat_skew=1.0, mix_prop=0.7, std_dev=0.1, seed=42
+)
 
 
 def bph(states):
@@ -266,8 +272,8 @@ def test_ploidy_correctness(data):
         bafs=data["baf_embryo"],
         pos=data["pos"],
         haps=data["mat_haps"],
-        pi0=0.3,
-        std_dev=0.15,
+        pi0=0.7,
+        std_dev=0.1,
     )
     # all of the columns must have a sum to 1
     assert np.all(np.isclose(np.sum(np.exp(gammas), axis=0), 1.0))
