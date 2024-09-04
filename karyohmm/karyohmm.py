@@ -1104,9 +1104,10 @@ class DuoHMM(MetaHMM):
         haps,
         freqs=None,
         maternal=True,
-        algo="Powell",
+        algo="Nelder-Mead",
         pi0_bounds=(0.01, 0.99),
-        sigma_bounds=(1e-2, 1.0),
+        sigma_bounds=(1e-2, 0.5),
+        global_opt=False,
         **kwargs,
     ):
         """Estimate sigma and pi0 under the B-Allele Frequency model using optimization of forward algorithm likelihood.
@@ -1117,6 +1118,9 @@ class DuoHMM(MetaHMM):
             - haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
             - freqs (`np.array`): an m array of 0/1 paternal haplotypes
             - algo (`str`): one of Nelder-Mead, L-BFGS-B, or Powell algorithms for optimization
+            - pi0_bounds (`tuple`): bounds for acceptable values of pi0 parameter
+            - sigma_bounds (`tuple`): bounds for acceptable values for sigma
+            - global_opt (`bool`): a boolean value indicating to perform global optimization
 
         Returns:
             - pi0_est (`float`): estimate of sparsity parameter (pi0) for B-allele emission model
@@ -1132,23 +1136,41 @@ class DuoHMM(MetaHMM):
         assert sigma_bounds[0] < sigma_bounds[1]
         mid_pi0 = np.mean(pi0_bounds)
         mid_sigma = np.mean(sigma_bounds)
-        opt_res = minimize(
-            lambda x: -self.forward_algorithm(
-                bafs=bafs,
-                pos=pos,
-                haps=haps,
-                freqs=freqs,
-                maternal=maternal,
-                pi0=x[0],
-                std_dev=x[1],
-                **kwargs,
-            )[4],
-            x0=[mid_pi0, mid_sigma],
-            method=algo,
-            bounds=[pi0_bounds, sigma_bounds],
-            tol=1e-4,
-            options={"disp": True, "ftol": 1e-4, "xtol": 1e-4},
-        )
+        if global_opt:
+            from scipy.optimize import dual_annealing
+
+            opt_res = dual_annealing(
+                lambda x: -self.forward_algorithm(
+                    bafs=bafs,
+                    pos=pos,
+                    haps=haps,
+                    freqs=freqs,
+                    maternal=maternal,
+                    pi0=x[0],
+                    std_dev=x[1],
+                    **kwargs,
+                )[4],
+                bounds=[pi0_bounds, sigma_bounds],
+                maxiter=5,
+            )
+        else:
+            opt_res = minimize(
+                lambda x: -self.forward_algorithm(
+                    bafs=bafs,
+                    pos=pos,
+                    haps=haps,
+                    freqs=freqs,
+                    maternal=maternal,
+                    pi0=x[0],
+                    std_dev=x[1],
+                    **kwargs,
+                )[4],
+                x0=[mid_pi0, mid_sigma],
+                method=algo,
+                bounds=[pi0_bounds, sigma_bounds],
+                tol=1e-4,
+                options={"disp": True, "ftol": 1e-4, "xtol": 1e-4},
+            )
         pi0_est = opt_res.x[0]
         sigma_est = opt_res.x[1]
         return pi0_est, sigma_est
