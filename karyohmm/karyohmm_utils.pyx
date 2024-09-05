@@ -1,5 +1,4 @@
 from libc.math cimport erf, exp, expm1, log, log1p, pi, sqrt
-
 import numpy as np
 
 
@@ -536,258 +535,390 @@ def viterbi_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double 
     path[0] = psi[path[1], 1]
     return path, states, deltas, psi
 
+def forward_algo_duo(bafs, pos, haps, freqs, states, karyotypes, bint maternal=True, double r=1e-8, double a=1e-2, double pi0=0.8, double std_dev=0.2):
+    """Helper function for optimization for forward algorithm in the duo setting."""
+    cdef int i,j,idx,n,m;
+    cdef float di, f;
+    n = bafs.size
+    m = len(states)
+    ks = [sum([s >= 0 for s in state]) for state in states]
+    K0,K1 = create_index_arrays(karyotypes)
+    alphas = np.zeros(shape=(m, n))
+    alphas[:, 0] = log(1.0 / m)
+    geno = [[0,0], [0,1], [1,0], [1,1]]
+    for j in range(m):
+        # Need to marginalize over all the haplotypes ...
+        f = freqs[0]
+        cur_emission = np.zeros(4)
+        for idx, (x,p) in enumerate(zip(geno, ((1 - f)**2, f*(1-f), f*(1-f), f**2))):
+            if maternal:
+                m_ij = mat_dosage(haps[:, 0], states[j])
+                p_ij = pat_dosage(x, states[j])
+            else:
+                m_ij = mat_dosage(x, states[j])
+                p_ij = pat_dosage(haps[:, 0], states[j])
+            cur_emission[idx] = emission_baf(
+                    bafs[0],
+                    m_ij,
+                    p_ij,
+                    pi0=pi0,
+                    std_dev=std_dev,
+                    k=ks[j],
+                ) + log(p)
+        alphas[j,0] = logsumexp(cur_emission)
+    scaler = np.zeros(n)
+    scaler[0] = logsumexp(alphas[:, 0])
+    alphas[:, 0] -= scaler[0]
+    for i in range(1, n):
+        di = pos[i] - pos[i-1]
+        # This should get the distance dependent transition models ...
+        A_hat = transition_kernel(K0, K1, d=di, r=r, a=a)
+        for j in range(m):
+            cur_emission = np.zeros(4)
+            f = freqs[i]
+            for idx, (x,p) in enumerate(zip(geno, ((1 - f)**2, f*(1 - f), f*(1-f), f**2))):
+                if maternal:
+                    m_ij = mat_dosage(haps[:, i], states[j])
+                    p_ij = pat_dosage(x, states[j])
+                else:
+                    m_ij = mat_dosage(x, states[j])
+                    p_ij = pat_dosage(haps[:, i], states[j])
+                # Build up the summed emission model?
+                cur_emission[idx] = emission_baf(
+                        bafs[i],
+                        m_ij,
+                        p_ij,
+                        pi0=pi0,
+                        std_dev=std_dev,
+                        k=ks[j],
+                    ) + log(p)
+            alphas[j, i] = logsumexp(cur_emission) + logsumexp(A_hat[:, j] + alphas[:, (i - 1)])
+        scaler[i] = logsumexp(alphas[:, i])
+        alphas[:, i] -= scaler[i]
+    return alphas, scaler, states, None, sum(scaler)
+
+def backward_algo_duo(bafs, pos, haps, freqs, states, karyotypes, bint maternal=True, double r=1e-8, double a=1e-2, double pi0=0.2, double std_dev=0.25):
+    """Helper function for backward algorithm loop-optimization."""
+    cdef int i,j,idx,n,m;
+    cdef float di,f, p;
+    n = bafs.size
+    m = len(states)
+    ks = [sum([s >= 0 for s in state]) for state in states]
+    K0,K1 = create_index_arrays(karyotypes)
+    betas = np.zeros(shape=(m, n))
+    betas[:,-1] = log(1)
+    scaler = np.zeros(n)
+    scaler[-1] = logsumexp(betas[:, -1])
+    betas[:, -1] -= scaler[-1]
+    geno = [[0,0], [0,1], [1,0], [1,1]]
+    for i in range(n - 2, -1, -1):
+        f = freqs[i+1]
+        # The matrices are element-wise multiplied so add in log-space ...
+        di = pos[i+1] - pos[i]
+        A_hat = transition_kernel(K0, K1, d=di, r=r, a=a)
+        # Calculate the full set of emissions
+        cur_emissions = np.zeros(m)
+        for j in range(m):
+            cur_emission = np.zeros(4)
+            for idx, (x,p) in enumerate(zip(geno, ((1 - f)**2, f*(1-f), f*(1-f), f**2))):
+                if maternal:
+                    m_ij = mat_dosage(haps[:, i+1], states[j])
+                    p_ij = pat_dosage(x, states[j])
+                else:
+                    m_ij = mat_dosage(x, states[j])
+                    p_ij = pat_dosage(haps[:, i+1], states[j])
+                cur_emission[idx] = emission_baf(
+                        bafs[i+1],
+                        m_ij,
+                        p_ij,
+                        pi0=pi0,
+                        std_dev=std_dev,
+                        k=ks[j],
+                    ) + log(p)
+            cur_emissions[j] = logsumexp(cur_emission)
+        for j in range(m):
+            # This should be the correct version here ...
+            betas[j,i] = logsumexp(A_hat[:, j] + cur_emissions + betas[:, (i + 1)])
+        if i == 0:
+            f = freqs[i]
+            for j in range(m):
+                cur_emission = np.zeros(4)
+                for idx, (x,p) in enumerate(zip(geno, ((1 - f)**2, f*(1-f), f*(1-f), f**2))):
+                    if maternal:
+                        m_ij = mat_dosage(haps[:, i], states[j])
+                        p_ij = pat_dosage(x, states[j])
+                    else:
+                        m_ij = mat_dosage(x, states[j])
+                        p_ij = pat_dosage(haps[:,i], states[j])
+                    cur_emission[idx] = emission_baf(
+                            bafs[i],
+                            m_ij,
+                            p_ij,
+                            pi0=pi0,
+                            std_dev=std_dev,
+                            k=ks[j],
+                        ) + log(p)
+                # This is in log-space as well ...
+                cur_emissions = logsumexp(cur_emission)
+                # Add in the initialization + first emission?
+                betas[j,i] += log(1/m) + cur_emissions
+        # Do the rescaling here ...
+        scaler[i] = logsumexp(betas[:, i])
+        betas[:, i] -= scaler[i]
+    return betas, scaler, states, None, sum(scaler) + scaler[-1]
+
 
 # -------- DANGER ZONE ---------- #
-    def solve_trio(self, cg=0, fg=0, mg=0):
-        """Solve the trio setup to phase the parents.
+def solve_trio(self, cg=0, fg=0, mg=0):
+    """Solve the trio setup to phase the parents.
 
-        Code originally from: https://github.com/odelaneau/makeScaffold/blob/master/src/data_mendel.cpp
-        """
-        phased = None
-        mendel = None
-        if (fg == 0) & (mg == 0) & (cg == 0):
-            f0 = 0
-            f1 = 0
-            m0 = 0
-            m1 = 0
-            c0 = 0
-            c1 = 0
-            mendel = 0
-            phased = 1
-        if (fg == 0) & (mg == 0) & (cg == 1):
-            f0 = 0
-            f1 = 0
-            m0 = 0
-            m1 = 0
-            c0 = 0
-            c1 = 1
-            mendel = 1
-            phased = 0
-        if (fg == 0) & (mg == 0) & (cg == 2):
-            f0 = 0
-            f1 = 0
-            m0 = 0
-            m1 = 0
-            c0 = 1
-            c1 = 1
-            mendel = 1
-            phased = 0
-        if (fg == 0) & (mg == 1) & (cg == 0):
-            f0 = 0
-            f1 = 0
-            m0 = 1
-            m1 = 0
-            c0 = 0
-            c1 = 0
-            mendel = 0
-            phased = 1
-        if (fg == 0) & (mg == 1) & (cg == 1):
-            f0 = 0
-            f1 = 0
-            m0 = 0
-            m1 = 1
-            c0 = 0
-            c1 = 1
-            mendel = 0
-            phased = 1
-        if (fg == 0) & (mg == 1) & (cg == 2):
-            f0 = 0
-            f1 = 0
-            m0 = 0
-            m1 = 1
-            c0 = 1
-            c1 = 1
-            mendel = 1
-            phased = 0
-        if (fg == 0) & (mg == 2) & (cg == 0):
-            f0 = 0
-            f1 = 0
-            m0 = 1
-            m1 = 1
-            c0 = 0
-            c1 = 0
-            mendel = 1
-            phased = 0
-        if (fg == 0) & (mg == 2) & (cg == 1):
-            f0 = 0
-            f1 = 0
-            m0 = 1
-            m1 = 1
-            c0 = 0
-            c1 = 1
-            mendel = 0
-            phased = 1
-        if (fg == 0) & (mg == 2) & (cg == 2):
-            f0 = 0
-            f1 = 0
-            m0 = 1
-            m1 = 1
-            c0 = 1
-            c1 = 1
-            mendel = 1
-            phased = 0
-        if (fg == 1) & (mg == 0) & (cg == 0):
-            f0 = 0
-            f1 = 1
-            m0 = 0
-            m1 = 0
-            c0 = 0
-            c1 = 0
-            mendel = 0
-            phased = 1
-        if (fg == 1) & (mg == 0) & (cg == 1):
-            f0 = 1
-            f1 = 0
-            m0 = 0
-            m1 = 0
-            c0 = 1
-            c1 = 0
-            mendel = 0
-            phased = 1
-        if (fg == 1) & (mg == 0) & (cg == 2):
-            f0 = 1
-            f1 = 0
-            m0 = 0
-            m1 = 0
-            c0 = 1
-            c1 = 1
-            mendel = 1
-            phased = 0
-        if (fg == 1) & (mg == 1) & (cg == 0):
-            f0 = 0
-            f1 = 1
-            m0 = 1
-            m1 = 0
-            c0 = 0
-            c1 = 0
-            mendel = 0
-            phased = 1
-        if (fg == 1) & (mg == 1) & (cg == 1):
-            f0 = 0
-            f1 = 1
-            m0 = 0
-            m1 = 1
-            c0 = 0
-            c1 = 1
-            mendel = 0
-            phased = 0
-        if (fg == 1) & (mg == 1) & (cg == 2):
-            f0 = 1
-            f1 = 0
-            m0 = 0
-            m1 = 1
-            c0 = 1
-            c1 = 1
-            mendel = 0
-            phased = 1
-        if (fg == 1) & (mg == 2) & (cg == 0):
-            f0 = 0
-            f1 = 1
-            m0 = 1
-            m1 = 1
-            c0 = 0
-            c1 = 0
-            mendel = 1
-            phased = 0
-        if (fg == 1) & (mg == 2) & (cg == 1):
-            f0 = 0
-            f1 = 1
-            m0 = 1
-            m1 = 1
-            c0 = 0
-            c1 = 1
-            mendel = 0
-            phased = 1
-        if (fg == 1) & (mg == 2) & (cg == 2):
-            f0 = 1
-            f1 = 0
-            m0 = 1
-            m1 = 1
-            c0 = 1
-            c1 = 1
-            mendel = 0
-            phased = 1
-        if (fg == 2) & (mg == 0) & (cg == 0):
-            f0 = 1
-            f1 = 1
-            m0 = 0
-            m1 = 0
-            c0 = 0
-            c1 = 0
-            mendel = 1
-            phased = 0
-        if (fg == 2) & (mg == 0) & (cg == 1):
-            f0 = 1
-            f1 = 1
-            m0 = 0
-            m1 = 0
-            c0 = 1
-            c1 = 0
-            mendel = 0
-            phased = 1
-        if (fg == 2) & (mg == 0) & (cg == 2):
-            f0 = 1
-            f1 = 1
-            m0 = 0
-            m1 = 0
-            c0 = 1
-            c1 = 1
-            mendel = 1
-            phased = 0
-        if (fg == 2) & (mg == 1) & (cg == 0):
-            f0 = 1
-            f1 = 1
-            m0 = 0
-            m1 = 1
-            c0 = 0
-            c1 = 0
-            mendel = 1
-            phased = 0
-        if (fg == 2) & (mg == 1) & (cg == 1):
-            f0 = 1
-            f1 = 1
-            m0 = 1
-            m1 = 0
-            c0 = 1
-            c1 = 0
-            mendel = 0
-            phased = 1
-        if (fg == 2) & (mg == 1) & (cg == 2):
-            f0 = 1
-            f1 = 1
-            m0 = 0
-            m1 = 1
-            c0 = 1
-            c1 = 1
-            mendel = 0
-            phased = 1
-        if (fg == 2) & (mg == 2) & (cg == 0):
-            f0 = 1
-            f1 = 1
-            m0 = 1
-            m1 = 1
-            c0 = 0
-            c1 = 0
-            mendel = 1
-            phased = 0
-        if (fg == 2) & (mg == 2) & (cg == 1):
-            f0 = 1
-            f1 = 1
-            m0 = 1
-            m1 = 1
-            c0 = 0
-            c1 = 1
-            mendel = 1
-            phased = 0
-        if (fg == 2) & (mg == 2) & (cg == 2):
-            f0 = 1
-            f1 = 1
-            m0 = 1
-            m1 = 1
-            c0 = 1
-            c1 = 1
-            mendel = 0
-            phased = 1
-        if phased is None:
-            raise ValueError("Not-disomic genotype!")
-        return [f0, f1, m0, m1, c0, c1, mendel, phased]
+    Code originally from: https://github.com/odelaneau/makeScaffold/blob/master/src/data_mendel.cpp
+    """
+    phased = None
+    mendel = None
+    if (fg == 0) & (mg == 0) & (cg == 0):
+        f0 = 0
+        f1 = 0
+        m0 = 0
+        m1 = 0
+        c0 = 0
+        c1 = 0
+        mendel = 0
+        phased = 1
+    if (fg == 0) & (mg == 0) & (cg == 1):
+        f0 = 0
+        f1 = 0
+        m0 = 0
+        m1 = 0
+        c0 = 0
+        c1 = 1
+        mendel = 1
+        phased = 0
+    if (fg == 0) & (mg == 0) & (cg == 2):
+        f0 = 0
+        f1 = 0
+        m0 = 0
+        m1 = 0
+        c0 = 1
+        c1 = 1
+        mendel = 1
+        phased = 0
+    if (fg == 0) & (mg == 1) & (cg == 0):
+        f0 = 0
+        f1 = 0
+        m0 = 1
+        m1 = 0
+        c0 = 0
+        c1 = 0
+        mendel = 0
+        phased = 1
+    if (fg == 0) & (mg == 1) & (cg == 1):
+        f0 = 0
+        f1 = 0
+        m0 = 0
+        m1 = 1
+        c0 = 0
+        c1 = 1
+        mendel = 0
+        phased = 1
+    if (fg == 0) & (mg == 1) & (cg == 2):
+        f0 = 0
+        f1 = 0
+        m0 = 0
+        m1 = 1
+        c0 = 1
+        c1 = 1
+        mendel = 1
+        phased = 0
+    if (fg == 0) & (mg == 2) & (cg == 0):
+        f0 = 0
+        f1 = 0
+        m0 = 1
+        m1 = 1
+        c0 = 0
+        c1 = 0
+        mendel = 1
+        phased = 0
+    if (fg == 0) & (mg == 2) & (cg == 1):
+        f0 = 0
+        f1 = 0
+        m0 = 1
+        m1 = 1
+        c0 = 0
+        c1 = 1
+        mendel = 0
+        phased = 1
+    if (fg == 0) & (mg == 2) & (cg == 2):
+        f0 = 0
+        f1 = 0
+        m0 = 1
+        m1 = 1
+        c0 = 1
+        c1 = 1
+        mendel = 1
+        phased = 0
+    if (fg == 1) & (mg == 0) & (cg == 0):
+        f0 = 0
+        f1 = 1
+        m0 = 0
+        m1 = 0
+        c0 = 0
+        c1 = 0
+        mendel = 0
+        phased = 1
+    if (fg == 1) & (mg == 0) & (cg == 1):
+        f0 = 1
+        f1 = 0
+        m0 = 0
+        m1 = 0
+        c0 = 1
+        c1 = 0
+        mendel = 0
+        phased = 1
+    if (fg == 1) & (mg == 0) & (cg == 2):
+        f0 = 1
+        f1 = 0
+        m0 = 0
+        m1 = 0
+        c0 = 1
+        c1 = 1
+        mendel = 1
+        phased = 0
+    if (fg == 1) & (mg == 1) & (cg == 0):
+        f0 = 0
+        f1 = 1
+        m0 = 1
+        m1 = 0
+        c0 = 0
+        c1 = 0
+        mendel = 0
+        phased = 1
+    if (fg == 1) & (mg == 1) & (cg == 1):
+        f0 = 0
+        f1 = 1
+        m0 = 0
+        m1 = 1
+        c0 = 0
+        c1 = 1
+        mendel = 0
+        phased = 0
+    if (fg == 1) & (mg == 1) & (cg == 2):
+        f0 = 1
+        f1 = 0
+        m0 = 0
+        m1 = 1
+        c0 = 1
+        c1 = 1
+        mendel = 0
+        phased = 1
+    if (fg == 1) & (mg == 2) & (cg == 0):
+        f0 = 0
+        f1 = 1
+        m0 = 1
+        m1 = 1
+        c0 = 0
+        c1 = 0
+        mendel = 1
+        phased = 0
+    if (fg == 1) & (mg == 2) & (cg == 1):
+        f0 = 0
+        f1 = 1
+        m0 = 1
+        m1 = 1
+        c0 = 0
+        c1 = 1
+        mendel = 0
+        phased = 1
+    if (fg == 1) & (mg == 2) & (cg == 2):
+        f0 = 1
+        f1 = 0
+        m0 = 1
+        m1 = 1
+        c0 = 1
+        c1 = 1
+        mendel = 0
+        phased = 1
+    if (fg == 2) & (mg == 0) & (cg == 0):
+        f0 = 1
+        f1 = 1
+        m0 = 0
+        m1 = 0
+        c0 = 0
+        c1 = 0
+        mendel = 1
+        phased = 0
+    if (fg == 2) & (mg == 0) & (cg == 1):
+        f0 = 1
+        f1 = 1
+        m0 = 0
+        m1 = 0
+        c0 = 1
+        c1 = 0
+        mendel = 0
+        phased = 1
+    if (fg == 2) & (mg == 0) & (cg == 2):
+        f0 = 1
+        f1 = 1
+        m0 = 0
+        m1 = 0
+        c0 = 1
+        c1 = 1
+        mendel = 1
+        phased = 0
+    if (fg == 2) & (mg == 1) & (cg == 0):
+        f0 = 1
+        f1 = 1
+        m0 = 0
+        m1 = 1
+        c0 = 0
+        c1 = 0
+        mendel = 1
+        phased = 0
+    if (fg == 2) & (mg == 1) & (cg == 1):
+        f0 = 1
+        f1 = 1
+        m0 = 1
+        m1 = 0
+        c0 = 1
+        c1 = 0
+        mendel = 0
+        phased = 1
+    if (fg == 2) & (mg == 1) & (cg == 2):
+        f0 = 1
+        f1 = 1
+        m0 = 0
+        m1 = 1
+        c0 = 1
+        c1 = 1
+        mendel = 0
+        phased = 1
+    if (fg == 2) & (mg == 2) & (cg == 0):
+        f0 = 1
+        f1 = 1
+        m0 = 1
+        m1 = 1
+        c0 = 0
+        c1 = 0
+        mendel = 1
+        phased = 0
+    if (fg == 2) & (mg == 2) & (cg == 1):
+        f0 = 1
+        f1 = 1
+        m0 = 1
+        m1 = 1
+        c0 = 0
+        c1 = 1
+        mendel = 1
+        phased = 0
+    if (fg == 2) & (mg == 2) & (cg == 2):
+        f0 = 1
+        f1 = 1
+        m0 = 1
+        m1 = 1
+        c0 = 1
+        c1 = 1
+        mendel = 0
+        phased = 1
+    if phased is None:
+        raise ValueError("Not-disomic genotype!")
+    return [f0, f1, m0, m1, c0, c1, mendel, phased]

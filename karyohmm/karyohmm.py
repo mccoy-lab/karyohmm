@@ -18,9 +18,11 @@ Modules available are:
 import numpy as np
 from karyohmm_utils import (
     backward_algo,
+    backward_algo_duo,
     backward_algo_sibs,
     emission_baf,
     forward_algo,
+    forward_algo_duo,
     forward_algo_sibs,
     lod_phase,
     logsumexp,
@@ -1086,6 +1088,281 @@ class QuadHMM(AneuploidyHMM):
         pat_haplo_len = aggregate_length(pos, paternal_haplo_idx)
         both_haplo_len = aggregate_length(pos, both_haplo_idx)
         return mat_haplo_len, pat_haplo_len, both_haplo_len, tot_len
+
+
+class DuoHMM(MetaHMM):
+    """Class for estimating ploidy variation in duo-based data."""
+
+    def __init__(self, disomy=False):
+        """Initialize the HMM."""
+        super().__init__()
+
+    def est_sigma_pi0(
+        self,
+        bafs,
+        pos,
+        haps,
+        freqs=None,
+        maternal=True,
+        algo="Nelder-Mead",
+        pi0_bounds=(0.01, 0.99),
+        sigma_bounds=(1e-2, 0.5),
+        global_opt=False,
+        **kwargs,
+    ):
+        """Estimate sigma and pi0 under the B-Allele Frequency model using optimization of forward algorithm likelihood.
+
+        Arguments:
+            - bafs (`np.array`): B-allele frequencies across the all m sites
+            - pos (`np.array`): basepair positions of the SNPs
+            - haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
+            - freqs (`np.array`): an m array of 0/1 paternal haplotypes
+            - algo (`str`): one of Nelder-Mead, L-BFGS-B, or Powell algorithms for optimization
+            - pi0_bounds (`tuple`): bounds for acceptable values of pi0 parameter
+            - sigma_bounds (`tuple`): bounds for acceptable values for sigma
+            - global_opt (`bool`): a boolean value indicating to perform global optimization
+
+        Returns:
+            - pi0_est (`float`): estimate of sparsity parameter (pi0) for B-allele emission model
+            - sigma_est (`float`): estimate of noise parameter (sigma) for B-allele emission model
+
+        """
+        assert algo in ["Nelder-Mead", "L-BFGS-B", "Powell"]
+        assert (len(pi0_bounds) == 2) and (len(sigma_bounds) == 2)
+        assert (pi0_bounds[0] > 0) and (pi0_bounds[1] > 0)
+        assert (pi0_bounds[0] < 1) and (pi0_bounds[1] < 1)
+        assert pi0_bounds[0] < pi0_bounds[1]
+        assert (sigma_bounds[0] > 0) and (sigma_bounds[1] > 0)
+        assert sigma_bounds[0] < sigma_bounds[1]
+        mid_pi0 = np.mean(pi0_bounds)
+        mid_sigma = np.mean(sigma_bounds)
+        if global_opt:
+            from scipy.optimize import dual_annealing
+
+            opt_res = dual_annealing(
+                lambda x: -self.forward_algorithm(
+                    bafs=bafs,
+                    pos=pos,
+                    haps=haps,
+                    freqs=freqs,
+                    maternal=maternal,
+                    pi0=x[0],
+                    std_dev=x[1],
+                    **kwargs,
+                )[4],
+                bounds=[pi0_bounds, sigma_bounds],
+                maxiter=5,
+            )
+        else:
+            opt_res = minimize(
+                lambda x: -self.forward_algorithm(
+                    bafs=bafs,
+                    pos=pos,
+                    haps=haps,
+                    freqs=freqs,
+                    maternal=maternal,
+                    pi0=x[0],
+                    std_dev=x[1],
+                    **kwargs,
+                )[4],
+                x0=[mid_pi0, mid_sigma],
+                method=algo,
+                bounds=[pi0_bounds, sigma_bounds],
+                tol=1e-4,
+                options={"disp": True, "ftol": 1e-4, "xtol": 1e-4},
+            )
+        pi0_est = opt_res.x[0]
+        sigma_est = opt_res.x[1]
+        return pi0_est, sigma_est
+
+    def forward_algorithm(
+        self,
+        bafs,
+        pos,
+        haps,
+        freqs=None,
+        maternal=True,
+        pi0=0.2,
+        std_dev=0.25,
+        r=1e-8,
+        a=1e-2,
+        unphased=False,
+    ):
+        """Forward algorithm for duos.
+
+        Arguments:
+            - bafs (`np.array`): B-allele frequencies across the all m sites
+            - pos (`np.array`): m-length vector of basepair positions for sites
+            - haps (`np.array`): a 2 x m array of 0/1 parental haplotypes
+            - freqs (`np.array`): an m-length array of freqs
+            - pi0 (`float`): sparsity parameter for B-allele emission model
+            - std_dev (`float`): standard deviation for B-allele emission model
+            - r (`float`): intra-karyotype transition rate (recombination)
+            - a (`float`): inter-karyotype transition rate
+            - unphased (`bool`): run the model in unphased mode
+
+        Returns:
+            - alphas (`np.array`): forward variable from hmm across k states
+            - scaler (`np.array`): m-length array of scale parameters
+            - states (`list`): tuple representation of states
+            - karyotypes (`np.array`):  array of karyotypes in the MetaHMM model
+            - loglik (`float`): total log-likelihood of B-allele frequency
+
+        """
+        assert bafs.ndim == 1
+        assert pos.ndim == 1
+        assert haps.ndim == 2
+        assert (pi0 > 0) & (pi0 < 1.0)
+        assert std_dev > 0
+        assert bafs.size == haps.shape[1]
+        assert bafs.size == pos.size
+        assert np.all(pos[1:] > pos[:-1])
+        assert r < 0.5 and r > 0
+        assert a < 0.5 and a > 0
+        if freqs is not None:
+            assert freqs.size == bafs.size
+        else:
+            # NOTE: This is not a uniform sampling across the genotypes ...
+            freqs = np.repeat(0.5, bafs.size)
+        alphas, scaler, _, _, loglik = forward_algo_duo(
+            bafs,
+            pos,
+            haps,
+            freqs,
+            self.states,
+            self.karyotypes,
+            maternal=maternal,
+            r=r,
+            a=a,
+            pi0=pi0,
+            std_dev=std_dev,
+        )
+        return alphas, scaler, self.states, self.karyotypes, loglik
+
+    def backward_algorithm(
+        self,
+        bafs,
+        pos,
+        haps,
+        freqs=None,
+        maternal=True,
+        pi0=0.2,
+        std_dev=0.25,
+        r=1e-8,
+        a=1e-2,
+        unphased=False,
+    ):
+        """Backward algorithm for duos.
+
+        Arguments:
+            - bafs (`np.array`): B-allele frequencies across the all m sites
+            - pos (`np.array`): m-length vector of basepair positions for sites
+            - haps (`np.array`): a 2 x m array of 0/1 parental haplotypes
+            - freqs (`np.array`): an m-length array of freqs
+            - pi0 (`float`): sparsity parameter for B-allele emission model
+            - std_dev (`float`): standard deviation for B-allele emission model
+            - r (`float`): intra-karyotype transition rate (recombination)
+            - a (`float`): inter-karyotype transition rate
+            - unphased (`bool`): run the model in unphased mode
+
+        Returns:
+            - alphas (`np.array`): forward variable from hmm across k states
+            - scaler (`np.array`): m-length array of scale parameters
+            - states (`list`): tuple representation of states
+            - karyotypes (`np.array`):  array of karyotypes in the MetaHMM model
+            - loglik (`float`): total log-likelihood of B-allele frequency
+
+        """
+        assert bafs.ndim == 1
+        assert pos.ndim == 1
+        assert haps.ndim == 2
+        assert (pi0 > 0) & (pi0 < 1.0)
+        assert std_dev > 0
+        assert bafs.size == haps.shape[1]
+        assert bafs.size == pos.size
+        assert np.all(pos[1:] > pos[:-1])
+        assert r < 0.5 and r > 0
+        assert a < 0.5 and a > 0
+        if freqs is not None:
+            assert freqs.size == bafs.size
+        else:
+            # NOTE: This is not a uniform sampling across the genotypes ...
+            freqs = np.repeat(0.5, bafs.size)
+        betas, scaler, _, _, loglik = backward_algo_duo(
+            bafs,
+            pos,
+            haps,
+            freqs,
+            self.states,
+            self.karyotypes,
+            maternal=maternal,
+            r=r,
+            a=a,
+            pi0=pi0,
+            std_dev=std_dev,
+        )
+        return betas, scaler, self.states, self.karyotypes, loglik
+
+    def forward_backward(
+        self,
+        bafs,
+        pos,
+        haps,
+        freqs=None,
+        maternal=True,
+        pi0=0.2,
+        std_dev=0.25,
+        r=1e-8,
+        a=1e-2,
+        unphased=False,
+    ):
+        """Forward-backward algorithm for duos.
+
+        Arguments:
+            - bafs (`np.array`): B-allele frequencies across the all m sites
+            - pos (`np.array`): m-length vector of basepair positions for sites
+            - haps (`np.array`): a 2 x m array of 0/1 parental haplotypes
+            - freqs (`np.array`): an m-length array of freqs
+            - pi0 (`float`): sparsity parameter for B-allele emission model
+            - std_dev (`float`): standard deviation for B-allele emission model
+            - r (`float`): intra-karyotype transition rate (recombination)
+            - a (`float`): inter-karyotype transition rate
+            - unphased (`bool`): run the model in unphased mode
+
+        Returns:
+            - alphas (`np.array`): forward variable from hmm across k states
+            - scaler (`np.array`): m-length array of scale parameters
+            - states (`list`): tuple representation of states
+            - karyotypes (`np.array`):  array of karyotypes in the MetaHMM model
+            - loglik (`float`): total log-likelihood of B-allele frequency
+
+        """
+        alphas, _, states, karyotypes, _ = self.forward_algorithm(
+            bafs,
+            pos,
+            haps,
+            freqs,
+            maternal=maternal,
+            pi0=pi0,
+            std_dev=std_dev,
+            r=r,
+            a=a,
+            unphased=unphased,
+        )
+        betas, _, _, _, _ = self.backward_algorithm(
+            bafs,
+            pos,
+            haps,
+            freqs,
+            maternal=maternal,
+            pi0=pi0,
+            std_dev=std_dev,
+            r=r,
+            a=a,
+            unphased=unphased,
+        )
+        gammas = (alphas + betas) - logsumexp_sp(alphas + betas, axis=0)
+        return gammas, states, karyotypes
 
 
 class MosaicEst:
