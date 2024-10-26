@@ -1816,7 +1816,9 @@ class RecombEst(PhaseCorrect):
         else:
             return []
 
-    def isolate_recomb_events(self, template_embryo=0, maternal=True, npad=5):
+    def isolate_recomb_events(
+        self, template_embryo=0, maternal=True, ll_thresh=0, npad=5
+    ):
         """Isolate specific recombination events.
 
         NOTE: this uses paternal by default!
@@ -1824,6 +1826,7 @@ class RecombEst(PhaseCorrect):
         Arguments:
             - template_embryo (`int`): index of the template embryo
             - maternal (`bool`): indicator of estimating maternal crossovers.
+            - ll_thresh (`float`): indicator of the likelihood threshold for transmission.
             - npad (`int`): integer value of adjacent informative snps to consider as a switch cluster.
 
         Returns:
@@ -1838,6 +1841,7 @@ class RecombEst(PhaseCorrect):
         m = len(self.embryo_bafs)
         assert m > 1
         assert template_embryo < m
+        assert ll_thresh >= 0
         non_template_ids = [i for i in range(m) if i != template_embryo]
         # Get the informative snps for the specific parent
         info_snps = self.informative_markers(maternal=maternal)
@@ -1965,20 +1969,23 @@ class RecombEst(PhaseCorrect):
             llr_z[j, :] = llrs
 
         # Now we make a rough decision rule here for the likelihood-ratio supporting one or the other class ...
-        # 1 indicates copying the same allele, 2 indicates that copying different alleles.
+        # 1 indicates copying the same allele, -1 indicates that copying different alleles
+        # 0 indicates a "missing" variant
         Z = np.zeros(shape=llr_z.shape)
-        Z[llr_z < 0] = 2
-        Z[llr_z > 0] = 1
+        Z[llr_z < ll_thresh] = -1
+        Z[llr_z > ll_thresh] = 1
 
-        # For each sibling embryo check its "switch-clusters"
-        isolated_switches = []
-        for i in range(len(non_template_ids)):
-            # Check the switch cluster for sibling i
-            potential_switches = np.where(Z[i, :-1] != Z[i, 1:])[0]
-            potential_switches_filt = self.refine_recomb_events(
-                potential_switches, npad=npad
-            )
-            isolated_switches.append(potential_switches_filt)
+        # # For each sibling embryo check its "switch-clusters"
+        # isolated_switches = []
+        # for i in range(len(non_template_ids)):
+        #     # Check the switch cluster for sibling i ....
+        #     potential_switches = np.where(Z[i, :-1] != Z[i, 1:])[0]
+        #     potential_switches_filt = self.refine_recomb_events(
+        #         potential_switches, npad=npad
+        #     )
+        #     isolated_switches.append(potential_switches_filt)
+
+        isolated_switches = self.identify_switch_intervals(Z, npad=npad)
         # Check the total isolated switches ...
         isolated_switches = np.hstack(isolated_switches)
         switch_idx, cnts = np.unique(isolated_switches, return_counts=True)
@@ -1986,6 +1993,30 @@ class RecombEst(PhaseCorrect):
         potential_switches_filt = switch_idx[cnts > (m - 1) / 2].astype(int)
         switch_cnts_filt = cnts[cnts > (m - 1) / 2].astype(int)
         return Z, llr_z, potential_switches_filt, switch_cnts_filt
+
+    def identify_switch_intervals(self, Z, npad=5):
+        """Identify windows of switch intervals - accounting for missing/poor genotypes."""
+        assert Z.ndim == 2
+        assert Z.shape[1] > 0
+        assert Z.shape[0] > 1
+        assert npad > 1
+        nsib = Z.shape[0]
+        isolated_switches = []
+        for i in range(nsib):
+            zs = Z[i, :]
+            asign = np.sign(zs)
+            sz = asign == 0
+            while sz.any():
+                asign[sz] = np.roll(asign, 1)[sz]
+                sz = asign == 0
+            signchange = ((np.roll(asign, 1) - asign) != 0).astype(int)
+            # NOTE: we don't consider the first signchange index...
+            potential_switches = np.where(signchange[1:])[0]
+            potential_switches_filt = self.refine_recomb_events(
+                potential_switches, npad=npad
+            )
+            isolated_switches.append(potential_switches_filt)
+        return isolated_switches
 
     def second_refine_recomb(
         self, template_embryo=0, maternal=True, start=None, end=None
