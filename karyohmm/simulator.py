@@ -570,3 +570,46 @@ class PGTSimMosaic(PGTSimBase):
             "alpha": alpha,
         }
         return res_table
+
+
+class PGTSimVCF(PGTSimBase):
+    """Implements PGT-simulation from realized parental genotypes."""
+
+    def __init__(self):
+        """Initialize the class."""
+        super().__init__()
+
+    def gen_parental_haplotypes(
+        self, vcf_fp, maternal_id=None, paternal_id=None, **kwargs
+    ):
+        """Generate parental haplotypes from an actual VCF."""
+        from cyvcf2 import VCF
+
+        vcf = VCF(vcf_fp, **kwargs)
+        assert isinstance(maternal_id, str)
+        assert isinstance(paternal_id, str)
+        assert maternal_id in vcf.samples
+        assert paternal_id in vcf.samples
+        pos = []
+        for var in vcf():
+            pass
+        raise NotImplementedError(
+            "Generating parents from VCF is not currently supported!"
+        )
+
+    def full_ploidy_sim(
+        self,
+        ploidy=2,
+        length=1e7,
+        rec_prob=1e-4,
+        mat_skew=0.5,
+        std_dev=0.15,
+        mix_prop=0.3,
+        alpha=1.0,
+        switch_err_rate=1e-2,
+        seed=42,
+    ):
+        """Implement full simulation of parents from VCF."""
+        raise NotImplementedError(
+            "Generating full simulation from VCF is not currently supported!"
+        )
