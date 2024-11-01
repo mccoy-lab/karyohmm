@@ -2099,13 +2099,18 @@ class RecombEst(PhaseCorrect):
                 rec_locations.append((p1, p2))
             return rec_locations
 
-    def estimate_crossovers(self, template_embryo=0, maternal=True, npad=5):
+    def estimate_crossovers(
+        self, template_embryo=0, ll_thresh=0, maternal=True, npad=5
+    ):
         """Routine that actually does the FULL crossover estimation + interval refinement."""
         assert self.embryo_bafs is not None
         assert self.embryo_pi0s is not None
         assert self.embryo_sigmas is not None
         Z, llr_z, potential_switches, switch_cnts = self.isolate_recomb_events(
-            template_embryo=template_embryo, maternal=maternal, npad=npad
+            template_embryo=template_embryo,
+            maternal=maternal,
+            ll_thresh=ll_thresh,
+            npad=npad,
         )
         rec_loc = self.finalize_recomb_events(
             potential_switches, template_embryo=template_embryo, maternal=maternal
