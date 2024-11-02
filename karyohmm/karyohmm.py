@@ -25,6 +25,7 @@ from karyohmm_utils import (
     forward_algo_duo,
     forward_algo_sibs,
     lod_phase,
+    logaddexp,
     logsumexp,
     mat_dosage,
     mix_loglik,
@@ -1363,6 +1364,66 @@ class DuoHMM(MetaHMM):
         )
         gammas = (alphas + betas) - logsumexp_sp(alphas + betas, axis=0)
         return gammas, states, karyotypes
+
+    def genotype_parent(
+        self, bafs, haps, freqs, gammas, maternal=True, pi0=0.2, std_dev=0.25
+    ):
+        """Obtain a matrix of genotype dosages/posteriors for the unobserved parent."""
+        assert bafs.ndim == 1
+        assert haps.ndim == 2
+        assert (pi0 > 0) & (pi0 < 1.0)
+        assert std_dev > 0
+        assert bafs.size == haps.shape[1]
+        assert gammas.ndim == 2
+        assert gammas.shape[0] == self.karyotypes.size
+        if freqs is not None:
+            assert freqs.size == bafs.size
+        else:
+            # NOTE: This is approximately uniform across the
+            freqs = np.repeat(0.5, bafs.size)
+        ks = [sum([s >= 0 for s in state]) for state in self.states]
+        n = bafs.size
+        m = len(self.states)
+        geno_dosage = np.zeros(shape=(4, n), dtype=np.float32)
+        geno = [[0, 0], [0, 1], [1, 0], [1, 1]]
+        for i in range(n):
+            f = freqs[i]
+
+            for idx, (x, p) in enumerate(
+                zip(geno, ((1 - f) ** 2, f * (1 - f), f * (1 - f), f**2))
+            ):
+                cur_emissions = np.zeros(m)
+                for j in range(m):
+                    if maternal:
+                        m_ij = mat_dosage(haps[:, i], self.states[j])
+                        p_ij = pat_dosage(x, self.states[j])
+                    else:
+                        m_ij = mat_dosage(x, self.states[j])
+                        p_ij = pat_dosage(haps[:, i], self.states[j])
+                    # dosage is proportional to likelihood * prior * posterior of specific state
+                    cur_emissions[j] = (
+                        emission_baf(
+                            bafs[i],
+                            m_ij,
+                            p_ij,
+                            pi0=pi0,
+                            std_dev=std_dev,
+                            k=ks[j],
+                        )
+                        + np.log(p)
+                        + gammas[j, i]
+                    )
+                geno_dosage[idx, i] = logsumexp(cur_emissions)
+        # Now rescale the dosage estimates ...
+        geno_dosage_rev = np.zeros(shape=(3, n))
+        for i in range(n):
+            tot = logsumexp_sp(geno_dosage[:, i])
+            geno_dosage_rev[0, i] = geno_dosage[0, i] - tot
+            geno_dosage_rev[1, i] = (
+                logaddexp(geno_dosage[1, i], geno_dosage[2, i]) - tot
+            )
+            geno_dosage_rev[2, i] = geno_dosage[3, i] - tot
+        return geno_dosage_rev
 
 
 class MosaicEst:
