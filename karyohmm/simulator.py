@@ -570,3 +570,94 @@ class PGTSimMosaic(PGTSimBase):
             "alpha": alpha,
         }
         return res_table
+
+
+class PGTSimVCF(PGTSimBase):
+    """Implements PGT-simulation from realized parental genotypes."""
+
+    def __init__(self):
+        """Initialize the class."""
+        super().__init__()
+
+    def gen_parental_haplotypes(
+        self, vcf_fp, maternal_id=None, paternal_id=None, **kwargs
+    ):
+        """Generate parental haplotypes from an actual VCF."""
+        from cyvcf2 import VCF
+
+        vcf = VCF(vcf_fp, **kwargs)
+        assert isinstance(maternal_id, str)
+        assert isinstance(paternal_id, str)
+        assert maternal_id in vcf.samples
+        assert paternal_id in vcf.samples
+        pos = []
+        mat_haps = []
+        for var in vcf(samples=[maternal_id]):
+            pos.append(var.POS)
+            mat_haps.append([var.genotypes[0], var.genotypes[1]])
+        pat_haps = []
+        for var in vcf(samples=[paternal_id]):
+            pat_haps.append([var.genotypes[0], var.genotypes[1]])
+        mat_haps = np.array(mat_haps).astype(np.uint8)
+        pat_haps = np.array(pat_haps).astype(np.uint8)
+        pos = np.array(pos)
+        return mat_haps, pat_haps, pos
+
+    def full_ploidy_sim(
+        self,
+        vcf_fp,
+        maternal_id=None,
+        paternal_id=None,
+        ploidy=2,
+        rec_prob=1e-4,
+        mat_skew=0.5,
+        std_dev=0.15,
+        mix_prop=0.3,
+        alpha=1.0,
+        seed=42,
+        **kwargs,
+    ):
+        """Implement full simulation of parents from VCF."""
+        mat_haps, pat_haps, pos = self.gen_parental_genotypes(
+            vcf_fp, maternal_id=maternal_id, paternal_id=paternal_id, **kwargs
+        )
+        zs_maternal, zs_paternal, mat_hap1, pat_hap1, aploid = self.sim_haplotype_paths(
+            mat_haps,
+            pat_haps,
+            ploidy=ploidy,
+            mat_skew=mat_skew,
+            rec_prob=rec_prob,
+            seed=seed,
+        )
+        geno, baf = self.sim_b_allele_freq(
+            mat_hap1,
+            pat_hap1,
+            ploidy=ploidy,
+            std_dev=std_dev,
+            mix_prop=mix_prop,
+            seed=seed,
+        )
+        m = pos.size
+        assert geno.size == m
+        assert baf.size == m
+        assert pos.size == m
+        res_table = {
+            "mat_haps": mat_haps,
+            "pat_haps": pat_haps,
+            "mat_haps_prime": mat_haps,
+            "pat_haps_prime": pat_haps,
+            "zs_maternal": zs_maternal,
+            "zs_paternal": zs_paternal,
+            "geno_embryo": geno,
+            "baf_embryo": baf,
+            "pos": pos,
+            "m": m,
+            "aploid": aploid,
+            "ploidy": ploidy,
+            "rec_prob": rec_prob,
+            "std_dev": std_dev,
+            "mix_prop": mix_prop,
+            "alpha": alpha,
+            "seed": seed,
+        }
+        return res_table
