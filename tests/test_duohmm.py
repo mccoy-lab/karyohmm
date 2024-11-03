@@ -343,3 +343,12 @@ def test_genotype_parent(data):
     # NOTE: this assumes the parent is diploid at these sites
     assert geno_dosage.ndim == 2
     assert geno_dosage.shape[0] == 3
+    pat_geno = np.sum(data["pat_haps_prime"], axis=0)
+    assert pat_geno.size == geno_dosage.shape[1]
+    assert np.all(np.isin(pat_geno, [0, 1, 2]))
+    for i in np.where(pat_geno == 0)[0]:
+        pass
+    for i in np.where(pat_geno == 1)[0]:
+        pass
+    for i in np.where(pat_geno == 2)[0]:
+        pass
