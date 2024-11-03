@@ -1366,7 +1366,7 @@ class DuoHMM(MetaHMM):
         return gammas, states, karyotypes
 
     def genotype_parent(
-        self, bafs, haps, freqs, gammas, maternal=True, pi0=0.2, std_dev=0.25
+        self, bafs, haps, gammas, freqs=None, maternal=True, pi0=0.2, std_dev=0.25
     ):
         """Obtain a matrix of genotype dosages/posteriors for the unobserved parent."""
         assert bafs.ndim == 1
