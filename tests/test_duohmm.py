@@ -3,6 +3,7 @@ import numpy as np
 import pytest
 from karyohmm_utils import create_index_arrays, transition_kernel
 from scipy.special import logsumexp as logsumexp_sp
+from scipy.stats import mode
 
 from karyohmm import DuoHMM, PGTSim
 
@@ -346,9 +347,14 @@ def test_genotype_parent(data):
     pat_geno = np.sum(data["pat_haps_prime"], axis=0)
     assert pat_geno.size == geno_dosage.shape[1]
     assert np.all(np.isin(pat_geno, [0, 1, 2]))
-    for i in np.where(pat_geno == 0)[0]:
-        pass
-    for i in np.where(pat_geno == 1)[0]:
-        pass
-    for i in np.where(pat_geno == 2)[0]:
-        pass
+    # NOTE: we should only check the settings where the parents are opposite homozygotes as a clear sanity check?
+    modal_geno = np.argmax(geno_dosage, axis=0)
+    modal_geno0 = modal_geno[np.where(pat_geno == 0)[0]]
+    modal_geno1 = modal_geno[np.where(pat_geno == 1)[0]]
+    modal_geno2 = modal_geno[np.where(pat_geno == 2)[0]]
+    print(mode(modal_geno0, nan_policy="omit"))
+    print(mode(modal_geno1, nan_policy="omit"))
+    print(mode(modal_geno2, nan_policy="omit"))
+    assert mode(modal_geno0, nan_policy="omit").mode == 0
+    assert mode(modal_geno1, nan_policy="omit").mode == 1
+    assert mode(modal_geno2, nan_policy="omit").mode == 2
