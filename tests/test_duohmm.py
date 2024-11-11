@@ -337,6 +337,7 @@ def test_genotype_parent(data):
         bafs=data["baf_embryo"],
         haps=data["mat_haps"],
         gammas=gammas,
+        freqs=data["allele_freqs"],
         maternal=True,
         pi0=pi0_est,
         std_dev=sigma_est,
