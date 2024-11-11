@@ -47,7 +47,7 @@ class PGTSimBase:
         pat_h1 = binom.rvs(1, ps)
         pat_h2 = binom.rvs(1, ps)
         # NOTE: assuming diploid here ...
-        return [np.vstack([mat_h1, mat_h2]), np.vstack([pat_h1, pat_h2])], ps
+        return np.vstack([mat_h1, mat_h2]), np.vstack([pat_h1, pat_h2]), ps
 
     def create_switch_errors_help(self, haps, err_rate=1e-3, seed=42):
         """Revised method to create switch errors."""

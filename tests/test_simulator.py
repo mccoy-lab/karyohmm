@@ -13,11 +13,12 @@ pgt_sim_mosaic = PGTSimMosaic()
 @given(
     length=st.floats(min_value=1e2, max_value=1e8),
     m=st.integers(min_value=2, max_value=1000),
+    ploidy=st.integers(min_value=0, max_value=3),
 )
-@settings(max_examples=10, deadline=1000)
-def test_pgt_sim(length, m):
+@settings(max_examples=100, deadline=1000)
+def test_pgt_sim(length, m, ploidy):
     """Test for PGT simulations."""
-    data = pgt_sim.full_ploidy_sim(m=m, length=length)
+    data = pgt_sim.full_ploidy_sim(m=m, ploidy=ploidy, length=length)
     assert data["m"] == m
     assert data["length"] == length
     assert np.max(data["pos"]) <= length
@@ -28,7 +29,7 @@ def test_pgt_sim(length, m):
     m=st.integers(min_value=2, max_value=1000),
     nsib=st.integers(min_value=2, max_value=5),
 )
-@settings(max_examples=10, deadline=5000)
+@settings(max_examples=20, deadline=5000)
 def test_pgt_siblings(length, m, nsib):
     """Test for PGT simulations."""
     data = pgt_sim.sibling_euploid_sim(nsibs=nsib, m=m, length=length)
