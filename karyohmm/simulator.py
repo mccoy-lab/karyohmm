@@ -25,6 +25,7 @@ class PGTSimBase:
         Output:
             maternal_haps (`np.array`): maternal haplotypes
             paternal_haps (`np.array`): paternal haplotypes
+            ps (`np.array`): allele frequency of variants
 
         """
         assert m > 0
@@ -46,7 +47,7 @@ class PGTSimBase:
         pat_h1 = binom.rvs(1, ps)
         pat_h2 = binom.rvs(1, ps)
         # NOTE: assuming diploid here ...
-        return [np.vstack([mat_h1, mat_h2]), np.vstack([pat_h1, pat_h2])]
+        return [np.vstack([mat_h1, mat_h2]), np.vstack([pat_h1, pat_h2])], ps
 
     def create_switch_errors_help(self, haps, err_rate=1e-3, seed=42):
         """Revised method to create switch errors."""
@@ -336,7 +337,7 @@ class PGTSim(PGTSimBase):
     ):
         """Simulate a single embryo with a given ploidy status."""
         np.random.seed(seed)
-        mat_haps, pat_haps = self.draw_parental_genotypes(afs=afs, m=m, seed=seed)
+        mat_haps, pat_haps, ps = self.draw_parental_genotypes(afs=afs, m=m, seed=seed)
         zs_maternal, zs_paternal, mat_hap1, pat_hap1, aploid = self.sim_haplotype_paths(
             mat_haps,
             pat_haps,
@@ -377,6 +378,7 @@ class PGTSim(PGTSimBase):
             "geno_embryo": geno,
             "baf_embryo": baf,
             "pos": pos,
+            "allele_freqs": ps,
             "m": m,
             "length": length,
             "aploid": aploid,
@@ -411,7 +413,7 @@ class PGTSim(PGTSimBase):
         np.random.seed(seed)
 
         res_table = {}
-        mat_haps, pat_haps = self.draw_parental_genotypes(afs=None, m=m, seed=seed)
+        mat_haps, pat_haps, ps = self.draw_parental_genotypes(afs=afs, m=m, seed=seed)
         (
             mat_haps_prime,
             pat_haps_prime,
@@ -427,6 +429,7 @@ class PGTSim(PGTSimBase):
         res_table["pat_haps_real"] = pat_haps_prime
         res_table["mat_switch"] = mat_switch
         res_table["pat_switch"] = pat_switch
+        res_table["allele_freqs"] = ps
         res_table["m"] = m
         res_table["nsibs"] = nsibs
         res_table["aploid"] = "2"
@@ -500,7 +503,7 @@ class PGTSimMosaic(PGTSimBase):
             props /= np.sum(props)
         # 1. Simulate the parental haplotypes
         np.random.seed(seed)
-        mat_haps, pat_haps = self.draw_parental_genotypes(afs=afs, m=m, seed=seed)
+        mat_haps, pat_haps, ps = self.draw_parental_genotypes(afs=afs, m=m, seed=seed)
         mat_haps_prime, pat_haps_prime, _, _ = self.create_switch_errors(
             mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
         )
@@ -559,6 +562,7 @@ class PGTSimMosaic(PGTSimBase):
             "baf_embryo": baf_embryo,
             "lrr_embryo": lrr_embryo,
             "m": m,
+            "allele_freqs": ps,
             "pos": pos,
             "length": length,
             "aploid": aploids,
@@ -651,6 +655,7 @@ class PGTSimVCF(PGTSimBase):
             "geno_embryo": geno,
             "baf_embryo": baf,
             "pos": pos,
+            "allele_freqs": None,
             "m": m,
             "aploid": aploid,
             "ploidy": ploidy,
