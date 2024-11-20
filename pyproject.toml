@@ -26,7 +26,8 @@ Homepage = "https://github.com/mccoy-lab/karyohmm"
 tests = [ "pytest", "pytest-cov", "hypothesis", "flake8", "sphinx"]
 
 [project.scripts]
-karyohmm-cli = "karyohmm.cli:main"
+karyohmm-infer = "karyohmm.infer_cli:main"
+karyohmm-simulate = "karyohmm.simulate_cli:main"
 
 [tool.setuptools]
 zip-safe = false

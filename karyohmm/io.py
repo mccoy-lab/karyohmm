@@ -1,4 +1,5 @@
 """Classes for reading in data for karyoHMM.
+
 Implements methods for both MetaHMM and DuoHMM-based datasets.
 """
 

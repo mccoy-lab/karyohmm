@@ -31,7 +31,7 @@ logging.basicConfig(
     default=False,
     show_default=True,
     type=bool,
-    help="Apply the Viterbi algorithm for tracing ploidy.",
+    help="Viterbi algorithm for tracing ploidy states.",
 )
 @click.option(
     "--mode",
@@ -46,7 +46,7 @@ logging.basicConfig(
     default="Powell",
     type=click.Choice(["Nelder-Mead", "L-BFGS-B", "Powell"]),
     show_default=True,
-    help="Method for parameter inference.",
+    help="Optimization method for parameter inference.",
 )
 @click.option(
     "--recomb_rate",
@@ -73,7 +73,7 @@ logging.basicConfig(
     default=None,
     type=bool,
     show_default=True,
-    help="Indicator of duo being a mother-child duo.",
+    help="Indicator of duo being mother-child duo.",
 )
 @click.option(
     "--gzip",
@@ -103,7 +103,7 @@ def main(
     gzip=True,
     out="karyohmm",
 ):
-    """Karyohmm CLI."""
+    """Karyohmm-Inference CLI."""
     logging.info(f"Starting to read input data {input}.")
     data_reader = DataReader(mode=mode, duo_maternal=duo_maternal)
     data_df = data_reader.read_data(input)
@@ -196,7 +196,7 @@ def main(
                 ]
                 gamma_dfs.append(gamma_df)
         if mode == "Duo":
-            raise NotImplementedError("Currently DuoHMM is in development progress!")
+            raise NotImplementedError("Currently DuoHMM is in development!")
 
     if mode == "Meta":
         out_fp = f"{out}.meta.posterior.tsv.gz" if gzip else f"{out}.meta.posterior.tsv"
