@@ -6,7 +6,7 @@ import click
 import numpy as np
 import pandas as pd
 
-from karyohmm import MetaHMM
+from karyohmm import DataReader, DuoHMM, MetaHMM, RecombEst
 
 # Setup the logging configuration for the CLI
 logging.basicConfig(
@@ -14,73 +14,6 @@ logging.basicConfig(
     level=logging.INFO,
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-
-# Shared type requirements for underlying data
-karyo_dtypes = {
-    "chrom": str,
-    "pos": float,
-    "ref": str,
-    "alt": str,
-    "baf": float,
-    "mat_hap0": int,
-    "mat_hap1": int,
-    "pat_hap0": int,
-    "pat_hap1": int,
-}
-
-
-def read_data_np(input_fp):
-    """Read data from an .npy or npz file and reformat for karyohmm."""
-    data = np.load(input_fp, allow_pickle=True)
-    for x in ["chrom", "pos", "ref", "alt", "baf", "mat_haps", "pat_haps"]:
-        assert x in data
-    df = pd.DataFrame(
-        {
-            "chrom": data["chrom"],
-            "pos": data["pos"],
-            "ref": data["ref"],
-            "alt": data["alt"],
-            "baf": data["baf"],
-            "mat_hap0": data["mat_haps"][0, :],
-            "mat_hap1": data["mat_haps"][1, :],
-            "pat_hap0": data["pat_haps"][0, :],
-            "pat_hap1": data["pat_haps"][1, :],
-        },
-        dtype=karyo_dtypes,
-    )
-    return df
-
-
-def read_data_df(input_fp):
-    """Read in data from a pre-existing text-based dataset."""
-    sep = ","
-    if ".tsv" in input_fp:
-        sep = "\t"
-    elif ".txt" in input_fp:
-        sep = " "
-    df = pd.read_csv(input_fp, dtype=karyo_dtypes, sep=sep)
-    for x in [
-        "chrom",
-        "pos",
-        "ref",
-        "alt",
-        "baf",
-        "mat_hap0",
-        "mat_hap1",
-        "pat_hap0",
-        "pat_hap1",
-    ]:
-        assert x in df.columns
-    return df
-
-
-def read_data(input_fp):
-    """Read in data in either pandas/numpy format."""
-    if (".npz" in input_fp) or (".npy" in input_fp):
-        df = read_data_np(input_fp)
-    else:
-        df = read_data_df(input_fp)
-    return df
 
 
 @click.command()
@@ -104,7 +37,7 @@ def read_data(input_fp):
     "--mode",
     required=True,
     default="Meta",
-    type=click.Choice(["Meta"]),
+    type=click.Choice(["Meta", "Duo"]),
     show_default=True,
 )
 @click.option(
@@ -128,10 +61,19 @@ def read_data(input_fp):
     "--aneuploidy_rate",
     "-a",
     required=False,
-    default=1e-10,
+    default=1e-2,
     type=float,
     show_default=True,
     help="Probability of shifting between aneuploidy states between SNPs.",
+)
+@click.option(
+    "--duo_maternal",
+    "-dm",
+    required=False,
+    default=None,
+    type=bool,
+    show_default=True,
+    help="Indicator of duo being a mother-child duo.",
 )
 @click.option(
     "--gzip",
@@ -140,7 +82,7 @@ def read_data(input_fp):
     required=False,
     type=bool,
     default=True,
-    help="Gzip output files",
+    help="Gzip output files.",
 )
 @click.option(
     "--out",
@@ -152,24 +94,28 @@ def read_data(input_fp):
 )
 def main(
     input,
-    viterbi,
-    mode,
+    viterbi=False,
+    mode="Meta",
     algo="Powell",
     recomb_rate=1e-8,
     aneuploidy_rate=1e-2,
+    duo_maternal=None,
     gzip=True,
     out="karyohmm",
 ):
     """Karyohmm CLI."""
     logging.info(f"Starting to read input data {input}.")
-    data_df = read_data(input)
+    data_reader = DataReader(mode=mode, duo_maternal=duo_maternal)
+    data_df = data_reader.read_data(input)
     assert data_df is not None
     logging.info(f"Finished reading in {input}.")
     if mode == "Meta":
         hmm = MetaHMM()
+    elif mode == "Duo":
+        hmm = DuoHMM()
     else:
         raise NotImplementedError(
-            "Meta-HMM is currently the only supported model for karyohmm!"
+            f"Mode {mode} is not currently supported  in karyoHMM!"
         )
     # The unique chromosomes present in this dataset and the specific
     uniq_chroms = np.unique(data_df["chrom"])

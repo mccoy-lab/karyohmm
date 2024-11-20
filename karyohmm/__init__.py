@@ -20,5 +20,6 @@ Modules exported are:
 
 __version__ = "0.3.4a"
 
+from .io import DataReader
 from .karyohmm import DuoHMM, MetaHMM, MosaicEst, PhaseCorrect, QuadHMM, RecombEst
 from .simulator import PGTSim, PGTSimMosaic
