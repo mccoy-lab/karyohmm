@@ -466,6 +466,72 @@ class PGTSim(PGTSimBase):
             res_table[f"zs_paternal{i}"] = zs_paternal
         return res_table
 
+    def sim_from_haps(
+        self,
+        mat_haps,
+        pat_haps,
+        pos,
+        ploidy=2,
+        ec_prob=1e-4,
+        mat_skew=0.5,
+        std_dev=0.15,
+        mix_prop=0.3,
+        alpha=1.0,
+        switch_err_rate=1e-2,
+        seed=42,
+    ):
+        """Simulate data"""
+        zs_maternal, zs_paternal, mat_hap1, pat_hap1, aploid = self.sim_haplotype_paths(
+            mat_haps,
+            pat_haps,
+            ploidy=ploidy,
+            mat_skew=mat_skew,
+            rec_prob=rec_prob,
+            seed=seed,
+        )
+        geno, baf = self.sim_b_allele_freq(
+            mat_hap1,
+            pat_hap1,
+            ploidy=ploidy,
+            std_dev=std_dev,
+            mix_prop=mix_prop,
+            seed=seed,
+        )
+        (
+            mat_haps_prime,
+            pat_haps_prime,
+            mat_switch,
+            pat_switch,
+        ) = self.create_switch_errors(
+            mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
+        )
+        assert geno.size == baf.size
+        assert pos.size == baf.size
+        res_table = {
+            "mat_haps": mat_haps,
+            "pat_haps": pat_haps,
+            "mat_haps_prime": mat_haps_prime,
+            "pat_haps_prime": pat_haps_prime,
+            "mat_switch": mat_switch,
+            "pat_switch": pat_switch,
+            "zs_maternal": zs_maternal,
+            "zs_paternal": zs_paternal,
+            "geno_embryo": geno,
+            "baf_embryo": baf,
+            "pos": pos,
+            "allele_freqs": None,
+            "m": m,
+            "length": length,
+            "aploid": aploid,
+            "ploidy": ploidy,
+            "rec_prob": rec_prob,
+            "std_dev": std_dev,
+            "mix_prop": mix_prop,
+            "alpha": alpha,
+            "seed": seed,
+        }
+        return res_table
+
 
 class PGTSimMosaic(PGTSimBase):
     """Simulator for mosaic aneuploidies."""
@@ -575,9 +641,108 @@ class PGTSimMosaic(PGTSimBase):
         }
         return res_table
 
+    def sim_from_haps(
+        self,
+        mat_haps,
+        pat_haps,
+        pos,
+        ploidies=np.array([0, 1, 2, 3]),
+        props=np.array([0, 0, 1.0, 0.0]),
+        ncells=10,
+        rec_prob=1e-4,
+        mat_skew=0.5,
+        std_dev=0.15,
+        mix_prop=0.3,
+        alpha=1.0,
+        switch_err_rate=1e-2,
+        seed=42,
+    ):
+        """Simulate mosaic aneuploidies from known parental haplotypes."""
+        assert mat_haps.ndim == 2
+        assert pat_haps.ndim == 2
+        assert mat_haps.size == pat_haps.size
+        assert mat_haps.shape[1] == pos.size
+        assert pat_haps.shape[1] == pos.size
+        mat_haps_prime, pat_haps_prime, _, _ = self.create_switch_errors(
+            mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
+        )
+        # 2. Draw cells from a distribution of ploidies
+        mix_ploidies = np.random.choice(ploidies, p=props, size=ncells)
+        bafs = np.zeros(shape=(ncells, m))
+        lrrs = np.zeros(shape=(ncells, m))
+        genos = np.zeros(shape=(ncells, m))
+        aploids = []
+        # NOTE: only simulate unique ploidies once and then take the weighted mean across them?
+        for i, p in enumerate(np.unique(mix_ploidies)):
+            (
+                zs_maternal,
+                zs_paternal,
+                mat_hap1,
+                pat_hap1,
+                aploid,
+            ) = self.sim_haplotype_paths(
+                mat_haps,
+                pat_haps,
+                ploidy=p,
+                mat_skew=mat_skew,
+                rec_prob=rec_prob,
+                seed=i + 1,
+            )
+            geno, baf = self.sim_b_allele_freq(
+                mat_hap1,
+                pat_hap1,
+                ploidy=p,
+                std_dev=std_dev,
+                mix_prop=mix_prop,
+                seed=i + 1,
+            )
+            lrr = self.sim_logR_ratio(
+                mat_hap1, pat_hap1, ploidy=p, alpha=alpha, seed=i + 1
+            )
+            assert baf.size == m
+            assert lrr.size == m
+            for j in np.where(mix_ploidies == p):
+                bafs[j, :] = baf
+                lrrs[j, :] = lrr
+            aploids.append(aploid)
+        # Take the mean BAF + LRR estimates across the bulk samples
+        baf_embryo = np.mean(bafs, axis=0)
+        lrr_embryo = np.mean(lrrs, axis=0)
+        assert baf_embryo.size == m
+        res_table = {
+            "mat_haps": mat_haps,
+            "pat_haps": pat_haps,
+            "mat_haps_prime": mat_haps_prime,
+            "pat_haps_prime": pat_haps_prime,
+            "geno_embryo_bulk": genos,
+            "baf_embryo_bulk": bafs,
+            "lrr_embryo_bulk": lrrs,
+            "baf_embryo": baf_embryo,
+            "lrr_embryo": lrr_embryo,
+            "allele_freqs": None,
+            "pos": pos,
+            "length": length,
+            "aploid": aploids,
+            "ploidies": mix_ploidies,
+            "rec_prob": rec_prob,
+            "std_dev": std_dev,
+            "mix_prop": mix_prop,
+            "seed": seed,
+            "alpha": alpha,
+        }
+        return res_table
 
-class PGTSimVCF(PGTSimBase):
-    """Implements PGT-simulation from realized parental genotypes."""
+
+class PGTSimSegmental(PGTSimBase):
+    """Simulator for segmental aneuploidies."""
+
+    def __init__(self):
+        """Initialize simulation of segmental data."""
+        super().__init__()
+
+
+class PGTSimVCF(PGTSim):
+    """Implements PGT-simulation from parental haplotypes."""
 
     def __init__(self):
         """Initialize the class."""
@@ -606,63 +771,3 @@ class PGTSimVCF(PGTSimBase):
         pat_haps = np.array(pat_haps).astype(np.uint8)
         pos = np.array(pos)
         return mat_haps, pat_haps, pos
-
-    def full_ploidy_sim(
-        self,
-        vcf_fp,
-        maternal_id=None,
-        paternal_id=None,
-        ploidy=2,
-        rec_prob=1e-4,
-        mat_skew=0.5,
-        std_dev=0.15,
-        mix_prop=0.3,
-        alpha=1.0,
-        seed=42,
-        **kwargs,
-    ):
-        """Implement full simulation of parents from VCF."""
-        mat_haps, pat_haps, pos = self.gen_parental_genotypes(
-            vcf_fp, maternal_id=maternal_id, paternal_id=paternal_id, **kwargs
-        )
-        zs_maternal, zs_paternal, mat_hap1, pat_hap1, aploid = self.sim_haplotype_paths(
-            mat_haps,
-            pat_haps,
-            ploidy=ploidy,
-            mat_skew=mat_skew,
-            rec_prob=rec_prob,
-            seed=seed,
-        )
-        geno, baf = self.sim_b_allele_freq(
-            mat_hap1,
-            pat_hap1,
-            ploidy=ploidy,
-            std_dev=std_dev,
-            mix_prop=mix_prop,
-            seed=seed,
-        )
-        m = pos.size
-        assert geno.size == m
-        assert baf.size == m
-        assert pos.size == m
-        res_table = {
-            "mat_haps": mat_haps,
-            "pat_haps": pat_haps,
-            "mat_haps_prime": mat_haps,
-            "pat_haps_prime": pat_haps,
-            "zs_maternal": zs_maternal,
-            "zs_paternal": zs_paternal,
-            "geno_embryo": geno,
-            "baf_embryo": baf,
-            "pos": pos,
-            "allele_freqs": None,
-            "m": m,
-            "aploid": aploid,
-            "ploidy": ploidy,
-            "rec_prob": rec_prob,
-            "std_dev": std_dev,
-            "mix_prop": mix_prop,
-            "alpha": alpha,
-            "seed": seed,
-        }
-        return res_table

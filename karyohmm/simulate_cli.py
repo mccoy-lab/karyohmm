@@ -34,6 +34,40 @@ logging.basicConfig(
     help="Recombination rate between SNPs.",
 )
 @click.option(
+    "--vcf",
+    "-v",
+    required=False,
+    default=None,
+    type=float,
+    show_default=True,
+    help="VCF as input for parental haplotype data.",
+)
+@click.option(
+    "--vcf",
+    "-v",
+    required=False,
+    default=None,
+    type=float,
+    show_default=True,
+    help="VCF as input for parental haplotype data.",
+)
+@click.option(
+    "--maternal_id",
+    required=False,
+    default=None,
+    type=float,
+    show_default=True,
+    help="IID of maternal individual in VCF",
+)
+@click.option(
+    "--paternal_id",
+    required=False,
+    default=None,
+    type=float,
+    show_default=True,
+    help="IID of paternal individual in VCF.",
+)
+@click.option(
     "--gzip",
     "-g",
     is_flag=True,
@@ -60,4 +94,4 @@ def main(
 ):
     """Karyohmm-Simulator CLI."""
     logging.info("Starting simulation ...")
-    logging.info("Finished karyohmm analysis!")
+    logging.info("Finished data simulation!")
