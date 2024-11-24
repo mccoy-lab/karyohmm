@@ -1,7 +1,16 @@
 """Simulation utilities for unit-testing suite."""
 
 import numpy as np
-from scipy.stats import beta, binom, norm, poisson, rv_histogram, truncnorm, uniform
+from scipy.stats import (
+    beta,
+    binom,
+    norm,
+    poisson,
+    randint,
+    rv_histogram,
+    truncnorm,
+    uniform,
+)
 
 # These are the different classes of aneuploidy that we can putatively simulate from
 
@@ -472,7 +481,7 @@ class PGTSim(PGTSimBase):
         pat_haps,
         pos,
         ploidy=2,
-        ec_prob=1e-4,
+        rec_prob=1e-4,
         mat_skew=0.5,
         std_dev=0.15,
         mix_prop=0.3,
@@ -480,7 +489,7 @@ class PGTSim(PGTSimBase):
         switch_err_rate=1e-2,
         seed=42,
     ):
-        """Simulate data"""
+        """Simulate data from pre-existing haplotype data."""
         zs_maternal, zs_paternal, mat_hap1, pat_hap1, aploid = self.sim_haplotype_paths(
             mat_haps,
             pat_haps,
@@ -520,8 +529,6 @@ class PGTSim(PGTSimBase):
             "baf_embryo": baf,
             "pos": pos,
             "allele_freqs": None,
-            "m": m,
-            "length": length,
             "aploid": aploid,
             "ploidy": ploidy,
             "rec_prob": rec_prob,
@@ -663,6 +670,7 @@ class PGTSimMosaic(PGTSimBase):
         assert mat_haps.size == pat_haps.size
         assert mat_haps.shape[1] == pos.size
         assert pat_haps.shape[1] == pos.size
+        m = pos.size
         mat_haps_prime, pat_haps_prime, _, _ = self.create_switch_errors(
             mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
         )
@@ -721,7 +729,6 @@ class PGTSimMosaic(PGTSimBase):
             "lrr_embryo": lrr_embryo,
             "allele_freqs": None,
             "pos": pos,
-            "length": length,
             "aploid": aploids,
             "ploidies": mix_ploidies,
             "rec_prob": rec_prob,
@@ -770,7 +777,9 @@ class PGTSimSegmental(PGTSimBase):
         assert rec_prob > 0
         np.random.seed(seed)
         m = mat_haps.shape[1]
-        aneu_type, (start, end) = seg_aneuploidy(m=m, mean_size=mean_size, seed=seed)
+        aneu_type, (start, end) = self.seg_aneuploidy(
+            m=m, mean_size=mean_size, seed=seed
+        )
         zs_maternal = np.zeros(m)
         zs_paternal = np.zeros(m)
         zs1_maternal = np.repeat(np.nan, m)
@@ -859,31 +868,31 @@ class PGTSimSegmental(PGTSimBase):
             else:
                 pass
 
-    # Now sample through the underlying haplotypes
-    mat_haps1 = np.zeros(m, dtype=np.uint16)
-    pat_haps1 = np.zeros(m, dtype=np.uint16)
-    for i in range(m):
-        # Sample the alleles for both maternal and paternal haplotypes ...
-        if ~np.isnan(zs_maternal[i]):
-            mat_haps1[i] = mat_haps[int(zs_maternal[i]), i]
-        if ~np.isnan(zs_paternal[i]):
-            pat_haps1[i] = pat_haps[int(zs_paternal[i]), i]
-        if ~np.isnan(zs1_maternal[i]):
-            mat_haps1[i] += mat_haps[int(zs1_maternal[i]), i]
-        if ~np.isnan(zs1_paternal[i]):
-            pat_haps1[i] += pat_haps[int(zs1_paternal[i]), i]
-    return (
-        mat_haps1,
-        pat_haps1,
-        aneu_type,
-        start,
-        end,
-        zs_maternal,
-        zs_paternal,
-        zs1_maternal,
-        zs1_paternal,
-        ploidies,
-    )
+        # Now sample through the underlying haplotypes
+        mat_haps1 = np.zeros(m, dtype=np.uint16)
+        pat_haps1 = np.zeros(m, dtype=np.uint16)
+        for i in range(m):
+            # Sample the alleles for both maternal and paternal haplotypes ...
+            if ~np.isnan(zs_maternal[i]):
+                mat_haps1[i] = mat_haps[int(zs_maternal[i]), i]
+            if ~np.isnan(zs_paternal[i]):
+                pat_haps1[i] = pat_haps[int(zs_paternal[i]), i]
+            if ~np.isnan(zs1_maternal[i]):
+                mat_haps1[i] += mat_haps[int(zs1_maternal[i]), i]
+            if ~np.isnan(zs1_paternal[i]):
+                pat_haps1[i] += pat_haps[int(zs1_paternal[i]), i]
+        return (
+            mat_haps1,
+            pat_haps1,
+            aneu_type,
+            start,
+            end,
+            zs_maternal,
+            zs_paternal,
+            zs1_maternal,
+            zs1_paternal,
+            ploidies,
+        )
 
     def sim_b_allele_freq_segmental(
         self, mat_hap, pat_hap, ploidies, std_dev=0.1, mix_prop=0.6, seed=42
@@ -930,7 +939,7 @@ class PGTSimSegmental(PGTSimBase):
     ):
         """Conduct a full simulation of segmental aneuploidies conditional on parental haplotypes."""
         np.random.seed(seed)
-        mat_haps, pat_haps = draw_parental_genotypes(afs=afs, m=m, seed=seed)
+        mat_haps, pat_haps = self.draw_parental_genotypes(afs=afs, m=m, seed=seed)
         (
             mat_hap1,
             pat_hap1,
@@ -942,17 +951,22 @@ class PGTSimSegmental(PGTSimBase):
             zs1_maternal,
             zs1_paternal,
             ploidies,
-        ) = sim_haplotype_paths_segmental(
+        ) = self.sim_haplotype_paths_segmental(
             mat_haps,
             pat_haps,
             rec_prob=rec_prob,
             mean_size=mean_size,
             seed=seed,
         )
-        geno, baf, ploidies = sim_b_allele_freq_segmental(
+        geno, baf, ploidies = self.sim_b_allele_freq_segmental(
             mat_hap1, pat_hap1, ploidies, std_dev=std_dev, mix_prop=mix_prop, seed=seed
         )
-        mat_haps_prime, pat_haps_prime, mat_switch, pat_switch = create_switch_errors(
+        (
+            mat_haps_prime,
+            pat_haps_prime,
+            mat_switch,
+            pat_switch,
+        ) = self.create_switch_errors(
             mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
         )
         assert geno.size == m
@@ -978,9 +992,66 @@ class PGTSimSegmental(PGTSimBase):
         }
         return res_table
 
-    def sim_from_haps(self, mat_haps, pat_haps, **kwargs):
-        """Simulate a segmental aneuploidy from known haplotypes"""
-        raise NotImplementedError("Segmental simulation is not currently implemented!")
+    def sim_from_haps(
+        self,
+        mat_haps,
+        pat_haps,
+        pos,
+        rec_prob=1e-4,
+        std_dev=0.1,
+        mix_prop=0.7,
+        mean_size=10,
+        switch_err_rate=1e-2,
+        seed=42,
+    ):
+        """Simulate a segmental aneuploidy from known haplotypes."""
+        (
+            mat_hap1,
+            pat_hap1,
+            aneu_type,
+            start,
+            end,
+            zs_maternal,
+            zs_paternal,
+            zs1_maternal,
+            zs1_paternal,
+            ploidies,
+        ) = self.sim_haplotype_paths_segmental(
+            mat_haps,
+            pat_haps,
+            rec_prob=rec_prob,
+            mean_size=mean_size,
+            seed=seed,
+        )
+        geno, baf, ploidies = self.sim_b_allele_freq_segmental(
+            mat_hap1, pat_hap1, ploidies, std_dev=std_dev, mix_prop=mix_prop, seed=seed
+        )
+        (
+            mat_haps_prime,
+            pat_haps_prime,
+            mat_switch,
+            pat_switch,
+        ) = self.create_switch_errors(
+            mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
+        )
+        res_table = {
+            "mat_haps": mat_haps,
+            "pat_haps": pat_haps,
+            "mat_haps_prime": mat_haps_prime,
+            "pat_haps_prime": pat_haps_prime,
+            "ploidies": ploidies,
+            "seg_aneuploidy_type": aneu_type,
+            "seg_start": start,
+            "seg_end": end,
+            "geno_embryo": geno,
+            "baf_embryo": baf,
+            "pos": pos,
+            "rec_prob": rec_prob,
+            "std_dev": std_dev,
+            "mix_prop": mix_prop,
+            "seed": seed,
+        }
+        return res_table
 
 
 class PGTSimVCF(PGTSim):
