@@ -1,7 +1,7 @@
 """Simulation utilities for unit-testing suite."""
 
 import numpy as np
-from scipy.stats import beta, binom, norm, rv_histogram, truncnorm, uniform
+from scipy.stats import beta, binom, norm, poisson, rv_histogram, truncnorm, uniform
 
 # These are the different classes of aneuploidy that we can putatively simulate from
 
@@ -739,6 +739,248 @@ class PGTSimSegmental(PGTSimBase):
     def __init__(self):
         """Initialize simulation of segmental data."""
         super().__init__()
+
+    def seg_aneuploidy(self, m=100, mean_size=10, seed=42):
+        """Choose the position and type of the segmental aneuploidy."""
+        assert mean_size > 0
+        assert seed > 0
+        # 1. Identify the number of SNPs that the segmental aneuploidy occupies
+        np.random.seed(seed)
+        seg_l = m
+        while seg_l >= m:
+            seg_l = poisson.rvs(mean_size, loc=0, size=1)
+        assert m > seg_l
+        # 1. Define the start and ending position of the aneuploidy
+        start = randint.rvs(low=0, high=m - seg_l, size=1)
+        end = start + seg_l
+        # 2. Determine the type of the aneuploidy as a random choice
+        aneu_type = np.random.choice(["1m", "1p", "3m", "3p"])
+        return aneu_type, (start, end)
+
+    def sim_haplotype_paths_segmental(
+        self, mat_haps, pat_haps, rec_prob=1e-2, mean_size=10, seed=42
+    ):
+        """Simulate haplotypes and segmental aneuploidies.
+
+        This simulates a local segmental aneuploidy in an otherwise disomic background.
+
+        """
+        assert mat_haps.size == pat_haps.size
+        assert seed > 0
+        assert rec_prob > 0
+        np.random.seed(seed)
+        m = mat_haps.shape[1]
+        aneu_type, (start, end) = seg_aneuploidy(m=m, mean_size=mean_size, seed=seed)
+        zs_maternal = np.zeros(m)
+        zs_paternal = np.zeros(m)
+        zs1_maternal = np.repeat(np.nan, m)
+        zs1_paternal = np.repeat(np.nan, m)
+        ploidies = np.zeros(m, dtype=np.uint16)
+        zs_maternal[0] = binom.rvs(1, 0.5)
+        zs_paternal[0] = binom.rvs(1, 0.5)
+        for i in range(1, m):
+            if (i >= start) and (i <= end):
+                # NOTE: we're in the aneuploidy state here ...
+                if aneu_type == "1m":
+                    # Only sample from the maternal haplotypes
+                    ploidies[i] = 1
+                    zs_maternal[i] = (
+                        1 - zs_maternal[i - 1]
+                        if uniform.rvs() <= rec_prob
+                        else zs_maternal[i - 1]
+                    )
+                    zs_paternal[i] = np.nan
+                if aneu_type == "1p":
+                    # Only sample from the paternal haplotypes
+                    ploidies[i] = 1
+                    zs_paternal[i] = (
+                        1 - zs_paternal[i - 1]
+                        if uniform.rvs() <= rec_prob
+                        else zs_paternal[i - 1]
+                    )
+                    zs_maternal[i] = np.nan
+                if aneu_type == "3m":
+                    ploidies[i] = 3
+                    if (i == 0) or np.isnan(zs1_maternal[(i - 1)]):
+                        zs1_maternal[i] = binom.rvs(1, 0.5)
+                    else:
+                        zs1_maternal[i] = (
+                            1 - zs1_maternal[i - 1]
+                            if uniform.rvs() <= rec_prob
+                            else zs1_maternal[i - 1]
+                        )
+                    zs_maternal[i] = (
+                        1 - zs_maternal[i - 1]
+                        if uniform.rvs() <= rec_prob
+                        else zs_maternal[i - 1]
+                    )
+                    zs_paternal[i] = (
+                        1 - zs_paternal[i - 1]
+                        if uniform.rvs() <= rec_prob
+                        else zs_paternal[i - 1]
+                    )
+                if aneu_type == "3p":
+                    ploidies[i] = 3
+                    if (i == 0) or np.isnan(zs1_paternal[(i - 1)]):
+                        zs1_paternal[i] = binom.rvs(1, 0.5)
+                    else:
+                        zs1_paternal[i] = (
+                            1 - zs1_maternal[i - 1]
+                            if uniform.rvs() <= rec_prob
+                            else zs1_paternal[i - 1]
+                        )
+                    zs_maternal[i] = (
+                        1 - zs_maternal[i - 1]
+                        if uniform.rvs() <= rec_prob
+                        else zs_maternal[i - 1]
+                    )
+                    zs_paternal[i] = (
+                        1 - zs_paternal[i - 1]
+                        if uniform.rvs() <= rec_prob
+                        else zs_paternal[i - 1]
+                    )
+        else:
+            ploidies[i] = 2
+            # NOTE: what happens if you are coming back from a null zs_maternal?
+            if ~np.isnan(zs_maternal[i - 1]):
+                zs_maternal[i] = (
+                    1 - zs_maternal[i - 1]
+                    if uniform.rvs() <= rec_prob
+                    else zs_maternal[i - 1]
+                )
+            else:
+                pass
+            if ~np.isnan(zs_paternal[i - 1]):
+                zs_paternal[i] = (
+                    1 - zs_paternal[i - 1]
+                    if uniform.rvs() <= rec_prob
+                    else zs_paternal[i - 1]
+                )
+            else:
+                pass
+
+    # Now sample through the underlying haplotypes
+    mat_haps1 = np.zeros(m, dtype=np.uint16)
+    pat_haps1 = np.zeros(m, dtype=np.uint16)
+    for i in range(m):
+        # Sample the alleles for both maternal and paternal haplotypes ...
+        if ~np.isnan(zs_maternal[i]):
+            mat_haps1[i] = mat_haps[int(zs_maternal[i]), i]
+        if ~np.isnan(zs_paternal[i]):
+            pat_haps1[i] = pat_haps[int(zs_paternal[i]), i]
+        if ~np.isnan(zs1_maternal[i]):
+            mat_haps1[i] += mat_haps[int(zs1_maternal[i]), i]
+        if ~np.isnan(zs1_paternal[i]):
+            pat_haps1[i] += pat_haps[int(zs1_paternal[i]), i]
+    return (
+        mat_haps1,
+        pat_haps1,
+        aneu_type,
+        start,
+        end,
+        zs_maternal,
+        zs_paternal,
+        zs1_maternal,
+        zs1_paternal,
+        ploidies,
+    )
+
+    def sim_b_allele_freq_segmental(
+        self, mat_hap, pat_hap, ploidies, std_dev=0.1, mix_prop=0.6, seed=42
+    ):
+        """Simulate B-allele frequency conditional on parental haplotypes."""
+        np.random.seed(seed)
+        assert mat_hap.size == pat_hap.size
+        assert ploidies.size == mat_hap.size
+        true_geno = mat_hap + pat_hap
+        baf = np.zeros(true_geno.size)
+        for i in range(baf.size):
+            if ploidies[i] == 0:
+                baf[i] = np.random.uniform()
+            else:
+                mu_i = true_geno[i] / ploidies[i]
+                a, b = (0 - mu_i) / std_dev, (1 - mu_i) / std_dev
+                if mu_i == 0:
+                    baf[i] = (
+                        0.0
+                        if uniform.rvs() < mix_prop
+                        else truncnorm.rvs(a, b, loc=mu_i, scale=std_dev)
+                    )
+                elif mu_i == 1:
+                    baf[i] = (
+                        1.0
+                        if uniform.rvs() < mix_prop
+                        else truncnorm.rvs(a, b, loc=mu_i, scale=std_dev)
+                    )
+                else:
+                    baf[i] = truncnorm.rvs(a, b, loc=mu_i, scale=std_dev)
+        return true_geno, baf, ploidies
+
+    def full_sim_segmental(
+        self,
+        afs=None,
+        m=10000,
+        length=50e6,
+        rec_prob=1e-4,
+        std_dev=0.1,
+        mix_prop=0.7,
+        mean_size=10,
+        switch_err_rate=1e-2,
+        seed=42,
+    ):
+        """Conduct a full simulation of segmental aneuploidies conditional on parental haplotypes."""
+        np.random.seed(seed)
+        mat_haps, pat_haps = draw_parental_genotypes(afs=afs, m=m, seed=seed)
+        (
+            mat_hap1,
+            pat_hap1,
+            aneu_type,
+            start,
+            end,
+            zs_maternal,
+            zs_paternal,
+            zs1_maternal,
+            zs1_paternal,
+            ploidies,
+        ) = sim_haplotype_paths_segmental(
+            mat_haps,
+            pat_haps,
+            rec_prob=rec_prob,
+            mean_size=mean_size,
+            seed=seed,
+        )
+        geno, baf, ploidies = sim_b_allele_freq_segmental(
+            mat_hap1, pat_hap1, ploidies, std_dev=std_dev, mix_prop=mix_prop, seed=seed
+        )
+        mat_haps_prime, pat_haps_prime, mat_switch, pat_switch = create_switch_errors(
+            mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
+        )
+        assert geno.size == m
+        assert baf.size == m
+        pos = np.sort(np.random.uniform(high=length, size=m))
+        res_table = {
+            "mat_haps": mat_haps,
+            "pat_haps": pat_haps,
+            "mat_haps_prime": mat_haps_prime,
+            "pat_haps_prime": pat_haps_prime,
+            "ploidies": ploidies,
+            "seg_aneuploidy_type": aneu_type,
+            "seg_start": start,
+            "seg_end": end,
+            "geno_embryo": geno,
+            "baf_embryo": baf,
+            "pos": pos,
+            "m": m,
+            "rec_prob": rec_prob,
+            "std_dev": std_dev,
+            "mix_prop": mix_prop,
+            "seed": seed,
+        }
+        return res_table
+
+    def sim_from_haps(self, mat_haps, pat_haps, **kwargs):
+        """Simulate a segmental aneuploidy from known haplotypes"""
+        raise NotImplementedError("Segmental simulation is not currently implemented!")
 
 
 class PGTSimVCF(PGTSim):
