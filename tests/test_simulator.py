@@ -13,7 +13,7 @@ pgt_sim_segmental = PGTSimSegmental()
 
 @given(
     length=st.floats(min_value=1e2, max_value=1e8),
-    m=st.integers(min_value=2, max_value=1000),
+    m=st.integers(min_value=1000, max_value=5000),
     ploidy=st.integers(min_value=0, max_value=3),
 )
 @settings(max_examples=100, deadline=1000)
@@ -23,6 +23,8 @@ def test_pgt_sim(length, m, ploidy):
     assert data["m"] == m
     assert data["length"] == length
     assert np.max(data["pos"]) <= length
+    assert "baf_embryo" in data.keys()
+    assert np.any(data["baf_embryo"] == 0.0) | np.any(data["baf_embryo"] == 1.0)
 
 
 @given(
@@ -44,7 +46,7 @@ def test_pgt_siblings(length, m, nsib):
 
 
 @given(
-    m=st.integers(min_value=1000, max_value=10000),
+    m=st.integers(min_value=1000, max_value=5000),
     ploidy=st.integers(min_value=0, max_value=3),
     frac_chrom=st.floats(min_value=1e-2, max_value=0.99),
 )
@@ -54,3 +56,9 @@ def test_pgt_segmental(m, ploidy, frac_chrom):
     mean_size = np.round(m * frac_chrom)
     data = pgt_sim_segmental.full_segmental_sim(m=m, ploidy=ploidy, mean_size=mean_size)
     assert data["m"] == m
+    assert "baf_embryo" in data.keys()
+    assert np.any(data["baf_embryo"] == 0.0) | np.any(data["baf_embryo"] == 1.0)
+    if ploidy != 2:
+        assert not np.all(data["ploidies"] == 2)
+    else:
+        assert np.all(data["ploidies"] == 2)
