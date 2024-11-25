@@ -4,10 +4,11 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from karyohmm import PGTSim, PGTSimMosaic
+from karyohmm import PGTSim, PGTSimMosaic, PGTSimSegmental
 
 pgt_sim = PGTSim()
 pgt_sim_mosaic = PGTSimMosaic()
+pgt_sim_segmental = PGTSimSegmental()
 
 
 @given(
@@ -40,3 +41,16 @@ def test_pgt_siblings(length, m, nsib):
     for i in range(nsib):
         assert f"baf_embryo{i}" in data.keys()
         assert f"geno_embryo{i}" in data.keys()
+
+
+@given(
+    m=st.integers(min_value=1000, max_value=10000),
+    ploidy=st.integers(min_value=0, max_value=3),
+    frac_chrom=st.floats(min_value=1e-2, max_value=0.99),
+)
+@settings(max_examples=20, deadline=5000)
+def test_pgt_segmental(m, ploidy, frac_chrom):
+    """Test for PGT segmental aneuploidy simulation."""
+    mean_size = np.round(m * frac_chrom)
+    data = pgt_sim_segmental.full_segmental_sim(m=m, ploidy=ploidy, mean_size=mean_size)
+    assert data["m"] == m

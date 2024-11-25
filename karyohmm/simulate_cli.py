@@ -120,6 +120,14 @@ logging.basicConfig(
     help="Probability of being a maternal-origin aneuploidy.",
 )
 @click.option(
+    "--mean_size",
+    required=False,
+    default=100,
+    type=int,
+    show_default=True,
+    help="Mean size of a segmental aneuploidy on the chromosome.",
+)
+@click.option(
     "--switch_err_rate",
     "-se",
     required=False,
@@ -184,6 +192,7 @@ def main(
     pi0=0.5,
     mat_skew=0.5,
     duo_maternal=None,
+    mean_size=100,
     switch_err_rate=1e-2,
     seed=42,
     threads=1,
@@ -247,10 +256,23 @@ def main(
             )
     elif mode == "Segmental":
         if vcf_haps:
-            pass
+            pgt_sim = PGTSimSegmental()
+            results = pgt_sim.sim_from_haps(
+                mat_haps,
+                pat_haps,
+                pos,
+                ploidy=int(ploidy),
+                rec_prob=recomb_rate,
+                mat_skew=mat_skew,
+                std_dev=std_dev,
+                mix_prop=pi0,
+                mean_size=mean_size,
+                switch_err_rate=switch_err_rate,
+                seed=seed,
+            )
         else:
             pgt_sim = PGTSimSegmental()
-            pgt_sim.full_segmental_sim(
+            results = pgt_sim.full_segmental_sim(
                 afs=afs,
                 ploidy=int(ploidy),
                 m=m,
@@ -259,11 +281,10 @@ def main(
                 mat_skew=mat_skew,
                 std_dev=std_dev,
                 mix_prop=pi0,
-                alpha=1.0,
+                mean_size=mean_size,
                 switch_err_rate=switch_err_rate,
                 seed=seed,
             )
-        raise NotImplementedError("Segmental simulation not currently implemented!")
     elif mode == "Mosaic":
         raise NotImplementedError("Mosaic simulation not currently implemented!")
     if format == "tsv":
@@ -273,9 +294,9 @@ def main(
         if gzip:
             logging.info(f"Writing output to {out}.tsv.gz")
             out_fp = f"{out}.tsv.gz"
-            with gz.open(out_fp, "w+") as outfile:
+            with gz.open(out_fp, "wt") as outfile:
                 outfile.write(
-                    "chrom\tpos\tref\talt\tmat_hap0\tmat_hap1\tpat_hap0\tpat_hap1\tbaf"
+                    "chrom\tpos\tref\talt\tmat_hap0\tmat_hap1\tpat_hap0\tpat_hap1\tbaf\n"
                 )
                 for i in range(m):
                     outfile.write(
@@ -284,9 +305,9 @@ def main(
         else:
             logging.info(f"Writing output to {out}.tsv")
             out_fp = f"{out}.tsv"
-            with gzip.open(out_fp, "w+") as outfile:
+            with open(out_fp, "w+") as outfile:
                 outfile.write(
-                    "chrom\tpos\tref\talt\tmat_hap0\tmat_hap1\tpat_hap0\tpat_hap1\tbaf"
+                    "chrom\tpos\tref\talt\tmat_hap0\tmat_hap1\tpat_hap0\tpat_hap1\tbaf\n"
                 )
                 for i in range(m):
                     outfile.write(
