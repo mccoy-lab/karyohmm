@@ -6,7 +6,7 @@ import click
 import numpy as np
 import pandas as pd
 
-from karyohmm import PGTSim, PGTSimMosaic
+from karyohmm import PGTSim, PGTSimMosaic, PGTSimSegmental, PGTSimVCF
 
 # Setup the logging configuration for the CLI
 logging.basicConfig(
@@ -23,6 +23,15 @@ logging.basicConfig(
     default="Whole-Chromosome",
     type=click.Choice(["Whole-Chromosome", "Segmental", "Mosaic"]),
     show_default=True,
+)
+@click.option(
+    "--afs",
+    "-a",
+    required=False,
+    default=None,
+    type=str,
+    show_default=True,
+    help="Allele frequency file for variants (to mimic ascertainment-bias).",
 )
 @click.option(
     "--recomb_rate",
@@ -68,6 +77,80 @@ logging.basicConfig(
     help="IID of paternal individual in VCF.",
 )
 @click.option(
+    "--length",
+    required=False,
+    default=50e6,
+    type=float,
+    show_default=True,
+    help="Length of segment to simulate.",
+)
+@click.option(
+    "--length",
+    required=True,
+    default=2,
+    type=click.Choice(["0", "1", "2", "3"]),
+    show_default=True,
+    help="Degree of aneuploidy to be simulated.",
+)
+@click.option(
+    "--m",
+    "-m",
+    required=False,
+    default=5000,
+    type=int,
+    show_default=True,
+    help="Number of variants to simulate on chromosome.",
+)
+@click.option(
+    "--std",
+    required=True,
+    default=0.2,
+    type=float,
+    show_default=True,
+    help="Standard deviation of BAF-distribution.",
+)
+@click.option(
+    "--pi0",
+    required=True,
+    default=0.5,
+    type=float,
+    show_default=True,
+    help="Point-mass for emission distribution of BAF.",
+)
+@click.option(
+    "--mat_skew",
+    required=True,
+    default=0.5,
+    type=float,
+    show_default=True,
+    help="Probability of being a maternal-origin aneuploidy.",
+)
+@click.option(
+    "--switch_err_rate",
+    "-se",
+    required=False,
+    default=1e-2,
+    type=float,
+    show_default=True,
+    help="Switch error rate in parental haplotypes.",
+)
+@click.option(
+    "--seed",
+    required=True,
+    default=42,
+    type=int,
+    show_default=True,
+    help="Random seed for simulation.",
+)
+@click.option(
+    "--threads",
+    required=False,
+    default=1,
+    type=int,
+    show_default=True,
+    help="Threads if reading from a VCF.",
+)
+@click.option(
     "--gzip",
     "-g",
     is_flag=True,
@@ -84,14 +167,100 @@ logging.basicConfig(
     default="karyohmm",
     help="Output file prefix.",
 )
+@click.option(
+    "--format",
+    "-fmt",
+    required=True,
+    type=click.Choice(["tsv", "npz"]),
+    default="tsv",
+    help="Output file format.",
+)
 def main(
     mode="Whole-Chromosome",
+    afs=None,
+    vcf=None,
+    maternal_id=None,
+    paternal_id=None,
+    ploidy=2,
     recomb_rate=1e-8,
     aneuploidy_rate=1e-2,
+    length=50e6,
+    m=5000,
+    std_dev=0.2,
+    pi0=0.5,
+    mat_skew=0.5,
     duo_maternal=None,
+    switch_err_rate=1e-2,
+    seed=42,
+    threads=1,
     gzip=True,
     out="karyohmm",
+    format="tsv",
 ):
     """Karyohmm-Simulator CLI."""
     logging.info("Starting simulation ...")
+    if mode == "Whole-Chromosome":
+        logging.info("Simulating whole-chromosome aneuploidy ...")
+        if vcf is not None:
+            logging.info(f"Reading in parental haplotypes from VCF: {vcf}")
+            if (maternal_id is None) or (paternal_id is None):
+                raise ValueError(
+                    "Need to specify both `maternal_id` and `paternal_id` if simulating from a VCF!"
+                )
+            pgt_sim_vcf = PGTSimVCF()
+            mat_haps, pat_haps, pos = pgt_sim_vcf.gen_parental_haplotypes(
+                vcf_fp=vcf,
+                maternal_id=maternal_id,
+                paternal_id=paternal_id,
+                gts012=True,
+                threads=threads,
+            )
+            logging.info(
+                f"Finished extracting haplotypes from {maternal_id}, {paternal_id} in {vcf}!"
+            )
+            logging.info("Starting whole-chromosome aneuploidy simulation ...")
+            pgt_sim = PGTSim()
+            results = pgt_sim.sim_from_haps(
+                mat_haps,
+                pat_haps,
+                pos,
+                ploidy=int(ploidy),
+                rec_prob=recomb_rate,
+                mat_skew=mat_skew,
+                std_dev=std_dev,
+                mix_prop=pi0,
+                alpha=1.0,
+                switch_err_rate=switch_err_rate,
+                seed=seed,
+            )
+        else:
+            pgt_sim = PGTSim()
+            results = pgt_sim.full_ploidy_sim(
+                afs=None,
+                ploidy=int(ploidy),
+                m=m,
+                length=length,
+                rec_prob=recomb_rate,
+                mat_skew=0.5,
+                std_dev=std_dev,
+                mix_prop=pi0,
+                alpha=1.0,
+                switch_err_rate=switch_err_rate,
+                seed=seed,
+            )
+    elif mode == "Mosaic":
+        raise NotImplementedError("Mosaic simulation not currently implemented!")
+    elif mode == "Segmental":
+        raise NotImplementedError("Segmental simulation not currently implemented!")
+    if format == "tsv":
+        if gzip:
+            out_fp = f"{out}.tsv.gz"
+        else:
+            out_fp = f"{out}.tsv"
+        
+    else:
+        out_fp = f"{out}.npz"
+        logging.info(f"Writing output to {out}.npz")
+        np.savez(out_fp, **results)
+
     logging.info("Finished data simulation!")
