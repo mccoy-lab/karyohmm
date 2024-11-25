@@ -1,4 +1,5 @@
 """CLI for simulating synthetic aneuploidy data in karyoHMM."""
+import gzip as gz
 import logging
 import sys
 
@@ -52,15 +53,6 @@ logging.basicConfig(
     help="VCF as input for parental haplotype data.",
 )
 @click.option(
-    "--vcf",
-    "-v",
-    required=False,
-    default=None,
-    type=float,
-    show_default=True,
-    help="VCF as input for parental haplotype data.",
-)
-@click.option(
     "--maternal_id",
     required=False,
     default=None,
@@ -78,6 +70,7 @@ logging.basicConfig(
 )
 @click.option(
     "--length",
+    "-l",
     required=False,
     default=50e6,
     type=float,
@@ -85,7 +78,8 @@ logging.basicConfig(
     help="Length of segment to simulate.",
 )
 @click.option(
-    "--length",
+    "--ploidy",
+    "-p",
     required=True,
     default=2,
     type=click.Choice(["0", "1", "2", "3"]),
@@ -102,7 +96,7 @@ logging.basicConfig(
     help="Number of variants to simulate on chromosome.",
 )
 @click.option(
-    "--std",
+    "--std_dev",
     required=True,
     default=0.2,
     type=float,
@@ -199,25 +193,28 @@ def main(
 ):
     """Karyohmm-Simulator CLI."""
     logging.info("Starting simulation ...")
+    vcf_haps = False
+    if vcf is not None:
+        logging.info(f"Reading in parental haplotypes from VCF: {vcf}")
+        if (maternal_id is None) or (paternal_id is None):
+            raise ValueError(
+                "Need to specify both `maternal_id` and `paternal_id` if simulating from a VCF!"
+            )
+        pgt_sim_vcf = PGTSimVCF()
+        mat_haps, pat_haps, pos = pgt_sim_vcf.gen_parental_haplotypes(
+            vcf_fp=vcf,
+            maternal_id=maternal_id,
+            paternal_id=paternal_id,
+            gts012=True,
+            threads=threads,
+        )
+        logging.info(
+            f"Finished extracting haplotypes from {maternal_id}, {paternal_id} in {vcf}!"
+        )
+        vcf_haps = True
     if mode == "Whole-Chromosome":
         logging.info("Simulating whole-chromosome aneuploidy ...")
-        if vcf is not None:
-            logging.info(f"Reading in parental haplotypes from VCF: {vcf}")
-            if (maternal_id is None) or (paternal_id is None):
-                raise ValueError(
-                    "Need to specify both `maternal_id` and `paternal_id` if simulating from a VCF!"
-                )
-            pgt_sim_vcf = PGTSimVCF()
-            mat_haps, pat_haps, pos = pgt_sim_vcf.gen_parental_haplotypes(
-                vcf_fp=vcf,
-                maternal_id=maternal_id,
-                paternal_id=paternal_id,
-                gts012=True,
-                threads=threads,
-            )
-            logging.info(
-                f"Finished extracting haplotypes from {maternal_id}, {paternal_id} in {vcf}!"
-            )
+        if vcf_haps:
             logging.info("Starting whole-chromosome aneuploidy simulation ...")
             pgt_sim = PGTSim()
             results = pgt_sim.sim_from_haps(
@@ -236,31 +233,70 @@ def main(
         else:
             pgt_sim = PGTSim()
             results = pgt_sim.full_ploidy_sim(
-                afs=None,
+                afs=afs,
                 ploidy=int(ploidy),
                 m=m,
                 length=length,
                 rec_prob=recomb_rate,
-                mat_skew=0.5,
+                mat_skew=mat_skew,
                 std_dev=std_dev,
                 mix_prop=pi0,
                 alpha=1.0,
                 switch_err_rate=switch_err_rate,
                 seed=seed,
             )
+    elif mode == "Segmental":
+        if vcf_haps:
+            pass
+        else:
+            pgt_sim = PGTSimSegmental()
+            pgt_sim.full_segmental_sim(
+                afs=afs,
+                ploidy=int(ploidy),
+                m=m,
+                length=length,
+                rec_prob=recomb_rate,
+                mat_skew=mat_skew,
+                std_dev=std_dev,
+                mix_prop=pi0,
+                alpha=1.0,
+                switch_err_rate=switch_err_rate,
+                seed=seed,
+            )
+        raise NotImplementedError("Segmental simulation not currently implemented!")
     elif mode == "Mosaic":
         raise NotImplementedError("Mosaic simulation not currently implemented!")
-    elif mode == "Segmental":
-        raise NotImplementedError("Segmental simulation not currently implemented!")
     if format == "tsv":
+        logging.info(
+            "Writing output in TSV format (note: not all intermediate data will be kept) ..."
+        )
         if gzip:
+            logging.info(f"Writing output to {out}.tsv.gz")
             out_fp = f"{out}.tsv.gz"
+            with gz.open(out_fp, "w+") as outfile:
+                outfile.write(
+                    "chrom\tpos\tref\talt\tmat_hap0\tmat_hap1\tpat_hap0\tpat_hap1\tbaf"
+                )
+                for i in range(m):
+                    outfile.write(
+                        f"chr1\t{results['pos'][i]}\tA\tC\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf_embryo'][i]}\n"
+                    )
         else:
+            logging.info(f"Writing output to {out}.tsv")
             out_fp = f"{out}.tsv"
-        
+            with gzip.open(out_fp, "w+") as outfile:
+                outfile.write(
+                    "chrom\tpos\tref\talt\tmat_hap0\tmat_hap1\tpat_hap0\tpat_hap1\tbaf"
+                )
+                for i in range(m):
+                    outfile.write(
+                        f"chr1\t{results['pos'][i]}\tA\tC\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf_embryo'][i]}\n"
+                    )
+
     else:
+        logging.info("Writing output in NPZ format ...")
         out_fp = f"{out}.npz"
-        logging.info(f"Writing output to {out}.npz")
+        logging.info(f"Writing output to {out}.npz ...")
         np.savez(out_fp, **results)
 
     logging.info("Finished data simulation!")

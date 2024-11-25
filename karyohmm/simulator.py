@@ -747,10 +747,12 @@ class PGTSimSegmental(PGTSimBase):
         """Initialize simulation of segmental data."""
         super().__init__()
 
-    def seg_aneuploidy(self, m=100, mean_size=10, seed=42):
+    def seg_aneuploidy(self, m=100, mean_size=10, ploidy=3, mat_skew=0.5, seed=42):
         """Choose the position and type of the segmental aneuploidy."""
         assert mean_size > 0
         assert seed > 0
+        assert ploidy in [0, 1, 2, 3]
+        assert (mat_skew >= 0) and (mat_skew <= 1.0)
         # 1. Identify the number of SNPs that the segmental aneuploidy occupies
         np.random.seed(seed)
         seg_l = m
@@ -761,11 +763,26 @@ class PGTSimSegmental(PGTSimBase):
         start = randint.rvs(low=0, high=m - seg_l, size=1)
         end = start + seg_l
         # 2. Determine the type of the aneuploidy as a random choice
-        aneu_type = np.random.choice(["1m", "1p", "3m", "3p"])
+        if ploidy == 0:
+            aneu_type = "0"
+        elif ploidy == 1:
+            pat = binom.rvs(1, mat_skew)
+            if pat:
+                aneu_type = "1p"
+            else:
+                aneu_type = "1m"
+        elif ploidy == 2:
+            aneu_type = "2"
+        elif ploidy == 3:
+            pat = binom.rvs(1, mat_skew)
+            if pat:
+                aneu_type = "3p"
+            else:
+                aneu_type = "3m"
         return aneu_type, (start, end)
 
     def sim_haplotype_paths_segmental(
-        self, mat_haps, pat_haps, rec_prob=1e-2, mean_size=10, seed=42
+        self, mat_haps, pat_haps, start, end, aneu_type="3m", rec_prob=1e-4, seed=42
     ):
         """Simulate haplotypes and segmental aneuploidies.
 
@@ -775,11 +792,12 @@ class PGTSimSegmental(PGTSimBase):
         assert mat_haps.size == pat_haps.size
         assert seed > 0
         assert rec_prob > 0
+        assert start <= end
+        assert start <= mat_haps.shape[1]
+        assert end <= mat_haps.shape[1]
+        assert aneu_type in ["0", "1p", "1m", "2", "3m", "3p"]
         np.random.seed(seed)
         m = mat_haps.shape[1]
-        aneu_type, (start, end) = self.seg_aneuploidy(
-            m=m, mean_size=mean_size, seed=seed
-        )
         zs_maternal = np.zeros(m)
         zs_paternal = np.zeros(m)
         zs1_maternal = np.repeat(np.nan, m)
@@ -790,6 +808,10 @@ class PGTSimSegmental(PGTSimBase):
         for i in range(1, m):
             if (i >= start) and (i <= end):
                 # NOTE: we're in the aneuploidy state here ...
+                if aneu_type == "0":
+                    ploidies[i] = 0
+                    zs_maternal[i] = np.nan
+                    zs_paternal[i] = np.nan
                 if aneu_type == "1m":
                     # Only sample from the maternal haplotypes
                     ploidies[i] = 1
@@ -808,6 +830,18 @@ class PGTSimSegmental(PGTSimBase):
                         else zs_paternal[i - 1]
                     )
                     zs_maternal[i] = np.nan
+                if aneu_type == "2":
+                    ploidies[i] = 2
+                    zs_paternal[i] = (
+                        1 - zs_paternal[i - 1]
+                        if uniform.rvs() <= rec_prob
+                        else zs_paternal[i - 1]
+                    )
+                    zs_maternal[i] = (
+                        1 - zs_maternal[i - 1]
+                        if uniform.rvs() <= rec_prob
+                        else zs_maternal[i - 1]
+                    )
                 if aneu_type == "3m":
                     ploidies[i] = 3
                     if (i == 0) or np.isnan(zs1_maternal[(i - 1)]):
@@ -925,11 +959,13 @@ class PGTSimSegmental(PGTSimBase):
                     baf[i] = truncnorm.rvs(a, b, loc=mu_i, scale=std_dev)
         return true_geno, baf, ploidies
 
-    def full_sim_segmental(
+    def full_segmental_sim(
         self,
         afs=None,
+        ploidy=2,
         m=10000,
         length=50e6,
+        mat_skew=0.5,
         rec_prob=1e-4,
         std_dev=0.1,
         mix_prop=0.7,
@@ -939,7 +975,10 @@ class PGTSimSegmental(PGTSimBase):
     ):
         """Conduct a full simulation of segmental aneuploidies conditional on parental haplotypes."""
         np.random.seed(seed)
-        mat_haps, pat_haps = self.draw_parental_genotypes(afs=afs, m=m, seed=seed)
+        mat_haps, pat_haps, ps = self.draw_parental_genotypes(afs=afs, m=m, seed=seed)
+        aneu_type, (start, end) = self.seg_aneuploidy(
+            m=m, mean_size=mean_size, ploidy=ploidy, mat_skew=mat_skew, seed=seed
+        )
         (
             mat_hap1,
             pat_hap1,
@@ -954,8 +993,10 @@ class PGTSimSegmental(PGTSimBase):
         ) = self.sim_haplotype_paths_segmental(
             mat_haps,
             pat_haps,
+            start=start,
+            end=end,
+            aneu_type=aneu_type,
             rec_prob=rec_prob,
-            mean_size=mean_size,
             seed=seed,
         )
         geno, baf, ploidies = self.sim_b_allele_freq_segmental(
@@ -983,6 +1024,7 @@ class PGTSimSegmental(PGTSimBase):
             "seg_end": end,
             "geno_embryo": geno,
             "baf_embryo": baf,
+            "allele_freqs": ps,
             "pos": pos,
             "m": m,
             "rec_prob": rec_prob,
