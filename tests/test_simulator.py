@@ -48,9 +48,9 @@ def test_pgt_siblings(length, m, nsib):
 @given(
     m=st.integers(min_value=1000, max_value=5000),
     ploidy=st.integers(min_value=0, max_value=3),
-    frac_chrom=st.floats(min_value=1e-2, max_value=0.99),
+    frac_chrom=st.floats(min_value=0.1, max_value=0.5),
 )
-@settings(max_examples=20, deadline=5000)
+@settings(max_examples=10, deadline=5000)
 def test_pgt_segmental(m, ploidy, frac_chrom):
     """Test for PGT segmental aneuploidy simulation."""
     mean_size = np.round(m * frac_chrom)

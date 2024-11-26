@@ -805,14 +805,14 @@ class PGTSimSegmental(PGTSimBase):
         ploidies = np.zeros(m, dtype=np.uint16)
         zs_maternal[0] = binom.rvs(1, 0.5)
         zs_paternal[0] = binom.rvs(1, 0.5)
-        for i in range(1, m):
+        for i in range(0, m):
             if (i >= start) and (i <= end):
                 # NOTE: we're in the aneuploidy state here ...
                 if aneu_type == "0":
                     ploidies[i] = 0
                     zs_maternal[i] = np.nan
                     zs_paternal[i] = np.nan
-                if aneu_type == "1m":
+                elif aneu_type == "1m":
                     # Only sample from the maternal haplotypes
                     ploidies[i] = 1
                     zs_maternal[i] = (
@@ -821,7 +821,7 @@ class PGTSimSegmental(PGTSimBase):
                         else zs_maternal[i - 1]
                     )
                     zs_paternal[i] = np.nan
-                if aneu_type == "1p":
+                elif aneu_type == "1p":
                     # Only sample from the paternal haplotypes
                     ploidies[i] = 1
                     zs_paternal[i] = (
@@ -830,7 +830,7 @@ class PGTSimSegmental(PGTSimBase):
                         else zs_paternal[i - 1]
                     )
                     zs_maternal[i] = np.nan
-                if aneu_type == "2":
+                elif aneu_type == "2":
                     ploidies[i] = 2
                     zs_paternal[i] = (
                         1 - zs_paternal[i - 1]
@@ -842,7 +842,7 @@ class PGTSimSegmental(PGTSimBase):
                         if uniform.rvs() <= rec_prob
                         else zs_maternal[i - 1]
                     )
-                if aneu_type == "3m":
+                elif aneu_type == "3m":
                     ploidies[i] = 3
                     if (i == 0) or np.isnan(zs1_maternal[(i - 1)]):
                         zs1_maternal[i] = binom.rvs(1, 0.5)
@@ -862,7 +862,7 @@ class PGTSimSegmental(PGTSimBase):
                         if uniform.rvs() <= rec_prob
                         else zs_paternal[i - 1]
                     )
-                if aneu_type == "3p":
+                elif aneu_type == "3p":
                     ploidies[i] = 3
                     if (i == 0) or np.isnan(zs1_paternal[(i - 1)]):
                         zs1_paternal[i] = binom.rvs(1, 0.5)
@@ -882,25 +882,29 @@ class PGTSimSegmental(PGTSimBase):
                         if uniform.rvs() <= rec_prob
                         else zs_paternal[i - 1]
                     )
-        else:
-            ploidies[i] = 2
-            # NOTE: what happens if you are coming back from a null zs_maternal?
-            if ~np.isnan(zs_maternal[i - 1]):
-                zs_maternal[i] = (
-                    1 - zs_maternal[i - 1]
-                    if uniform.rvs() <= rec_prob
-                    else zs_maternal[i - 1]
-                )
+                else:
+                    raise ValueError(
+                        f"{aneu_type} is an invalid segmental aneuploidy status!"
+                    )
             else:
-                pass
-            if ~np.isnan(zs_paternal[i - 1]):
-                zs_paternal[i] = (
-                    1 - zs_paternal[i - 1]
-                    if uniform.rvs() <= rec_prob
-                    else zs_paternal[i - 1]
-                )
-            else:
-                pass
+                ploidies[i] = 2
+                # NOTE: what happens if you are coming back from a null zs_maternal?
+                if ~np.isnan(zs_maternal[i - 1]):
+                    zs_maternal[i] = (
+                        1 - zs_maternal[i - 1]
+                        if uniform.rvs() <= rec_prob
+                        else zs_maternal[i - 1]
+                    )
+                else:
+                    pass
+                if ~np.isnan(zs_paternal[i - 1]):
+                    zs_paternal[i] = (
+                        1 - zs_paternal[i - 1]
+                        if uniform.rvs() <= rec_prob
+                        else zs_paternal[i - 1]
+                    )
+                else:
+                    pass
 
         # Now sample through the underlying haplotypes
         mat_haps1 = np.zeros(m, dtype=np.uint16)
@@ -1000,7 +1004,7 @@ class PGTSimSegmental(PGTSimBase):
             rec_prob=rec_prob,
             seed=seed,
         )
-        geno, baf, ploidies = self.sim_b_allele_freq_segmental(
+        geno, baf, _ = self.sim_b_allele_freq_segmental(
             mat_hap1, pat_hap1, ploidies, std_dev=std_dev, mix_prop=mix_prop, seed=seed
         )
         (
