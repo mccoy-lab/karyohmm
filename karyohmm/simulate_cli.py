@@ -39,7 +39,7 @@ logging.basicConfig(
     "-a",
     required=False,
     default=None,
-    type=str,
+    type=click.Path(exists=True),
     show_default=True,
     help="Allele frequency file for variants (to mimic ascertainment-bias).",
 )
@@ -57,7 +57,7 @@ logging.basicConfig(
     "-v",
     required=False,
     default=None,
-    type=float,
+    type=click.Path(exists=True),
     show_default=True,
     help="VCF as input for parental haplotype data.",
 )

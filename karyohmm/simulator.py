@@ -1159,7 +1159,11 @@ class PGTSimVCF(PGTSim):
         pat_haps = []
         for var in vcf(samples=[paternal_id]):
             pat_haps.append([var.genotypes[0], var.genotypes[1]])
+        afs = []
+        for var in vcf:
+            afs.append(vcf.aaf[0])
         mat_haps = np.array(mat_haps).astype(np.uint8)
         pat_haps = np.array(pat_haps).astype(np.uint8)
         pos = np.array(pos)
+        afs = np.array(afs)
         return mat_haps, pat_haps, pos
