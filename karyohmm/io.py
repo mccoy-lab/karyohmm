@@ -26,7 +26,7 @@ class DataReader:
         }
         self.dtypes = karyo_dtypes
         self.mode = mode
-        if (mode == "Duo") and (duo_maternal is None):
+        if (mode == "Duo") and (type(duo_maternal) is not bool):
             raise ValueError(
                 "Need to specify whether a mother-child or father-child duo!"
             )
@@ -43,18 +43,18 @@ class DataReader:
             assert "pat_haps" in data
             df = pd.DataFrame(
                 {
-                    "chrom": data["chrom"],
-                    "pos": data["pos"],
-                    "ref": data["ref"],
-                    "alt": data["alt"],
-                    "baf": data["baf"],
-                    "mat_hap0": data["mat_haps"][0, :],
-                    "mat_hap1": data["mat_haps"][1, :],
-                    "pat_hap0": data["pat_haps"][0, :],
-                    "pat_hap1": data["pat_haps"][1, :],
-                },
-                dtype=self.dtypes,
+                    "chrom": data["chrom"].tolist(),
+                    "pos": data["pos"].tolist(),
+                    "ref": data["ref"].tolist(),
+                    "alt": data["alt"].tolist(),
+                    "baf": data["baf"].tolist(),
+                    "mat_hap0": data["mat_haps"][0, :].tolist(),
+                    "mat_hap1": data["mat_haps"][1, :].tolist(),
+                    "pat_hap0": data["pat_haps"][0, :].tolist(),
+                    "pat_hap1": data["pat_haps"][1, :].tolist(),
+                }
             )
+            df = df.astype(dtype=self.dtypes)
             return df
         if self.mode == "Duo":
             if self.duo_maternal:
@@ -69,8 +69,8 @@ class DataReader:
                         "mat_hap0": data["mat_haps"][0, :],
                         "mat_hap1": data["mat_haps"][1, :],
                     },
-                    dtype=self.dtypes,
                 )
+                df = df.astype(dtype=self.dtypes)
                 return df
             else:
                 assert "pat_haps" in data
@@ -84,8 +84,8 @@ class DataReader:
                         "pat_hap0": data["pat_haps"][0, :],
                         "pat_hap1": data["pat_haps"][1, :],
                     },
-                    dtype=self.dtypes,
                 )
+                df = df.astype(dtype=self.dtypes)
             return df
 
     def read_data_df(self, input_fp):

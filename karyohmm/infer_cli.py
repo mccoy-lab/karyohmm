@@ -49,6 +49,14 @@ logging.basicConfig(
     help="Optimization method for parameter inference.",
 )
 @click.option(
+    "--thin",
+    required=False,
+    default=1,
+    type=int,
+    show_default=True,
+    help="SNP thinning to improve optimization speed for parameter inference.",
+)
+@click.option(
     "--recomb_rate",
     "-r",
     required=False,
@@ -81,7 +89,7 @@ logging.basicConfig(
     is_flag=True,
     required=False,
     type=bool,
-    default=True,
+    default=False,
     help="Gzip output files.",
 )
 @click.option(
@@ -97,14 +105,15 @@ def main(
     viterbi=False,
     mode="Meta",
     algo="Powell",
+    thin=1,
     recomb_rate=1e-8,
     aneuploidy_rate=1e-2,
     duo_maternal=None,
-    gzip=True,
+    gzip=False,
     out="karyohmm",
 ):
     """Karyohmm-Inference CLI."""
-    logging.info(f"Starting to read input data {input}.")
+    logging.info(f"Starting to read input data {input}...")
     data_reader = DataReader(mode=mode, duo_maternal=duo_maternal)
     data_df = data_reader.read_data(input)
     assert data_df is not None
@@ -132,17 +141,31 @@ def main(
             pat_haps = np.vstack([cur_df.pat_hap0.values, cur_df.pat_hap1.values])
             bafs = cur_df.baf.values
             pos = cur_df.pos.values
-            pi0_est, sigma_est = hmm.est_sigma_pi0(
-                bafs=bafs,
-                pos=pos,
-                mat_haps=mat_haps,
-                pat_haps=pat_haps,
-                r=recomb_rate,
-                a=aneuploidy_rate,
-                algo=algo,
+            if thin > 1:
+                pi0_est, sigma_est = hmm.est_sigma_pi0(
+                    bafs=bafs[::thin],
+                    pos=pos[::thin],
+                    mat_haps=mat_haps[:, ::thin],
+                    pat_haps=pat_haps[:, ::thin],
+                    r=recomb_rate,
+                    a=aneuploidy_rate,
+                    algo=algo,
+                )
+            else:
+                pi0_est, sigma_est = hmm.est_sigma_pi0(
+                    bafs=bafs[::thin],
+                    pos=pos[::thin],
+                    mat_haps=mat_haps[:, ::thin],
+                    pat_haps=pat_haps[:, ::thin],
+                    r=recomb_rate,
+                    a=aneuploidy_rate,
+                    algo=algo,
+                )
+            logging.info(
+                f"MetaHMM emission parameters are pi0={pi0_est:.3f}, sigma={sigma_est:.3f} for {c}."
             )
             logging.info(f"Finished inference of HMM-parameters for {c}!")
-            logging.info(f"Starting Forward-Backward algorithm tracing  for {c} ...")
+            logging.info(f"Starting Forward-Backward algorithm tracing for {c} ...")
             gammas, states, karyotypes = hmm.forward_backward(
                 bafs=bafs,
                 pos=pos,
@@ -211,13 +234,26 @@ def main(
                 haps = np.vstack([cur_df.pat_hap0.values, cur_df.pat_hap1.values])
             bafs = cur_df.baf.values
             pos = cur_df.pos.values
-            pi0_est, sigma_est = hmm.est_sigma_pi0(
-                bafs=bafs,
-                haps=haps,
-                pos=pos,
-                r=recomb_rate,
-                a=aneuploidy_rate,
-                algo=algo,
+            if thin > 1:
+                pi0_est, sigma_est = hmm.est_sigma_pi0(
+                    bafs=bafs[::thin],
+                    haps=haps[:, ::thin],
+                    pos=pos[::thin],
+                    r=recomb_rate,
+                    a=aneuploidy_rate,
+                    algo=algo,
+                )
+            else:
+                pi0_est, sigma_est = hmm.est_sigma_pi0(
+                    bafs=bafs,
+                    haps=haps,
+                    pos=pos,
+                    r=recomb_rate,
+                    a=aneuploidy_rate,
+                    algo=algo,
+                )
+            logging.info(
+                f"DuoHMM emission parameters are pi0={pi0_est:.3f}, sigma={sigma_est:.3f} for {c}."
             )
             logging.info(f"Finished inference of DuoHMM-parameters for {c}!")
             logging.info(f"Starting Forward-Backward algorithm tracing  for {c} ...")
@@ -255,7 +291,7 @@ def main(
         out_fp = f"{out}.meta.posterior.tsv.gz" if gzip else f"{out}.meta.posterior.tsv"
         kar_df = pd.concat(kar_dfs)
         kar_df.to_csv(out_fp, sep="\t", index=None)
-        logging.info(f"Wrote full posterior karyotypes to {out_fp}")
+        logging.info(f"Wrote full posterior karyotypes to {out_fp}!")
         gamma_df = pd.concat(gamma_dfs)
         out_fp = f"{out}.meta.gammas.tsv.gz" if gzip else f"{out}.meta.gammas.tsv"
         gamma_df.to_csv(out_fp, sep="\t", index=None)

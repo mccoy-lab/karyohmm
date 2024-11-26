@@ -26,6 +26,15 @@ logging.basicConfig(
     show_default=True,
 )
 @click.option(
+    "--chrom",
+    "-c",
+    required=False,
+    default="chr1",
+    type=str,
+    show_default=True,
+    help="Chromosome indicator.",
+)
+@click.option(
     "--afs",
     "-a",
     required=False,
@@ -179,6 +188,7 @@ logging.basicConfig(
 )
 def main(
     mode="Whole-Chromosome",
+    chrom="chr1",
     afs=None,
     vcf=None,
     maternal_id=None,
@@ -301,12 +311,12 @@ def main(
                 if "aploid" in results:
                     for i in range(m):
                         outfile.write(
-                            f"chr1\t{results['pos'][i]}\tA\tC\t{results['aploid']}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf_embryo'][i]}\n"
+                            f"{chrom}\t{results['pos'][i]}\tA\tC\t{results['aploid']}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf'][i]}\n"
                         )
                 else:
                     for i in range(m):
                         outfile.write(
-                            f"chr1\t{results['pos'][i]}\tA\tC\t{results['ploidies'][i]}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf_embryo'][i]}\n"
+                            f"{chrom}\t{results['pos'][i]}\tA\tC\t{results['ploidies'][i]}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf'][i]}\n"
                         )
         else:
             logging.info(f"Writing output to {out}.tsv")
@@ -318,15 +328,19 @@ def main(
                 if "aploid" in results:
                     for i in range(m):
                         outfile.write(
-                            f"chr1\t{results['pos'][i]}\tA\tC\t{results['aploid']}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf_embryo'][i]}\n"
+                            f"{chrom}\t{results['pos'][i]}\tA\tC\t{results['aploid']}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf'][i]}\n"
                         )
                 else:
                     for i in range(m):
                         outfile.write(
-                            f"chr1\t{results['pos'][i]}\tA\tC\t{results['ploidies'][i]}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf_embryo'][i]}\n"
+                            f"{chrom}\t{results['pos'][i]}\tA\tC\t{results['ploidies'][i]}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf'][i]}\n"
                         )
 
     else:
+        # Append a chromosome name to the input
+        results["chrom"] = np.repeat(f"{chrom}", m, dtype=str)
+        results["ref"] = np.repeat("A", m, dtype=str)
+        results["alt"] = np.repeat("C", m, dtype=str)
         logging.info("Writing output in NPZ format ...")
         out_fp = f"{out}.npz"
         logging.info(f"Writing output to {out}.npz ...")

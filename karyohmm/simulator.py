@@ -393,7 +393,7 @@ class PGTSim(PGTSimBase):
             "zs_maternal": zs_maternal,
             "zs_paternal": zs_paternal,
             "geno_embryo": geno,
-            "baf_embryo": baf,
+            "baf": baf,
             "pos": pos,
             "allele_freqs": ps,
             "m": m,
@@ -643,8 +643,8 @@ class PGTSimMosaic(PGTSimBase):
             "geno_embryo_bulk": genos,
             "baf_embryo_bulk": bafs,
             "lrr_embryo_bulk": lrrs,
-            "baf_embryo": baf_embryo,
-            "lrr_embryo": lrr_embryo,
+            "baf": baf_embryo,
+            "lrr": lrr_embryo,
             "m": m,
             "allele_freqs": ps,
             "pos": pos,
@@ -825,6 +825,15 @@ class PGTSimSegmental(PGTSimBase):
         ploidies = np.zeros(m, dtype=np.uint16)
         zs_maternal[0] = binom.rvs(1, 0.5)
         zs_paternal[0] = binom.rvs(1, 0.5)
+        if start == 0:
+            if aneu_type == "0":
+                ploidies[0] = 0
+            elif aneu_type in ["1m", "1p"]:
+                ploidies[0] = 1
+            elif aneu_type in ["3m", "3p"]:
+                ploidies[0] = 3
+            else:
+                ploidies[0] = 2
         for i in range(1, m):
             d = pos[i] - pos[i - 1]
             if (i >= start) and (i <= end):
@@ -1050,7 +1059,7 @@ class PGTSimSegmental(PGTSimBase):
             "seg_start": start,
             "seg_end": end,
             "geno_embryo": geno,
-            "baf_embryo": baf,
+            "baf": baf,
             "allele_freqs": ps,
             "pos": pos,
             "m": m,
@@ -1114,7 +1123,7 @@ class PGTSimSegmental(PGTSimBase):
             "seg_start": start,
             "seg_end": end,
             "geno_embryo": geno,
-            "baf_embryo": baf,
+            "baf": baf,
             "pos": pos,
             "rec_rate": rec_rate,
             "std_dev": std_dev,
