@@ -150,7 +150,7 @@ logging.basicConfig(
     default=1,
     type=int,
     show_default=True,
-    help="Threads if reading from a VCF.",
+    help="VCF reading threads.",
 )
 @click.option(
     "--gzip",
@@ -158,7 +158,7 @@ logging.basicConfig(
     is_flag=True,
     required=False,
     type=bool,
-    default=True,
+    default=False,
     help="Gzip output files.",
 )
 @click.option(
@@ -183,7 +183,7 @@ def main(
     vcf=None,
     maternal_id=None,
     paternal_id=None,
-    ploidy=2,
+    ploidy="2",
     recomb_rate=1e-8,
     aneuploidy_rate=1e-2,
     length=50e6,
@@ -196,7 +196,7 @@ def main(
     switch_err_rate=1e-2,
     seed=42,
     threads=1,
-    gzip=True,
+    gzip=False,
     out="karyohmm",
     format="tsv",
 ):
@@ -231,7 +231,7 @@ def main(
                 pat_haps,
                 pos,
                 ploidy=int(ploidy),
-                rec_prob=recomb_rate,
+                rec_rate=recomb_rate,
                 mat_skew=mat_skew,
                 std_dev=std_dev,
                 mix_prop=pi0,
@@ -246,7 +246,7 @@ def main(
                 ploidy=int(ploidy),
                 m=m,
                 length=length,
-                rec_prob=recomb_rate,
+                rec_rate=recomb_rate,
                 mat_skew=mat_skew,
                 std_dev=std_dev,
                 mix_prop=pi0,
@@ -262,7 +262,7 @@ def main(
                 pat_haps,
                 pos,
                 ploidy=int(ploidy),
-                rec_prob=recomb_rate,
+                rec_rate=recomb_rate,
                 mat_skew=mat_skew,
                 std_dev=std_dev,
                 mix_prop=pi0,
@@ -277,7 +277,7 @@ def main(
                 ploidy=int(ploidy),
                 m=m,
                 length=length,
-                rec_prob=recomb_rate,
+                rec_rate=recomb_rate,
                 mat_skew=mat_skew,
                 std_dev=std_dev,
                 mix_prop=pi0,
@@ -296,23 +296,35 @@ def main(
             out_fp = f"{out}.tsv.gz"
             with gz.open(out_fp, "wt") as outfile:
                 outfile.write(
-                    "chrom\tpos\tref\talt\tmat_hap0\tmat_hap1\tpat_hap0\tpat_hap1\tbaf\n"
+                    "chrom\tpos\tref\talt\tploidy\tmat_hap0\tmat_hap1\tpat_hap0\tpat_hap1\tbaf\n"
                 )
-                for i in range(m):
-                    outfile.write(
-                        f"chr1\t{results['pos'][i]}\tA\tC\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf_embryo'][i]}\n"
-                    )
+                if "aploid" in results:
+                    for i in range(m):
+                        outfile.write(
+                            f"chr1\t{results['pos'][i]}\tA\tC\t{results['aploid']}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf_embryo'][i]}\n"
+                        )
+                else:
+                    for i in range(m):
+                        outfile.write(
+                            f"chr1\t{results['pos'][i]}\tA\tC\t{results['ploidies'][i]}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf_embryo'][i]}\n"
+                        )
         else:
             logging.info(f"Writing output to {out}.tsv")
             out_fp = f"{out}.tsv"
             with open(out_fp, "w+") as outfile:
                 outfile.write(
-                    "chrom\tpos\tref\talt\tmat_hap0\tmat_hap1\tpat_hap0\tpat_hap1\tbaf\n"
+                    "chrom\tpos\tref\talt\tploidy\tmat_hap0\tmat_hap1\tpat_hap0\tpat_hap1\tbaf\n"
                 )
-                for i in range(m):
-                    outfile.write(
-                        f"chr1\t{results['pos'][i]}\tA\tC\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf_embryo'][i]}\n"
-                    )
+                if "aploid" in results:
+                    for i in range(m):
+                        outfile.write(
+                            f"chr1\t{results['pos'][i]}\tA\tC\t{results['aploid']}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf_embryo'][i]}\n"
+                        )
+                else:
+                    for i in range(m):
+                        outfile.write(
+                            f"chr1\t{results['pos'][i]}\tA\tC\t{results['ploidies'][i]}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf_embryo'][i]}\n"
+                        )
 
     else:
         logging.info("Writing output in NPZ format ...")

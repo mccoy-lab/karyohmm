@@ -97,12 +97,14 @@ class PGTSimBase:
         return mat_haps_prime, pat_haps_prime, m_switch, p_switch
 
     def sim_haplotype_paths(
-        self, mat_haps, pat_haps, ploidy=2, rec_prob=1e-2, mat_skew=0.5, seed=42
+        self, mat_haps, pat_haps, pos, ploidy=2, rec_rate=1e-8, mat_skew=0.5, seed=42
     ):
         """Simulate copying paths through the maternal and paternal haplotypes."""
         assert (ploidy <= 3) & (ploidy >= 0)
         assert (mat_skew >= 0) and (mat_skew <= 1.0)
         assert mat_haps.size == pat_haps.size
+        assert (pos.ndim == 1) and (pos.size == mat_haps.shape[1])
+        assert np.all(np.diff(pos) > 0)
         np.random.seed(seed)
         m = mat_haps.shape[1]
         # Simulating the hidden variables ...
@@ -125,9 +127,10 @@ class PGTSimBase:
                 zs_maternal = None
                 zs_paternal[0] = binom.rvs(1, 0.5)
                 for i in range(1, m):
+                    d = pos[i] - pos[i - 1]
                     zs_paternal[i] = (
                         1 - zs_paternal[i - 1]
-                        if uniform.rvs() <= rec_prob
+                        if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                         else zs_paternal[i - 1]
                     )
                 pat_real_hap = np.array(
@@ -140,9 +143,10 @@ class PGTSimBase:
                 zs_paternal = None
                 zs_maternal[0] = binom.rvs(1, 0.5)
                 for i in range(1, m):
+                    d = pos[i] - pos[i - 1]
                     zs_maternal[i] = (
                         1 - zs_maternal[i - 1]
-                        if uniform.rvs() <= rec_prob
+                        if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                         else zs_maternal[i - 1]
                     )
                 mat_real_hap = np.array(
@@ -160,19 +164,20 @@ class PGTSimBase:
                 zs1_paternal[0] = binom.rvs(0, 0.5)
 
                 for i in range(1, m):
+                    d = pos[i] - pos[i - 1]
                     zs_maternal[i] = (
                         1 - zs_maternal[i - 1]
-                        if uniform.rvs() <= rec_prob
+                        if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                         else zs_maternal[i - 1]
                     )
                     zs0_paternal[i] = (
                         1 - zs0_paternal[i - 1]
-                        if uniform.rvs() <= rec_prob
+                        if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                         else zs0_paternal[i - 1]
                     )
                     zs1_paternal[i] = (
                         1 - zs1_paternal[i - 1]
-                        if uniform.rvs() <= rec_prob
+                        if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                         else zs1_paternal[i - 1]
                     )
                 # Simulate a duplicate configuration of the paternal alleles ...
@@ -193,19 +198,20 @@ class PGTSimBase:
                 zs0_maternal[0] = binom.rvs(0, 0.5)
                 zs1_maternal[0] = binom.rvs(0, 0.5)
                 for i in range(1, m):
+                    d = pos[i] - pos[i - 1]
                     zs_paternal[i] = (
                         1 - zs_paternal[i - 1]
-                        if uniform.rvs() <= rec_prob
+                        if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                         else zs_paternal[i - 1]
                     )
                     zs0_maternal[i] = (
                         1 - zs0_maternal[i - 1]
-                        if uniform.rvs() <= rec_prob
+                        if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                         else zs0_maternal[i - 1]
                     )
                     zs1_maternal[i] = (
                         1 - zs1_maternal[i - 1]
-                        if uniform.rvs() <= rec_prob
+                        if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                         else zs1_maternal[i - 1]
                     )
                 # Simulate a duplicate configuration of the paternal alleles ...
@@ -229,14 +235,15 @@ class PGTSimBase:
             zs_paternal[0] = binom.rvs(1, 0.5)
             for i in range(1, m):
                 # We switch with a specific probability
+                d = pos[i] - pos[i - 1]
                 zs_maternal[i] = (
                     1 - zs_maternal[i - 1]
-                    if uniform.rvs() <= rec_prob
+                    if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                     else zs_maternal[i - 1]
                 )
                 zs_paternal[i] = (
                     1 - zs_paternal[i - 1]
-                    if uniform.rvs() <= rec_prob
+                    if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                     else zs_paternal[i - 1]
                 )
             mat_real_hap = np.array([mat_haps[i, p] for p, i in enumerate(zs_maternal)])
@@ -336,7 +343,7 @@ class PGTSim(PGTSimBase):
         ploidy=2,
         m=10000,
         length=1e7,
-        rec_prob=1e-4,
+        rec_rate=1e-4,
         mat_skew=0.5,
         std_dev=0.15,
         mix_prop=0.3,
@@ -347,12 +354,14 @@ class PGTSim(PGTSimBase):
         """Simulate a single embryo with a given ploidy status."""
         np.random.seed(seed)
         mat_haps, pat_haps, ps = self.draw_parental_genotypes(afs=afs, m=m, seed=seed)
+        pos = np.sort(np.random.uniform(high=length, size=m))
         zs_maternal, zs_paternal, mat_hap1, pat_hap1, aploid = self.sim_haplotype_paths(
             mat_haps,
             pat_haps,
+            pos,
             ploidy=ploidy,
             mat_skew=mat_skew,
-            rec_prob=rec_prob,
+            rec_rate=rec_rate,
             seed=seed,
         )
         geno, baf = self.sim_b_allele_freq(
@@ -371,7 +380,6 @@ class PGTSim(PGTSimBase):
         ) = self.create_switch_errors(
             mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
         )
-        pos = np.sort(np.random.uniform(high=length, size=m))
         assert geno.size == m
         assert baf.size == m
         assert pos.size == m
@@ -392,7 +400,7 @@ class PGTSim(PGTSimBase):
             "length": length,
             "aploid": aploid,
             "ploidy": ploidy,
-            "rec_prob": rec_prob,
+            "rec_rate": rec_rate,
             "std_dev": std_dev,
             "mix_prop": mix_prop,
             "alpha": alpha,
@@ -407,7 +415,7 @@ class PGTSim(PGTSimBase):
         m=10000,
         length=1e7,
         nsibs=3,
-        rec_prob=1e-4,
+        rec_rate=1e-8,
         std_dev=0.15,
         mix_prop=0.3,
         switch_err_rate=1e-2,
@@ -454,8 +462,9 @@ class PGTSim(PGTSimBase):
             ) = self.sim_haplotype_paths(
                 mat_haps,
                 pat_haps,
+                pos,
                 ploidy=ploidy,
-                rec_prob=rec_prob,
+                rec_rate=rec_rate,
                 seed=seed + i,
             )
             geno, baf = self.sim_b_allele_freq(
@@ -481,7 +490,7 @@ class PGTSim(PGTSimBase):
         pat_haps,
         pos,
         ploidy=2,
-        rec_prob=1e-4,
+        rec_rate=1e-8,
         mat_skew=0.5,
         std_dev=0.15,
         mix_prop=0.3,
@@ -493,9 +502,10 @@ class PGTSim(PGTSimBase):
         zs_maternal, zs_paternal, mat_hap1, pat_hap1, aploid = self.sim_haplotype_paths(
             mat_haps,
             pat_haps,
+            pos,
             ploidy=ploidy,
             mat_skew=mat_skew,
-            rec_prob=rec_prob,
+            rec_rate=rec_rate,
             seed=seed,
         )
         geno, baf = self.sim_b_allele_freq(
@@ -531,7 +541,7 @@ class PGTSim(PGTSimBase):
             "allele_freqs": None,
             "aploid": aploid,
             "ploidy": ploidy,
-            "rec_prob": rec_prob,
+            "rec_rate": rec_rate,
             "std_dev": std_dev,
             "mix_prop": mix_prop,
             "alpha": alpha,
@@ -559,7 +569,7 @@ class PGTSimMosaic(PGTSimBase):
         ncells=10,
         m=10000,
         length=1e7,
-        rec_prob=1e-4,
+        rec_rate=1e-8,
         mat_skew=0.5,
         std_dev=0.15,
         mix_prop=0.3,
@@ -576,6 +586,7 @@ class PGTSimMosaic(PGTSimBase):
             props /= np.sum(props)
         # 1. Simulate the parental haplotypes
         np.random.seed(seed)
+        pos = np.sort(np.random.uniform(high=length, size=m))
         mat_haps, pat_haps, ps = self.draw_parental_genotypes(afs=afs, m=m, seed=seed)
         mat_haps_prime, pat_haps_prime, _, _ = self.create_switch_errors(
             mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
@@ -597,9 +608,10 @@ class PGTSimMosaic(PGTSimBase):
             ) = self.sim_haplotype_paths(
                 mat_haps,
                 pat_haps,
+                pos,
                 ploidy=p,
                 mat_skew=mat_skew,
-                rec_prob=rec_prob,
+                rec_rate=rec_rate,
                 seed=i + 1,
             )
             geno, baf = self.sim_b_allele_freq(
@@ -622,7 +634,6 @@ class PGTSimMosaic(PGTSimBase):
         # Take the mean BAF + LRR estimates across the bulk samples
         baf_embryo = np.mean(bafs, axis=0)
         lrr_embryo = np.mean(lrrs, axis=0)
-        pos = np.sort(np.random.uniform(high=length, size=m))
         assert baf_embryo.size == m
         res_table = {
             "mat_haps": mat_haps,
@@ -640,7 +651,7 @@ class PGTSimMosaic(PGTSimBase):
             "length": length,
             "aploid": aploids,
             "ploidies": mix_ploidies,
-            "rec_prob": rec_prob,
+            "rec_rate": rec_rate,
             "std_dev": std_dev,
             "mix_prop": mix_prop,
             "seed": seed,
@@ -656,7 +667,7 @@ class PGTSimMosaic(PGTSimBase):
         ploidies=np.array([0, 1, 2, 3]),
         props=np.array([0, 0, 1.0, 0.0]),
         ncells=10,
-        rec_prob=1e-4,
+        rec_rate=1e-8,
         mat_skew=0.5,
         std_dev=0.15,
         mix_prop=0.3,
@@ -691,9 +702,10 @@ class PGTSimMosaic(PGTSimBase):
             ) = self.sim_haplotype_paths(
                 mat_haps,
                 pat_haps,
+                pos,
                 ploidy=p,
                 mat_skew=mat_skew,
-                rec_prob=rec_prob,
+                rec_rate=rec_rate,
                 seed=i + 1,
             )
             geno, baf = self.sim_b_allele_freq(
@@ -731,7 +743,7 @@ class PGTSimMosaic(PGTSimBase):
             "pos": pos,
             "aploid": aploids,
             "ploidies": mix_ploidies,
-            "rec_prob": rec_prob,
+            "rec_rate": rec_rate,
             "std_dev": std_dev,
             "mix_prop": mix_prop,
             "seed": seed,
@@ -782,7 +794,15 @@ class PGTSimSegmental(PGTSimBase):
         return aneu_type, (start, end)
 
     def sim_haplotype_paths_segmental(
-        self, mat_haps, pat_haps, start, end, aneu_type="3m", rec_prob=1e-4, seed=42
+        self,
+        mat_haps,
+        pat_haps,
+        pos,
+        start,
+        end,
+        aneu_type="3m",
+        rec_rate=1e-4,
+        seed=42,
     ):
         """Simulate haplotypes and segmental aneuploidies.
 
@@ -791,7 +811,7 @@ class PGTSimSegmental(PGTSimBase):
         """
         assert mat_haps.size == pat_haps.size
         assert seed > 0
-        assert rec_prob > 0
+        assert (rec_rate > 0) and (rec_rate <= 1)
         assert start <= end
         assert start <= mat_haps.shape[1]
         assert end <= mat_haps.shape[1]
@@ -805,7 +825,8 @@ class PGTSimSegmental(PGTSimBase):
         ploidies = np.zeros(m, dtype=np.uint16)
         zs_maternal[0] = binom.rvs(1, 0.5)
         zs_paternal[0] = binom.rvs(1, 0.5)
-        for i in range(0, m):
+        for i in range(1, m):
+            d = pos[i] - pos[i - 1]
             if (i >= start) and (i <= end):
                 # NOTE: we're in the aneuploidy state here ...
                 if aneu_type == "0":
@@ -817,7 +838,7 @@ class PGTSimSegmental(PGTSimBase):
                     ploidies[i] = 1
                     zs_maternal[i] = (
                         1 - zs_maternal[i - 1]
-                        if uniform.rvs() <= rec_prob
+                        if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                         else zs_maternal[i - 1]
                     )
                     zs_paternal[i] = np.nan
@@ -826,7 +847,7 @@ class PGTSimSegmental(PGTSimBase):
                     ploidies[i] = 1
                     zs_paternal[i] = (
                         1 - zs_paternal[i - 1]
-                        if uniform.rvs() <= rec_prob
+                        if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                         else zs_paternal[i - 1]
                     )
                     zs_maternal[i] = np.nan
@@ -834,12 +855,12 @@ class PGTSimSegmental(PGTSimBase):
                     ploidies[i] = 2
                     zs_paternal[i] = (
                         1 - zs_paternal[i - 1]
-                        if uniform.rvs() <= rec_prob
+                        if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                         else zs_paternal[i - 1]
                     )
                     zs_maternal[i] = (
                         1 - zs_maternal[i - 1]
-                        if uniform.rvs() <= rec_prob
+                        if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                         else zs_maternal[i - 1]
                     )
                 elif aneu_type == "3m":
@@ -849,17 +870,17 @@ class PGTSimSegmental(PGTSimBase):
                     else:
                         zs1_maternal[i] = (
                             1 - zs1_maternal[i - 1]
-                            if uniform.rvs() <= rec_prob
+                            if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                             else zs1_maternal[i - 1]
                         )
                     zs_maternal[i] = (
                         1 - zs_maternal[i - 1]
-                        if uniform.rvs() <= rec_prob
+                        if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                         else zs_maternal[i - 1]
                     )
                     zs_paternal[i] = (
                         1 - zs_paternal[i - 1]
-                        if uniform.rvs() <= rec_prob
+                        if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                         else zs_paternal[i - 1]
                     )
                 elif aneu_type == "3p":
@@ -869,17 +890,17 @@ class PGTSimSegmental(PGTSimBase):
                     else:
                         zs1_paternal[i] = (
                             1 - zs1_maternal[i - 1]
-                            if uniform.rvs() <= rec_prob
+                            if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                             else zs1_paternal[i - 1]
                         )
                     zs_maternal[i] = (
                         1 - zs_maternal[i - 1]
-                        if uniform.rvs() <= rec_prob
+                        if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                         else zs_maternal[i - 1]
                     )
                     zs_paternal[i] = (
                         1 - zs_paternal[i - 1]
-                        if uniform.rvs() <= rec_prob
+                        if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                         else zs_paternal[i - 1]
                     )
                 else:
@@ -892,7 +913,7 @@ class PGTSimSegmental(PGTSimBase):
                 if ~np.isnan(zs_maternal[i - 1]):
                     zs_maternal[i] = (
                         1 - zs_maternal[i - 1]
-                        if uniform.rvs() <= rec_prob
+                        if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                         else zs_maternal[i - 1]
                     )
                 else:
@@ -900,7 +921,7 @@ class PGTSimSegmental(PGTSimBase):
                 if ~np.isnan(zs_paternal[i - 1]):
                     zs_paternal[i] = (
                         1 - zs_paternal[i - 1]
-                        if uniform.rvs() <= rec_prob
+                        if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                         else zs_paternal[i - 1]
                     )
                 else:
@@ -971,7 +992,7 @@ class PGTSimSegmental(PGTSimBase):
         m=10000,
         length=50e6,
         mat_skew=0.5,
-        rec_prob=1e-4,
+        rec_rate=1e-8,
         std_dev=0.1,
         mix_prop=0.7,
         mean_size=10,
@@ -980,6 +1001,7 @@ class PGTSimSegmental(PGTSimBase):
     ):
         """Conduct a full simulation of segmental aneuploidies conditional on parental haplotypes."""
         np.random.seed(seed)
+        pos = np.sort(np.random.uniform(high=length, size=m))
         mat_haps, pat_haps, ps = self.draw_parental_genotypes(afs=afs, m=m, seed=seed)
         aneu_type, (start, end) = self.seg_aneuploidy(
             m=m, mean_size=mean_size, ploidy=ploidy, mat_skew=mat_skew, seed=seed
@@ -998,10 +1020,11 @@ class PGTSimSegmental(PGTSimBase):
         ) = self.sim_haplotype_paths_segmental(
             mat_haps,
             pat_haps,
+            pos,
             start=start,
             end=end,
             aneu_type=aneu_type,
-            rec_prob=rec_prob,
+            rec_rate=rec_rate,
             seed=seed,
         )
         geno, baf, _ = self.sim_b_allele_freq_segmental(
@@ -1017,7 +1040,6 @@ class PGTSimSegmental(PGTSimBase):
         )
         assert geno.size == m
         assert baf.size == m
-        pos = np.sort(np.random.uniform(high=length, size=m))
         res_table = {
             "mat_haps": mat_haps,
             "pat_haps": pat_haps,
@@ -1032,7 +1054,7 @@ class PGTSimSegmental(PGTSimBase):
             "allele_freqs": ps,
             "pos": pos,
             "m": m,
-            "rec_prob": rec_prob,
+            "rec_rate": rec_rate,
             "std_dev": std_dev,
             "mix_prop": mix_prop,
             "seed": seed,
@@ -1044,7 +1066,7 @@ class PGTSimSegmental(PGTSimBase):
         mat_haps,
         pat_haps,
         pos,
-        rec_prob=1e-4,
+        rec_rate=1e-4,
         std_dev=0.1,
         mix_prop=0.7,
         mean_size=10,
@@ -1066,7 +1088,8 @@ class PGTSimSegmental(PGTSimBase):
         ) = self.sim_haplotype_paths_segmental(
             mat_haps,
             pat_haps,
-            rec_prob=rec_prob,
+            pos,
+            rec_rate=rec_rate,
             mean_size=mean_size,
             seed=seed,
         )
@@ -1093,7 +1116,7 @@ class PGTSimSegmental(PGTSimBase):
             "geno_embryo": geno,
             "baf_embryo": baf,
             "pos": pos,
-            "rec_prob": rec_prob,
+            "rec_rate": rec_rate,
             "std_dev": std_dev,
             "mix_prop": mix_prop,
             "seed": seed,
