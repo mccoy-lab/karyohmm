@@ -65,7 +65,7 @@ logging.basicConfig(
     "--maternal_id",
     required=False,
     default=None,
-    type=float,
+    type=str,
     show_default=True,
     help="IID of maternal individual in VCF",
 )
@@ -73,7 +73,7 @@ logging.basicConfig(
     "--paternal_id",
     required=False,
     default=None,
-    type=float,
+    type=str,
     show_default=True,
     help="IID of paternal individual in VCF.",
 )
@@ -90,7 +90,7 @@ logging.basicConfig(
     "--ploidy",
     "-p",
     required=True,
-    default=2,
+    default="2",
     type=click.Choice(["0", "1", "2", "3"]),
     show_default=True,
     help="Degree of aneuploidy to be simulated.",
@@ -220,7 +220,7 @@ def main(
                 "Need to specify both `maternal_id` and `paternal_id` if simulating from a VCF!"
             )
         pgt_sim_vcf = PGTSimVCF()
-        mat_haps, pat_haps, pos = pgt_sim_vcf.gen_parental_haplotypes(
+        mat_haps, pat_haps, pos, ps = pgt_sim_vcf.gen_parental_haplotypes(
             vcf_fp=vcf,
             maternal_id=maternal_id,
             paternal_id=paternal_id,
@@ -249,6 +249,7 @@ def main(
                 switch_err_rate=switch_err_rate,
                 seed=seed,
             )
+            results["ps"] = ps
         else:
             pgt_sim = PGTSim()
             results = pgt_sim.full_ploidy_sim(
@@ -280,6 +281,7 @@ def main(
                 switch_err_rate=switch_err_rate,
                 seed=seed,
             )
+            results["ps"] = ps
         else:
             pgt_sim = PGTSimSegmental()
             results = pgt_sim.full_segmental_sim(

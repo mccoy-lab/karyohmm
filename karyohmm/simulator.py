@@ -395,7 +395,7 @@ class PGTSim(PGTSimBase):
             "geno_embryo": geno,
             "baf": baf,
             "pos": pos,
-            "allele_freqs": ps,
+            "af": ps,
             "m": m,
             "length": length,
             "aploid": aploid,
@@ -446,7 +446,7 @@ class PGTSim(PGTSimBase):
         res_table["pat_haps_real"] = pat_haps_prime
         res_table["mat_switch"] = mat_switch
         res_table["pat_switch"] = pat_switch
-        res_table["allele_freqs"] = ps
+        res_table["af"] = ps
         res_table["m"] = m
         res_table["nsibs"] = nsibs
         res_table["aploid"] = "2"
@@ -1060,7 +1060,7 @@ class PGTSimSegmental(PGTSimBase):
             "seg_end": end,
             "geno_embryo": geno,
             "baf": baf,
-            "allele_freqs": ps,
+            "af": ps,
             "pos": pos,
             "m": m,
             "rec_rate": rec_rate,
@@ -1146,24 +1146,24 @@ class PGTSimVCF(PGTSim):
         """Generate parental haplotypes from an actual VCF."""
         from cyvcf2 import VCF
 
-        vcf = VCF(vcf_fp, **kwargs)
         assert isinstance(maternal_id, str)
         assert isinstance(paternal_id, str)
+        vcf = VCF(vcf_fp, **kwargs)
         assert maternal_id in vcf.samples
         assert paternal_id in vcf.samples
         pos = []
         mat_haps = []
-        for var in vcf(samples=[maternal_id]):
+        for var in VCF(vcf_fp, samples=[maternal_id], **kwargs):
             pos.append(var.POS)
-            mat_haps.append([var.genotypes[0], var.genotypes[1]])
+            mat_haps.append([var.genotypes[0][0], var.genotypes[0][1]])
         pat_haps = []
-        for var in vcf(samples=[paternal_id]):
-            pat_haps.append([var.genotypes[0], var.genotypes[1]])
+        for var in VCF(vcf_fp, samples=[paternal_id], **kwargs):
+            pat_haps.append([var.genotypes[0][0], var.genotypes[0][1]])
         afs = []
         for var in vcf:
-            afs.append(vcf.aaf[0])
+            afs.append(var.aaf)
         mat_haps = np.array(mat_haps).astype(np.uint8)
         pat_haps = np.array(pat_haps).astype(np.uint8)
-        pos = np.array(pos)
-        afs = np.array(afs)
-        return mat_haps, pat_haps, pos
+        pos = np.array(pos, dtype=np.float64)
+        afs = np.array(afs, dtype=np.float64)
+        return mat_haps, pat_haps, pos, afs

@@ -4,7 +4,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from karyohmm import PGTSim, PGTSimMosaic, PGTSimSegmental
+from karyohmm import PGTSim, PGTSimMosaic, PGTSimSegmental, PGTSimVCF
 
 pgt_sim = PGTSim()
 pgt_sim_mosaic = PGTSimMosaic()
@@ -56,9 +56,33 @@ def test_pgt_segmental(m, ploidy, frac_chrom):
     mean_size = np.round(m * frac_chrom)
     data = pgt_sim_segmental.full_segmental_sim(m=m, ploidy=ploidy, mean_size=mean_size)
     assert data["m"] == m
-    assert "baf_embryo" in data.keys()
-    assert np.any(data["baf_embryo"] == 0.0) | np.any(data["baf_embryo"] == 1.0)
+    assert "baf" in data.keys()
+    assert np.any(data["baf"] == 0.0) | np.any(data["baf"] == 1.0)
     if ploidy != 2:
         assert not np.all(data["ploidies"] == 2)
     else:
         assert np.all(data["ploidies"] == 2)
+
+
+@pytest.fixture
+def valid_vcf_file():
+    """Small VCF file shipped with the project."""
+    return "data/chr1.subset.1kg_phase3.phased.n50.vcf.gz"
+
+
+def test_pgt_vcf(valid_vcf_file):
+    """Test reading in a VCF and outputting key parameters."""
+    pgt_vcf = PGTSimVCF()
+    mat_haps, pat_haps, pos, afs = pgt_vcf.gen_parental_haplotypes(
+        vcf_fp=valid_vcf_file,
+        maternal_id="HG00096",
+        paternal_id="HG00107",
+        gts012=True,
+        threads=4,
+    )
+    assert mat_haps.ndim == 2
+    assert pat_haps.ndim == 2
+    assert mat_haps.size == pat_haps.size
+    assert afs.size == pos.size
+    assert np.all(np.isin(mat_haps, [0, 1]))
+    assert np.all(np.isin(pat_haps, [0, 1]))
