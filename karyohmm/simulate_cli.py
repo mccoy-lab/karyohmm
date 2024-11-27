@@ -308,34 +308,34 @@ def main(
             out_fp = f"{out}.tsv.gz"
             with gz.open(out_fp, "wt") as outfile:
                 outfile.write(
-                    "chrom\tpos\tref\talt\tploidy\tmat_hap0\tmat_hap1\tpat_hap0\tpat_hap1\tbaf\n"
+                    "chrom\tpos\tref\talt\taf\tploidy\tmat_hap0\tmat_hap1\tpat_hap0\tpat_hap1\tbaf\n"
                 )
                 if "aploid" in results:
                     for i in range(m):
                         outfile.write(
-                            f"{chrom}\t{results['pos'][i]}\tA\tC\t{results['aploid']}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf'][i]}\n"
+                            f"{chrom}\t{results['pos'][i]}\tA\tC\t{results['af']}\t{results['aploid']}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf'][i]}\n"
                         )
                 else:
                     for i in range(m):
                         outfile.write(
-                            f"{chrom}\t{results['pos'][i]}\tA\tC\t{results['ploidies'][i]}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf'][i]}\n"
+                            f"{chrom}\t{results['pos'][i]}\tA\tC\t{results['af']}\t{results['ploidies'][i]}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf'][i]}\n"
                         )
         else:
             logging.info(f"Writing output to {out}.tsv")
             out_fp = f"{out}.tsv"
             with open(out_fp, "w+") as outfile:
                 outfile.write(
-                    "chrom\tpos\tref\talt\tploidy\tmat_hap0\tmat_hap1\tpat_hap0\tpat_hap1\tbaf\n"
+                    "chrom\tpos\tref\talt\taf\tploidy\tmat_hap0\tmat_hap1\tpat_hap0\tpat_hap1\tbaf\n"
                 )
                 if "aploid" in results:
                     for i in range(m):
                         outfile.write(
-                            f"{chrom}\t{results['pos'][i]}\tA\tC\t{results['aploid']}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf'][i]}\n"
+                            f"{chrom}\t{results['pos'][i]}\tA\tC\t{results['af']}\t{results['aploid']}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf'][i]}\n"
                         )
                 else:
                     for i in range(m):
                         outfile.write(
-                            f"{chrom}\t{results['pos'][i]}\tA\tC\t{results['ploidies'][i]}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf'][i]}\n"
+                            f"{chrom}\t{results['pos'][i]}\tA\tC\t{results['af']}\t{results['ploidies'][i]}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf'][i]}\n"
                         )
 
     else:

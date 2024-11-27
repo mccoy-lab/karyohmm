@@ -77,7 +77,7 @@ def test_rec_paternal_expected_baf_perfect_phase(sigma, pi0, nsibs, seed):
         nsibs=nsibs,
         std_dev=sigma,
         mix_prop=pi0,
-        rec_prob=1e-4,
+        rec_rate=1e-8,
         switch_err_rate=0.0,
         seed=seed,
     )
@@ -125,7 +125,7 @@ def test_norec_paternal_expected_baf_perfect_phase(sigma, pi0, nsibs, seed):
         nsibs=nsibs,
         std_dev=sigma,
         mix_prop=pi0,
-        rec_prob=1e-10,
+        rec_rate=1e-10,
         switch_err_rate=0.0,
         seed=seed,
     )
@@ -174,7 +174,7 @@ def test_rec_paternal_inferred_baf_perfect_phase(sigma, pi0, nsibs, seed):
         nsibs=nsibs,
         std_dev=sigma,
         mix_prop=pi0,
-        rec_prob=1e-4,
+        rec_rate=1e-4,
         switch_err_rate=0.0,
         seed=42 + seed,
     )
@@ -227,7 +227,7 @@ def test_rec_paternal_inferred_baf_fixphase(sigma, pi0, nsibs, seed):
         nsibs=nsibs,
         std_dev=sigma,
         mix_prop=pi0,
-        rec_prob=1e-4,
+        rec_rate=1e-4,
         switch_err_rate=1e-2,
         seed=42 + seed,
     )
@@ -302,7 +302,7 @@ def test_rec_paternal_inferred_baf_perfect_phase_diff_density(
         std_dev=sigma,
         mix_prop=pi0,
         length=seqlen,
-        rec_prob=e_rec,
+        rec_rate=e_rec,
         switch_err_rate=0.0,
         seed=42 + seed,
     )
@@ -358,7 +358,7 @@ def test_rec_paternal_inferred_baf_diff_density(sigma, pi0, nsibs, seed, m, seql
         nsibs=nsibs,
         std_dev=sigma,
         mix_prop=pi0,
-        rec_prob=e_rec,
+        rec_rate=e_rec,
         switch_err_rate=1.5e-2,
         seed=42 + seed,
     )
@@ -429,7 +429,7 @@ def test_rec_paternal_inferred_baf_diff_density_llthresh(
         nsibs=nsibs,
         std_dev=sigma,
         mix_prop=pi0,
-        rec_prob=e_rec,
+        rec_rate=e_rec,
         switch_err_rate=1.5e-2,
         seed=42 + seed,
     )
