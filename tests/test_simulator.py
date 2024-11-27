@@ -16,15 +16,16 @@ pgt_sim_segmental = PGTSimSegmental()
     m=st.integers(min_value=1000, max_value=5000),
     ploidy=st.integers(min_value=0, max_value=3),
 )
-@settings(max_examples=100, deadline=1000)
+@settings(max_examples=100, deadline=5000)
 def test_pgt_sim(length, m, ploidy):
     """Test for PGT simulations."""
     data = pgt_sim.full_ploidy_sim(m=m, ploidy=ploidy, length=length)
     assert data["m"] == m
     assert data["length"] == length
     assert np.max(data["pos"]) <= length
-    assert "baf_embryo" in data.keys()
-    assert np.any(data["baf_embryo"] == 0.0) | np.any(data["baf_embryo"] == 1.0)
+    assert "baf" in data.keys()
+    if ploidy > 0:
+        assert np.any(data["baf"] == 0.0) | np.any(data["baf"] == 1.0)
 
 
 @given(

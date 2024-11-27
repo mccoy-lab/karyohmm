@@ -860,7 +860,7 @@ class PGTSimSegmental(PGTSimBase):
         assert start <= end
         assert start <= mat_haps.shape[1]
         assert end <= mat_haps.shape[1]
-        assert aneu_type in ["0", "1p", "1m", "2", "3m", "3p"]
+        assert aneu_type in ["0", "1m", "1p", "2", "3m", "3p"]
         np.random.seed(seed)
         m = mat_haps.shape[1]
         zs_maternal = np.zeros(m)
@@ -870,6 +870,7 @@ class PGTSimSegmental(PGTSimBase):
         ploidies = np.zeros(m, dtype=np.uint16)
         zs_maternal[0] = binom.rvs(1, 0.5)
         zs_paternal[0] = binom.rvs(1, 0.5)
+        ploidies[0] = 2
         if start == 0:
             if aneu_type == "0":
                 ploidies[0] = 0
@@ -877,8 +878,6 @@ class PGTSimSegmental(PGTSimBase):
                 ploidies[0] = 1
             elif aneu_type in ["3m", "3p"]:
                 ploidies[0] = 3
-            else:
-                ploidies[0] = 2
         for i in range(1, m):
             d = pos[i] - pos[i - 1]
             if (i >= start) and (i <= end):
