@@ -19,6 +19,7 @@ class DataReader:
             "ref": str,
             "alt": str,
             "baf": float,
+            "af": float,
             "mat_hap0": int,
             "mat_hap1": int,
             "pat_hap0": int,
@@ -34,7 +35,15 @@ class DataReader:
             self.duo_maternal = duo_maternal
 
     def read_data_np(self, input_fp):
-        """Read data from an .npy or npz file and reformat for karyohmm."""
+        """Read data from an .npy or npz file and reformat for karyohmm.
+
+        Args:
+            input_fp (`str`): path to input NPZ or NPY file.
+
+        Output:
+            df (`pd.DataFrame`): pandas dataframe of cleaned options.
+
+        """
         data = np.load(input_fp, allow_pickle=True)
         for x in ["chrom", "pos", "ref", "alt", "baf"]:
             assert x in data
@@ -54,6 +63,8 @@ class DataReader:
                     "pat_hap1": data["pat_haps"][1, :].tolist(),
                 }
             )
+            if "af" in data:
+                df["af"] = data["af"]
             df = df.astype(dtype=self.dtypes)
             return df
         if self.mode == "Duo":
@@ -70,6 +81,8 @@ class DataReader:
                         "mat_hap1": data["mat_haps"][1, :],
                     },
                 )
+                if "af" in data:
+                    df["af"] = data["af"]
                 df = df.astype(dtype=self.dtypes)
                 return df
             else:
@@ -85,11 +98,21 @@ class DataReader:
                         "pat_hap1": data["pat_haps"][1, :],
                     },
                 )
+                if "af" in data:
+                    df["af"] = data["af"]
                 df = df.astype(dtype=self.dtypes)
             return df
 
     def read_data_df(self, input_fp):
-        """Read in data from a pre-existing text-based dataset."""
+        """Read in data from a pre-existing text-based dataset.
+
+        Args:
+            input_fp (`str`): path to input TSV/CSV/TXT file.
+
+        Output:
+            df (`pd.DataFrame`): pandas dataframe of cleaned options.
+
+        """
         sep = ","
         if ".tsv" in input_fp:
             sep = "\t"
@@ -117,7 +140,15 @@ class DataReader:
         return df
 
     def read_data(self, input_fp):
-        """Read in data in either pandas/numpy format."""
+        """Read in data in either pandas/numpy format.
+
+        Args:
+            input_fp (`str`): path to input file.
+
+        Output:
+            df (`pd.DataFrame`): pandas dataframe of cleaned options.
+
+        """
         if (".npz" in input_fp) or (".npy" in input_fp):
             df = self.read_data_np(input_fp)
         else:

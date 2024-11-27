@@ -1143,7 +1143,20 @@ class PGTSimVCF(PGTSim):
     def gen_parental_haplotypes(
         self, vcf_fp, maternal_id=None, paternal_id=None, **kwargs
     ):
-        """Generate parental haplotypes from an actual VCF."""
+        """Generate parental haplotypes from an actual VCF.
+
+        Args:
+            vcf_fp (`str`): path to an input VCF file.
+            maternal_id (`str`): ID of maternal individual.
+            paternal_id (`str`): ID of paternal individual.
+        Output:
+            mat_haps (`np.array`): paternal haplotypes.
+            pat_haps (`np.array`): maternal haplotypes.
+            pos (`np.array`): basepair positions of variants.
+            afs (`np.array`): alternative allele frequency.
+            df (`pd.DataFrame`): pandas dataframe of cleaned options.
+
+        """
         from cyvcf2 import VCF
 
         assert isinstance(maternal_id, str)
@@ -1154,16 +1167,21 @@ class PGTSimVCF(PGTSim):
         pos = []
         mat_haps = []
         for var in VCF(vcf_fp, samples=[maternal_id], **kwargs):
-            pos.append(var.POS)
-            mat_haps.append([var.genotypes[0][0], var.genotypes[0][1]])
+            if len(var.ALT) == 1:
+                pos.append(var.POS)
+                mat_haps.append([var.genotypes[0][0], var.genotypes[0][1]])
         pat_haps = []
         for var in VCF(vcf_fp, samples=[paternal_id], **kwargs):
-            pat_haps.append([var.genotypes[0][0], var.genotypes[0][1]])
+            if len(var.ALT) == 1:
+                pat_haps.append([var.genotypes[0][0], var.genotypes[0][1]])
         afs = []
         for var in vcf:
-            afs.append(var.aaf)
+            if len(var.ALT) == 1:
+                afs.append(var.aaf)
         mat_haps = np.array(mat_haps).astype(np.uint8)
         pat_haps = np.array(pat_haps).astype(np.uint8)
         pos = np.array(pos, dtype=np.float64)
         afs = np.array(afs, dtype=np.float64)
+        assert pos.size == afs.size
+        assert mat_haps.size == pat_haps.size
         return mat_haps, pat_haps, pos, afs
