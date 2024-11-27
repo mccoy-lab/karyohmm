@@ -83,6 +83,25 @@ def test_pgt_vcf(valid_vcf_file):
     assert mat_haps.ndim == 2
     assert pat_haps.ndim == 2
     assert mat_haps.size == pat_haps.size
+    assert mat_haps.shape[0] == 2
+    assert pat_haps.shape[0] == 2
+    assert mat_haps.shape[1] == pos.size
+    assert pat_haps.shape[1] == pos.size
     assert afs.size == pos.size
     assert np.all(np.isin(mat_haps, [0, 1]))
     assert np.all(np.isin(pat_haps, [0, 1]))
+
+
+def test_pgt_sim_from_vcf(valid_vcf_file):
+    """Test actually simulating from pre-existing haplotypes."""
+    pgt_vcf = PGTSimVCF()
+    pgt_sim = PGTSim()
+    mat_haps, pat_haps, pos, afs = pgt_vcf.gen_parental_haplotypes(
+        vcf_fp=valid_vcf_file,
+        maternal_id="HG00096",
+        paternal_id="HG00107",
+        gts012=True,
+        threads=4,
+    )
+    results = pgt_sim.sim_from_haps(mat_haps=mat_haps, pat_haps=pat_haps, pos=pos)
+    assert "baf" in results

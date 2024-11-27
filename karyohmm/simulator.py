@@ -59,7 +59,18 @@ class PGTSimBase:
         return np.vstack([mat_h1, mat_h2]), np.vstack([pat_h1, pat_h2]), ps
 
     def create_switch_errors_help(self, haps, err_rate=1e-3, seed=42):
-        """Revised method to create switch errors."""
+        """Revised method to create switch errors.
+
+        Args:
+            haps (`np.array`): 2 x M numpy array of haplotypes for bi-allelic variants.
+            err_rate (`float`): switch error rate between heterozygotes.
+            seed (`int`): random number seed.
+
+        Output:
+            haps_prime (`np.array`): switched haplotypes.
+            switches (`np.array`): snp-indices of haplotype switches.
+
+        """
         np.random.seed(seed)
         m = haps.shape[1]
         geno = haps.sum(axis=0)
@@ -82,7 +93,21 @@ class PGTSimBase:
         return haps_prime, np.array(switches)
 
     def create_switch_errors(self, mat_haps, pat_haps, err_rate=1e-3, seed=42):
-        """Create switch errors to evaluate impact of poor phasing."""
+        """Create switch errors to evaluate impact of poor phasing.
+
+        Args:
+            mat_haps (`np.array`): 2 x M numpy array for maternal haplotypes.
+            pat_haps (`np.array`): 2 x M numpy array for paternal haplotypes.
+            err_rate (`float`): switch error rate between heterozygotes.
+            seed (`int`): random number seed.
+
+        Output:
+            mat_haps_prime (`np.array`): switched maternal haplotypes.
+            pat_haps_prime (`np.array`): switched paternal haplotypes.
+            m_switches (`np.array`): snp-indices of maternal haplotype switches.
+            p_switches (`np.array`): snp-indices of maternal haplotype switches.
+
+        """
         assert mat_haps.size == pat_haps.size
         assert mat_haps.ndim == 2
         assert mat_haps.ndim == 2
@@ -99,7 +124,25 @@ class PGTSimBase:
     def sim_haplotype_paths(
         self, mat_haps, pat_haps, pos, ploidy=2, rec_rate=1e-8, mat_skew=0.5, seed=42
     ):
-        """Simulate copying paths through the maternal and paternal haplotypes."""
+        """Simulate copying paths through the maternal and paternal haplotypes.
+
+        Args:
+            mat_haps (`np.array`): 2 x M numpy array for maternal haplotypes.
+            pat_haps (`np.array`): 2 x M numpy array for paternal haplotypes.
+            pos (`np.array`): position of individual variants.
+            ploidy (`int`): integer of number of chromosomes being simulated.
+            rec_rate (`float`): uniform recombination rate per basepair.
+            mat_skew (`float`): probability of maternal-origin aneuploidy.
+            seed (`int`): random number seed.
+
+        Output:
+            zs_maternal (`np.array`): copying path through maternal haplotypes.
+            zs_paternal (`np.array`): copying path through paternal haplotypes.
+            mat_real_hap (`np.array`): simulated embryo maternal haplotype(s).
+            pat_real_hap (`np.array`): simulated embryo paternal haplotype(s).
+            aploid (`str`): indicator of aneuploidy status.
+
+        """
         assert (ploidy <= 3) & (ploidy >= 0)
         assert (mat_skew >= 0) and (mat_skew <= 1.0)
         assert mat_haps.size == pat_haps.size
@@ -536,7 +579,7 @@ class PGTSim(PGTSimBase):
             "zs_maternal": zs_maternal,
             "zs_paternal": zs_paternal,
             "geno_embryo": geno,
-            "baf_embryo": baf,
+            "baf": baf,
             "pos": pos,
             "allele_freqs": None,
             "aploid": aploid,
@@ -737,7 +780,7 @@ class PGTSimMosaic(PGTSimBase):
             "geno_embryo_bulk": genos,
             "baf_embryo_bulk": bafs,
             "lrr_embryo_bulk": lrrs,
-            "baf_embryo": baf_embryo,
+            "baf": baf_embryo,
             "lrr_embryo": lrr_embryo,
             "allele_freqs": None,
             "pos": pos,
@@ -1178,8 +1221,8 @@ class PGTSimVCF(PGTSim):
         for var in vcf:
             if len(var.ALT) == 1:
                 afs.append(var.aaf)
-        mat_haps = np.array(mat_haps).astype(np.uint8)
-        pat_haps = np.array(pat_haps).astype(np.uint8)
+        mat_haps = np.array(mat_haps).astype(np.uint8).T
+        pat_haps = np.array(pat_haps).astype(np.uint8).T
         pos = np.array(pos, dtype=np.float64)
         afs = np.array(afs, dtype=np.float64)
         assert pos.size == afs.size
