@@ -313,12 +313,12 @@ def main(
                 if "aploid" in results:
                     for i in range(m):
                         outfile.write(
-                            f"{chrom}\t{results['pos'][i]}\tA\tC\t{results['af']}\t{results['aploid']}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf'][i]}\n"
+                            f"{chrom}\t{results['pos'][i]}\tA\tC\t{results['af'][i]}\t{results['aploid']}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf'][i]}\n"
                         )
                 else:
                     for i in range(m):
                         outfile.write(
-                            f"{chrom}\t{results['pos'][i]}\tA\tC\t{results['af']}\t{results['ploidies'][i]}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf'][i]}\n"
+                            f"{chrom}\t{results['pos'][i]}\tA\tC\t{results['af'][i]}\t{results['ploidies'][i]}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf'][i]}\n"
                         )
         else:
             logging.info(f"Writing output to {out}.tsv")
@@ -330,12 +330,12 @@ def main(
                 if "aploid" in results:
                     for i in range(m):
                         outfile.write(
-                            f"{chrom}\t{results['pos'][i]}\tA\tC\t{results['af']}\t{results['aploid']}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf'][i]}\n"
+                            f"{chrom}\t{results['pos'][i]}\tA\tC\t{results['af'][i]}\t{results['aploid']}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf'][i]}\n"
                         )
                 else:
                     for i in range(m):
                         outfile.write(
-                            f"{chrom}\t{results['pos'][i]}\tA\tC\t{results['af']}\t{results['ploidies'][i]}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf'][i]}\n"
+                            f"{chrom}\t{results['pos'][i]}\tA\tC\t{results['af'][i]}\t{results['ploidies'][i]}\t{results['mat_haps_prime'][0, i]}\t{results['mat_haps_prime'][1, i]}\t{results['pat_haps_prime'][0, i]}\t{results['pat_haps_prime'][1, i]}\t{results['baf'][i]}\n"
                         )
 
     else:

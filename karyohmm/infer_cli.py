@@ -234,11 +234,16 @@ def main(
                 haps = np.vstack([cur_df.pat_hap0.values, cur_df.pat_hap1.values])
             bafs = cur_df.baf.values
             pos = cur_df.pos.values
+            ps = None
+            if "af" in cur_df.columns:
+                if not np.any(cur_df["af"].values.isnan()):
+                    ps = cur_df["af"].values
             if thin > 1:
                 pi0_est, sigma_est = hmm.est_sigma_pi0(
                     bafs=bafs[::thin],
                     haps=haps[:, ::thin],
                     pos=pos[::thin],
+                    freqs=ps if ps is None else ps[::thin],
                     r=recomb_rate,
                     a=aneuploidy_rate,
                     algo=algo,
@@ -248,6 +253,7 @@ def main(
                     bafs=bafs,
                     haps=haps,
                     pos=pos,
+                    freqs=ps,
                     r=recomb_rate,
                     a=aneuploidy_rate,
                     algo=algo,
@@ -261,6 +267,7 @@ def main(
                 bafs=bafs,
                 pos=pos,
                 haps=haps,
+                freqs=ps,
                 pi0=pi0_est,
                 std_dev=sigma_est,
                 r=recomb_rate,
