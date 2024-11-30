@@ -236,7 +236,7 @@ def main(
             pos = cur_df.pos.values
             ps = None
             if "af" in cur_df.columns:
-                if not np.any(cur_df["af"].values.isnan()):
+                if not np.any(np.isnan(cur_df["af"].values)):
                     ps = cur_df["af"].values
             if thin > 1:
                 pi0_est, sigma_est = hmm.est_sigma_pi0(
@@ -262,7 +262,7 @@ def main(
                 f"DuoHMM emission parameters are pi0={pi0_est:.3f}, sigma={sigma_est:.3f} for {c}."
             )
             logging.info(f"Finished inference of DuoHMM-parameters for {c}!")
-            logging.info(f"Starting Forward-Backward algorithm tracing  for {c} ...")
+            logging.info(f"Starting Forward-Backward algorithm tracing for {c} ...")
             gammas, states, karyotypes = hmm.forward_backward(
                 bafs=bafs,
                 pos=pos,

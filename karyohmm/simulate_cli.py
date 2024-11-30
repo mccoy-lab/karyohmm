@@ -234,7 +234,9 @@ def main(
     if mode == "Whole-Chromosome":
         logging.info("Simulating whole-chromosome aneuploidy ...")
         if vcf_haps:
-            logging.info("Starting whole-chromosome aneuploidy simulation ...")
+            logging.info(
+                f"Starting whole-chromosome aneuploidy simulation from {vcf} haplotypes ..."
+            )
             pgt_sim = PGTSim()
             results = pgt_sim.sim_from_haps(
                 mat_haps,
@@ -249,7 +251,7 @@ def main(
                 switch_err_rate=switch_err_rate,
                 seed=seed,
             )
-            results["ps"] = ps
+            results["af"] = ps
         else:
             pgt_sim = PGTSim()
             results = pgt_sim.full_ploidy_sim(
@@ -266,7 +268,11 @@ def main(
                 seed=seed,
             )
     elif mode == "Segmental":
+        logging.info("Simulating segmental aneuploidy ...")
         if vcf_haps:
+            logging.info(
+                f"Starting segmental aneuploidy simulation from {vcf} haplotypes ..."
+            )
             pgt_sim = PGTSimSegmental()
             results = pgt_sim.sim_from_haps(
                 mat_haps,
@@ -281,7 +287,7 @@ def main(
                 switch_err_rate=switch_err_rate,
                 seed=seed,
             )
-            results["ps"] = ps
+            results["af"] = ps
         else:
             pgt_sim = PGTSimSegmental()
             results = pgt_sim.full_segmental_sim(

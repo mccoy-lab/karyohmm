@@ -1208,6 +1208,10 @@ class PGTSimVCF(PGTSim):
         assert isinstance(maternal_id, str)
         assert isinstance(paternal_id, str)
         vcf = VCF(vcf_fp, **kwargs)
+        if maternal_id not in vcf.samples:
+            raise ValueError(f"{maternal_id} is not in {vcf_fp}!")
+        if paternal_id not in vcf.samples:
+            raise ValueError(f"{paternal_id} is not in {vcf_fp}!")
         assert maternal_id in vcf.samples
         assert paternal_id in vcf.samples
         pos = []
