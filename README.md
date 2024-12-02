@@ -51,8 +51,9 @@ karyohmm-infer -i data/test_combined_embryo.tsv -o data/out_combined
 
 For a full command-line set of options, run `karyohmm-infer --help`.
 
+To simulate different aneuploidy types, you can use the `karyohmm-simulate` program. Currently the modes that are supported are to simulate whole-chromosome or segmental aneuploidies. You can also use a pre-existing VCF file to sample parental haplotypes from for more realistic haplotype structure (and variant density). Currently, the simulation model only supports simulation of log-R ratio and B-allele frequency data to mimic Illumina arrays (we anticipate supporting read-based approaches like exome-capture quite soon).
 
-To simulate different aneuploidy types, you can use the `karyohmm-simulate` program. Currently the modes that are supported are to simulate whole-chromosome or segmental aneuploidies. You can also use a pre-existing VCF file to sample parental haplotypes from for more realistic haplotype structure (and variant density).
+For a full set of command-line options for simulation, run `karyohmm-simulate --help`.
 
 ## Contact
 
