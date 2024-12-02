@@ -5,7 +5,8 @@ requires = [
     "cython",
     "scipy",
     "numpy",
-    "pandas"
+    "pandas",
+    "cyvcf2"
 ]
 build-backend = "setuptools.build_meta"
 
@@ -15,7 +16,7 @@ description = "HMM-based Aneuploidy Detection of PGT-A Array Data."
 keywords = ["aneuploidy", "pgt", "haplotypes", "phasing"]
 classifiers = ["Development Status :: 3 - Alpha", "Intended Audience :: Science/Research", "Programming Language :: Python :: 3"]
 requires-python = ">= 3.9"
-dependencies = ["numpy", "scipy", "pandas", "Cython", "Click"]
+dependencies = ["numpy", "scipy", "pandas", "Cython", "Click", "cyvcf2"]
 dynamic = ["version"]
 authors = [{name = "Arjun Biddanda", email = "abiddan1@jhu.edu"}]
 
@@ -26,7 +27,8 @@ Homepage = "https://github.com/mccoy-lab/karyohmm"
 tests = [ "pytest", "pytest-cov", "hypothesis", "flake8", "sphinx"]
 
 [project.scripts]
-karyohmm-cli = "karyohmm.cli:main"
+karyohmm-infer = "karyohmm.infer_cli:main"
+karyohmm-simulate = "karyohmm.simulate_cli:main"
 
 [tool.setuptools]
 zip-safe = false

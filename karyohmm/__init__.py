@@ -16,9 +16,11 @@ Modules exported are:
 * MosaicEst: module for estimating mosaic cell fraction from shifts in BAF
 * PGTSim: module to generate synthetic PGT data for full aneuploidies
 * PGTSimMosaic: module to generate synthetic PGT data for a mosaic biopsy
+* PGTSimVCF: module to generate synthetic PGT data based on parental data in a VCF.
 """
 
-__version__ = "0.3.4a"
+__version__ = "0.5.0a"
 
+from .io import DataReader
 from .karyohmm import DuoHMM, MetaHMM, MosaicEst, PhaseCorrect, QuadHMM, RecombEst
-from .simulator import PGTSim, PGTSimMosaic
+from .simulator import PGTSim, PGTSimMosaic, PGTSimSegmental, PGTSimVCF
