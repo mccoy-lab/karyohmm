@@ -7,11 +7,12 @@ parental genotypes are available.
 
 Modules available are:
 
-- MetaHMM: module for whole chromosome aneuploidy determination via HMMs
-- QuadHMM: module leveraging multi-sibling design for evaluating crossover recombination estimation
-- MosaicEst: module for estimating mosaic cell fraction from heterozygote baf imbalance
+- MetaHMM: module for whole chromosome aneuploidy determination via HMMs.
+- QuadHMM: module leveraging multi-sibling design for evaluating crossover recombination estimation.
+- DuoHMM: module for inference of aneuploidy with a single parent.
+- MosaicEst: module for estimating mosaic cell fraction from heterozygote baf imbalance.
 - PhaseCorrect: module which implements Mendelian phase correction for parental haplotypes.
-- RecombEst: module implementing simpler detection of crossover recombination based on Coop et al 2007
+- RecombEst: module implementing simpler detection of crossover recombination based on Coop et al 2007.
 
 """
 
@@ -25,6 +26,7 @@ from karyohmm_utils import (
     forward_algo_duo,
     forward_algo_sibs,
     lod_phase,
+    logaddexp,
     logsumexp,
     mat_dosage,
     mix_loglik,
@@ -1364,6 +1366,66 @@ class DuoHMM(MetaHMM):
         gammas = (alphas + betas) - logsumexp_sp(alphas + betas, axis=0)
         return gammas, states, karyotypes
 
+    def genotype_parent(
+        self, bafs, haps, gammas, freqs=None, maternal=True, pi0=0.2, std_dev=0.25
+    ):
+        """Obtain a matrix of genotype dosages/posteriors for the unobserved parent."""
+        assert bafs.ndim == 1
+        assert haps.ndim == 2
+        assert (pi0 > 0) & (pi0 < 1.0)
+        assert std_dev > 0
+        assert bafs.size == haps.shape[1]
+        assert gammas.ndim == 2
+        assert gammas.shape[0] == self.karyotypes.size
+        if freqs is not None:
+            assert freqs.size == bafs.size
+        else:
+            # NOTE: This is approximately uniform across the
+            freqs = np.repeat(0.5, bafs.size)
+        ks = [sum([s >= 0 for s in state]) for state in self.states]
+        n = bafs.size
+        m = len(self.states)
+        geno_dosage = np.zeros(shape=(4, n), dtype=np.float32)
+        geno = [[0, 0], [0, 1], [1, 0], [1, 1]]
+        for i in range(n):
+            f = freqs[i]
+
+            for idx, (x, p) in enumerate(
+                zip(geno, ((1 - f) ** 2, f * (1 - f), f * (1 - f), f**2))
+            ):
+                cur_emissions = np.zeros(m)
+                for j in range(m):
+                    if maternal:
+                        m_ij = mat_dosage(haps[:, i], self.states[j])
+                        p_ij = pat_dosage(x, self.states[j])
+                    else:
+                        m_ij = mat_dosage(x, self.states[j])
+                        p_ij = pat_dosage(haps[:, i], self.states[j])
+                    # dosage is proportional to likelihood * prior * posterior of specific state
+                    cur_emissions[j] = (
+                        emission_baf(
+                            bafs[i],
+                            m_ij,
+                            p_ij,
+                            pi0=pi0,
+                            std_dev=std_dev,
+                            k=ks[j],
+                        )
+                        + np.log(p)
+                        + gammas[j, i]
+                    )
+                geno_dosage[idx, i] = logsumexp(cur_emissions)
+        # Now rescale the dosage estimates ...
+        geno_dosage_rev = np.zeros(shape=(3, n))
+        for i in range(n):
+            tot = logsumexp_sp(geno_dosage[:, i])
+            geno_dosage_rev[0, i] = geno_dosage[0, i] - tot
+            geno_dosage_rev[1, i] = (
+                logaddexp(geno_dosage[1, i], geno_dosage[2, i]) - tot
+            )
+            geno_dosage_rev[2, i] = geno_dosage[3, i] - tot
+        return geno_dosage_rev
+
 
 class MosaicEst:
     """Class to perform estimation of mosaic rates."""
@@ -1816,7 +1878,9 @@ class RecombEst(PhaseCorrect):
         else:
             return []
 
-    def isolate_recomb_events(self, template_embryo=0, maternal=True, npad=5):
+    def isolate_recomb_events(
+        self, template_embryo=0, maternal=True, ll_thresh=0, npad=5
+    ):
         """Isolate specific recombination events.
 
         NOTE: this uses paternal by default!
@@ -1824,6 +1888,7 @@ class RecombEst(PhaseCorrect):
         Arguments:
             - template_embryo (`int`): index of the template embryo
             - maternal (`bool`): indicator of estimating maternal crossovers.
+            - ll_thresh (`float`): indicator of the likelihood threshold for transmission.
             - npad (`int`): integer value of adjacent informative snps to consider as a switch cluster.
 
         Returns:
@@ -1838,6 +1903,7 @@ class RecombEst(PhaseCorrect):
         m = len(self.embryo_bafs)
         assert m > 1
         assert template_embryo < m
+        assert ll_thresh >= 0
         non_template_ids = [i for i in range(m) if i != template_embryo]
         # Get the informative snps for the specific parent
         info_snps = self.informative_markers(maternal=maternal)
@@ -1965,20 +2031,23 @@ class RecombEst(PhaseCorrect):
             llr_z[j, :] = llrs
 
         # Now we make a rough decision rule here for the likelihood-ratio supporting one or the other class ...
-        # 1 indicates copying the same allele, 2 indicates that copying different alleles.
+        # 1 indicates copying the same allele, -1 indicates that copying different alleles
+        # 0 indicates a "missing" variant
         Z = np.zeros(shape=llr_z.shape)
-        Z[llr_z < 0] = 2
-        Z[llr_z > 0] = 1
+        Z[llr_z < ll_thresh] = -1
+        Z[llr_z > ll_thresh] = 1
 
-        # For each sibling embryo check its "switch-clusters"
-        isolated_switches = []
-        for i in range(len(non_template_ids)):
-            # Check the switch cluster for sibling i
-            potential_switches = np.where(Z[i, :-1] != Z[i, 1:])[0]
-            potential_switches_filt = self.refine_recomb_events(
-                potential_switches, npad=npad
-            )
-            isolated_switches.append(potential_switches_filt)
+        # # For each sibling embryo check its "switch-clusters"
+        # isolated_switches = []
+        # for i in range(len(non_template_ids)):
+        #     # Check the switch cluster for sibling i ....
+        #     potential_switches = np.where(Z[i, :-1] != Z[i, 1:])[0]
+        #     potential_switches_filt = self.refine_recomb_events(
+        #         potential_switches, npad=npad
+        #     )
+        #     isolated_switches.append(potential_switches_filt)
+
+        isolated_switches = self.identify_switch_intervals(Z, npad=npad)
         # Check the total isolated switches ...
         isolated_switches = np.hstack(isolated_switches)
         switch_idx, cnts = np.unique(isolated_switches, return_counts=True)
@@ -1986,6 +2055,30 @@ class RecombEst(PhaseCorrect):
         potential_switches_filt = switch_idx[cnts > (m - 1) / 2].astype(int)
         switch_cnts_filt = cnts[cnts > (m - 1) / 2].astype(int)
         return Z, llr_z, potential_switches_filt, switch_cnts_filt
+
+    def identify_switch_intervals(self, Z, npad=5):
+        """Identify windows of switch intervals - accounting for missing/poor genotypes."""
+        assert Z.ndim == 2
+        assert Z.shape[1] > 0
+        assert Z.shape[0] > 1
+        assert npad > 1
+        nsib = Z.shape[0]
+        isolated_switches = []
+        for i in range(nsib):
+            zs = Z[i, :]
+            asign = np.sign(zs)
+            sz = asign == 0
+            while sz.any():
+                asign[sz] = np.roll(asign, 1)[sz]
+                sz = asign == 0
+            signchange = ((np.roll(asign, 1) - asign) != 0).astype(int)
+            # NOTE: we don't consider the first signchange index...
+            potential_switches = np.where(signchange[1:])[0]
+            potential_switches_filt = self.refine_recomb_events(
+                potential_switches, npad=npad
+            )
+            isolated_switches.append(potential_switches_filt)
+        return isolated_switches
 
     def second_refine_recomb(
         self, template_embryo=0, maternal=True, start=None, end=None
@@ -2068,13 +2161,18 @@ class RecombEst(PhaseCorrect):
                 rec_locations.append((p1, p2))
             return rec_locations
 
-    def estimate_crossovers(self, template_embryo=0, maternal=True, npad=5):
+    def estimate_crossovers(
+        self, template_embryo=0, ll_thresh=0, maternal=True, npad=5
+    ):
         """Routine that actually does the FULL crossover estimation + interval refinement."""
         assert self.embryo_bafs is not None
         assert self.embryo_pi0s is not None
         assert self.embryo_sigmas is not None
         Z, llr_z, potential_switches, switch_cnts = self.isolate_recomb_events(
-            template_embryo=template_embryo, maternal=maternal, npad=npad
+            template_embryo=template_embryo,
+            maternal=maternal,
+            ll_thresh=ll_thresh,
+            npad=npad,
         )
         rec_loc = self.finalize_recomb_events(
             potential_switches, template_embryo=template_embryo, maternal=maternal

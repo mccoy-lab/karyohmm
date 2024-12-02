@@ -3,6 +3,7 @@ import numpy as np
 import pytest
 from karyohmm_utils import create_index_arrays, transition_kernel
 from scipy.special import logsumexp as logsumexp_sp
+from scipy.stats import mode
 
 from karyohmm import DuoHMM, PGTSim
 
@@ -171,6 +172,8 @@ def test_est_pi0_sigma(data):
     )
     assert (pi0_est > 0) and (pi0_est < 1.0)
     assert (sigma_est > 0) and (sigma_est < 1.0)
+    assert np.isclose(pi0_est, 0.7, atol=1e-1)
+    assert np.isclose(sigma_est, 0.1, atol=5e-2)
 
 
 @pytest.mark.parametrize(
@@ -314,15 +317,45 @@ def test_ploidy_correctness_mle(data):
 
 
 @pytest.mark.parametrize("data", [data_disomy])
-def test_est_pi0_sigma_mle_global(data):
-    """Estimation via global parameter searching."""
+def test_genotype_parent(data):
+    """Test being able to genotype the unobserved parent."""
     hmm = DuoHMM()
     pi0_est, sigma_est = hmm.est_sigma_pi0(
         bafs=data["baf_embryo"],
         pos=data["pos"],
         haps=data["mat_haps_prime"],
-        global_opt=True,
+        global_opt=False,
     )
-    print(pi0_est, sigma_est)
-    # assert np.isclose(pi0_est, 0.7, atol=1e-1)
-    # assert np.isclose(sigma_est, 0.1, atol=5e-2)
+    gammas, _, karyotypes = hmm.forward_backward(
+        bafs=data["baf_embryo"],
+        pos=data["pos"],
+        haps=data["mat_haps"],
+        pi0=pi0_est,
+        std_dev=sigma_est,
+    )
+    geno_dosage = hmm.genotype_parent(
+        bafs=data["baf_embryo"],
+        haps=data["mat_haps"],
+        gammas=gammas,
+        freqs=data["allele_freqs"],
+        maternal=True,
+        pi0=pi0_est,
+        std_dev=sigma_est,
+    )
+    # NOTE: this assumes the parent is diploid at these sites
+    assert geno_dosage.ndim == 2
+    assert geno_dosage.shape[0] == 3
+    pat_geno = np.sum(data["pat_haps_prime"], axis=0)
+    assert pat_geno.size == geno_dosage.shape[1]
+    assert np.all(np.isin(pat_geno, [0, 1, 2]))
+    # NOTE: we should only check the settings where the parents are opposite homozygotes as a clear sanity check?
+    modal_geno = np.argmax(geno_dosage, axis=0)
+    modal_geno0 = modal_geno[np.where(pat_geno == 0)[0]]
+    modal_geno1 = modal_geno[np.where(pat_geno == 1)[0]]
+    modal_geno2 = modal_geno[np.where(pat_geno == 2)[0]]
+    print(mode(modal_geno0, nan_policy="omit"))
+    print(mode(modal_geno1, nan_policy="omit"))
+    print(mode(modal_geno2, nan_policy="omit"))
+    assert mode(modal_geno0, nan_policy="omit").mode == 0
+    assert mode(modal_geno1, nan_policy="omit").mode == 1
+    assert mode(modal_geno2, nan_policy="omit").mode == 2
