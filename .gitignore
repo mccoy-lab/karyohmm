@@ -12,4 +12,5 @@ docs/_static/
 docs/_templates/
 docs/_build/
 *.tsv.gz
+*.tsv
 *.npz
