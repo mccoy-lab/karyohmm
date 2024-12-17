@@ -670,7 +670,7 @@ def backward_algo_duo(bafs, pos, haps, freqs, states, karyotypes, bint maternal=
 
 def forward_algo_duo_panel(bafs, pos, haps, ref_panel, states, karyotypes, bint maternal=True, double r=1e-8, double a=1e-2, double pi0=0.8, double std_dev=0.2):
     """Helper function for optimization for forward algorithm in the duo setting with a reference panel.
-    
+
     Ref panel is a K x M set of reference haplotypes
     """
     cdef int i,j,idx,n,m;
@@ -681,11 +681,11 @@ def forward_algo_duo_panel(bafs, pos, haps, ref_panel, states, karyotypes, bint 
     k = ref_panel.shape[0]
     ks = [sum([s >= 0 for s in state]) for state in states]
     K0, K1 = create_index_arrays(karyotypes)
-    # The hidden state now also keeps track of the two unobserved parental haplotypes ... 
+    # The hidden state now also keeps track of the two unobserved parental haplotypes ...
     alphas = np.zeros(shape=(m, k, k, n))
     alphas[:, :, :, 0] = log(1.0 / m)
     for j in range(m):
-        # Iterating through the unobserved parental haplotypes in the panel ... 
+        # Iterating through the unobserved parental haplotypes in the panel ...
         for zi in range(k):
             for zj in range(k):
                 x = [ref_panel[zi, 0], ref_panel[zj, 0]]
@@ -719,7 +719,7 @@ def forward_algo_duo_panel(bafs, pos, haps, ref_panel, states, karyotypes, bint 
                         p_ij = pat_dosage(x, states[j])
                     else:
                         m_ij = mat_dosage(x, states[j])
-                        p_ij = pat_dosage(haps[:, i], states[j])    
+                        p_ij = pat_dosage(haps[:, i], states[j])
                     # Build up the summed emission model ...
                     cur_emission[j,zi,zj] = emission_baf(
                             bafs[i],
@@ -732,9 +732,8 @@ def forward_algo_duo_panel(bafs, pos, haps, ref_panel, states, karyotypes, bint 
                     for j_ in range(m):
                         for zi_ in range(k):
                             for zj_ in range(k):
-                                # NOTE: need to estimate the recombination fraction if zi_ != zi and zj_ != zj
-                                alphas[j,zi,zj, i] = A_hat[j_, j] + alphas[j_,zi_, zi_, (i-1)]
-                    
+                                alphas[j,zi,zj, i] = A_hat[j_, j] + log((1.0 - exp(-r*di))*(zi_ != zi) + (-r*di)*(zi_ == zi)) + log((1.0 - exp(-r*di))*(zj_ != zj) + (-r*di)*(zj_ == zj)) + alphas[j_,zi_, zi_, (i-1)]
+
         scaler[i] = logsumexp(alphas[:,:,:, i])
         alphas[:,:,:, i] -= scaler[i]
     return alphas, scaler, states, None, sum(scaler)

@@ -1427,6 +1427,32 @@ class DuoHMM(MetaHMM):
         return geno_dosage_rev
 
 
+class DuoHMMRef(MetaHMM):
+    def __init__(self, disomy=False):
+        """Initialize the HMM."""
+        super().__init__()
+
+    def est_sigma_pi0():
+        """Estimate sigma and pi0 using a reference panel model."""
+        pass
+
+    def forward_algorithm(
+        self,
+        bafs,
+        pos,
+        haps,
+        ref_panel,
+        maternal=True,
+        pi0=0.5,
+        std_dev=0.2,
+        r=1e-8,
+        a=1e-2,
+        unphased=False,
+    ):
+        """Run the forward-algorithm using a reference panel."""
+        pass
+
+
 class MosaicEst:
     """Class to perform estimation of mosaic rates."""
 
