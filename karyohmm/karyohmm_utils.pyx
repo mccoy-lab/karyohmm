@@ -668,6 +668,79 @@ def backward_algo_duo(bafs, pos, haps, freqs, states, karyotypes, bint maternal=
     return betas, scaler, states, None, sum(scaler) + scaler[-1]
 
 
+def forward_algo_duo_panel(bafs, pos, haps, ref_panel, states, karyotypes, bint maternal=True, double r=1e-8, double a=1e-2, double pi0=0.8, double std_dev=0.2):
+    """Helper function for optimization for forward algorithm in the duo setting with a reference panel.
+    
+    Ref panel is a K x M set of reference haplotypes
+    """
+    cdef int i,j,idx,n,m;
+    cdef int zi, zj, k;
+    cdef float di, f;
+    n = bafs.size
+    m = len(states)
+    k = ref_panel.shape[0]
+    ks = [sum([s >= 0 for s in state]) for state in states]
+    K0, K1 = create_index_arrays(karyotypes)
+    # The hidden state now also keeps track of the two unobserved parental haplotypes ... 
+    alphas = np.zeros(shape=(m, k, k, n))
+    alphas[:, :, :, 0] = log(1.0 / m)
+    for j in range(m):
+        # Iterating through the unobserved parental haplotypes in the panel ... 
+        for zi in range(k):
+            for zj in range(k):
+                x = [ref_panel[zi, 0], ref_panel[zj, 0]]
+                if maternal:
+                    m_ij = mat_dosage(haps[:, 0], states[j])
+                    p_ij = pat_dosage(x, states[j])
+                else:
+                    m_ij = mat_dosage(x, states[j])
+                    p_ij = pat_dosage(haps[:, 0], states[j])
+                alphas[j, zi, zj, 0] = emission_baf(
+                        bafs[0],
+                        m_ij,
+                        p_ij,
+                        pi0=pi0,
+                        std_dev=std_dev,
+                        k=ks[j],
+                    )
+    scaler = np.zeros(n)
+    scaler[0] = logsumexp(alphas[:,:,:, 0])
+    alphas[:,:,:, 0] -= scaler[0]
+    for i in range(1, n):
+        di = pos[i] - pos[i-1]
+        A_hat = transition_kernel(K0, K1, d=di, r=r, a=a)
+        cur_emission = np.zeros(shape=(m,k,k))
+        for j in range(m):
+            for zi in range(k):
+                for zj in range(k):
+                    x = [ref_panel[zi, i], ref_panel[zj, i]]
+                    if maternal:
+                        m_ij = mat_dosage(haps[:, i], states[j])
+                        p_ij = pat_dosage(x, states[j])
+                    else:
+                        m_ij = mat_dosage(x, states[j])
+                        p_ij = pat_dosage(haps[:, i], states[j])    
+                    # Build up the summed emission model ...
+                    cur_emission[j,zi,zj] = emission_baf(
+                            bafs[i],
+                            m_ij,
+                            p_ij,
+                            pi0=pi0,
+                            std_dev=std_dev,
+                            k=ks[j],
+                        )
+                    for j_ in range(m):
+                        for zi_ in range(k):
+                            for zj_ in range(k):
+                                # NOTE: need to estimate the recombination fraction if zi_ != zi and zj_ != zj
+                                alphas[j,zi,zj, i] = A_hat[j_, j] + alphas[j_,zi_, zi_, (i-1)]
+                    
+        scaler[i] = logsumexp(alphas[:,:,:, i])
+        alphas[:,:,:, i] -= scaler[i]
+    return alphas, scaler, states, None, sum(scaler)
+
+
+
 # -------- DANGER ZONE ---------- #
 def solve_trio(self, cg=0, fg=0, mg=0):
     """Solve the trio setup to phase the parents.
