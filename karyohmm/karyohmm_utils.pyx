@@ -213,18 +213,18 @@ cpdef transition_kernel(K0, K1, double d=1e3, double r=1e-8, double a=1e-2):
     alpha = 1.0 - exp(-r*a*d)
     A = K0*rho + K1*alpha
     for i in range(m):
-        A[i,i] = 1. - np.sum(A[i, :])
+        A[i, i] = 1. - np.sum(A[i, :])
     return np.log(A)
 
 
 def forward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-8, double a=1e-2, double pi0=0.2, double std_dev=0.25):
     """Helper function for forward algorithm loop-optimization."""
-    cdef int i,j,n,m;
-    cdef float di;
+    cdef int i, j, n, m
+    cdef float di
     n = bafs.size
     m = len(states)
     ks = [sum([s >= 0 for s in state]) for state in states]
-    K0,K1 = create_index_arrays(karyotypes)
+    K0, K1 = create_index_arrays(karyotypes)
     alphas = np.zeros(shape=(m, n))
     alphas[:, 0] = log(1.0 / m)
     for j in range(m):
@@ -239,7 +239,7 @@ def forward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-
                 std_dev=std_dev,
                 k=ks[j],
             )
-        alphas[j,0] += cur_emission
+        alphas[j, 0] += cur_emission
     scaler = np.zeros(n)
     scaler[0] = logsumexp(alphas[:, 0])
     alphas[:, 0] -= scaler[0]
@@ -264,16 +264,17 @@ def forward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-
         alphas[:, i] -= scaler[i]
     return alphas, scaler, states, None, sum(scaler)
 
+
 def backward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-8, double a=1e-2, double pi0=0.2, double std_dev=0.25):
     """Helper function for backward algorithm loop-optimization."""
-    cdef int i,j,n,m;
-    cdef float di;
+    cdef int i, j, n, m
+    cdef float di
     n = bafs.size
     m = len(states)
     ks = [sum([s >= 0 for s in state]) for state in states]
     K0,K1 = create_index_arrays(karyotypes)
     betas = np.zeros(shape=(m, n))
-    betas[:,-1] = log(1)
+    betas[:, -1] = log(1)
     scaler = np.zeros(n)
     scaler[-1] = logsumexp(betas[:, -1])
     betas[:, -1] -= scaler[-1]
@@ -297,7 +298,7 @@ def backward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e
                 )
         for j in range(m):
             # This should be the correct version here ...
-            betas[j,i] = logsumexp(A_hat[:, j] + cur_emissions + betas[:, (i + 1)])
+            betas[j, i] = logsumexp(A_hat[:, j] + cur_emissions + betas[:, (i + 1)])
         if i == 0:
             for j in range(m):
                 m_ij = mat_dosage(mat_haps[:, i], states[j])
@@ -312,7 +313,7 @@ def backward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e
                         k=ks[j],
                     )
                 # Add in the initialization + first emission?
-                betas[j,i] += log(1/m) + cur_emission
+                betas[j, i] += log(1/m) + cur_emission
         # Do the rescaling here ...
         scaler[i] = logsumexp(betas[:, i])
         betas[:, i] -= scaler[i]
@@ -320,8 +321,8 @@ def backward_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e
 
 def viterbi_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-8, double a=1e-2, double pi0=0.2, double std_dev=0.25):
     """Cython implementation of the Viterbi algorithm for MLE path estimation through states."""
-    cdef int i,j,n,m;
-    cdef float di;
+    cdef int i, j, n, m
+    cdef float di
     n = bafs.size
     m = len(states)
     deltas = np.zeros(shape=(m, n))
@@ -335,8 +336,8 @@ def viterbi_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-
         for j in range(m):
             m_ij = mat_dosage(mat_haps[:, i], states[j])
             p_ij = pat_dosage(pat_haps[:, i], states[j])
-            deltas[j,i] = np.max(deltas[:,i-1] + A_hat[:,j])
-            deltas[j,i] += emission_baf(
+            deltas[j, i] = np.max(deltas[:, i-1] + A_hat[:, j])
+            deltas[j, i] += emission_baf(
                     bafs[i],
                     m_ij,
                     p_ij,
@@ -355,8 +356,8 @@ def viterbi_algo(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-
 
 def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-8, double a=1e-2, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
     """Compute the forward algorithm for sibling embryo HMM."""
-    cdef int i,j,n,m;
-    cdef float di;
+    cdef int i, j, n, m
+    cdef float di
     assert len(bafs) == 2
     assert bafs[1].size == bafs[0].size
     n = bafs[0].size
@@ -387,7 +388,7 @@ def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double 
                 std_dev=std_dev[1],
                 k=2,
             )
-        alphas[j,0] += cur_emission
+        alphas[j, 0] += cur_emission
     scaler = np.zeros(n)
     scaler[0] = logsumexp(alphas[:, 0])
     alphas[:, 0] -= scaler[0]
@@ -425,8 +426,8 @@ def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double 
 
 def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double r=1e-8, double a=1e-2, (double, double) pi0=(0.2,0.2), (double, double) std_dev=(0.1,0.1)):
     """Compute the backward algorithm for the sibling embryo HMM."""
-    cdef int i,j,n,m;
-    cdef float di;
+    cdef int i, j, n, m
+    cdef float di
     assert len(bafs) == 2
     assert bafs[1].size == bafs[0].size
     n = bafs[0].size
@@ -463,7 +464,7 @@ def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double
                     k=2,
                 )
         for j in range(m):
-            betas[j,i] = logsumexp(A_hat[:, j] + cur_emissions + betas[:, (i + 1)])
+            betas[j, i] = logsumexp(A_hat[:, j] + cur_emissions + betas[:, (i + 1)])
         if i == 0:
             for j in range(m):
                 m_ij0 = mat_dosage(mat_haps[:, i], states[j][0])
@@ -487,7 +488,7 @@ def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double
                         k=2,
                     )
                 # Add in the initialization + first emission?
-                betas[j,i] += log(1/m) + cur_emission
+                betas[j, i] += log(1/m) + cur_emission
         scaler[i] = logsumexp(betas[:, i])
         betas[:, i] -= scaler[i]
     return betas, scaler, states, None, sum(scaler)
@@ -675,9 +676,10 @@ def forward_algo_duo_panel(bafs, pos, haps, ref_panel, states, karyotypes, bint 
 
     Ref panel is a K x M set of reference haplotypes
     """
-    cdef int i,j,idx,n,m;
-    cdef int zi, zj, k;
-    cdef float di, f;
+    cdef int i, j, idx, n, m
+    cdef int zi, zj, k
+    cdef float di, f, cur_emission
+    cdef double[:] transitions
     n = bafs.size
     m = len(states)
     k = ref_panel.shape[0]
@@ -711,7 +713,7 @@ def forward_algo_duo_panel(bafs, pos, haps, ref_panel, states, karyotypes, bint 
     for i in range(1, n):
         di = pos[i] - pos[i-1]
         A_hat = transition_kernel(K0, K1, d=di, r=r, a=a)
-        cur_emission = np.zeros(shape=(m,k,k))
+        cur_emission = 0.0
         for j in range(m):
             for zi in range(k):
                 for zj in range(k):
@@ -723,7 +725,7 @@ def forward_algo_duo_panel(bafs, pos, haps, ref_panel, states, karyotypes, bint 
                         m_ij = mat_dosage(x, states[j])
                         p_ij = pat_dosage(haps[:, i], states[j])
                     # Build up the summed emission model ...
-                    cur_emission[j,zi,zj] = emission_baf(
+                    cur_emission = emission_baf(
                             bafs[i],
                             m_ij,
                             p_ij,
@@ -731,11 +733,14 @@ def forward_algo_duo_panel(bafs, pos, haps, ref_panel, states, karyotypes, bint 
                             std_dev=std_dev,
                             k=ks[j],
                         )
+                    idx = 0
+                    transitions = np.zero(m*k*k)
                     for j_ in range(m):
                         for zi_ in range(k):
                             for zj_ in range(k):
-                                alphas[j,zi,zj, i] = A_hat[j_, j] + log((1.0 - exp(-r*di))*(zi_ != zi) + (-r*di)*(zi_ == zi)) + log((1.0 - exp(-r*di))*(zj_ != zj) + (-r*di)*(zj_ == zj)) + alphas[j_,zi_, zi_, (i-1)]
-
+                                transitions[idx] = A_hat[j_, j] + log((1.0 - exp(-r*di))*(zi_ != zi) + (-r*di)*(zi_ == zi)) + log((1.0 - exp(-r*di))*(zj_ != zj) + (-r*di)*(zj_ == zj)) + alphas[j_,zi_, zj_, (i-1)]
+                                idx += 1
+                    alphas[j,zi,zj,i] = cur_emission + logsumexp(transitions)
         scaler[i] = logsumexp(alphas[:,:,:, i])
         alphas[:,:,:, i] -= scaler[i]
     return alphas, scaler, states, None, sum(scaler)
