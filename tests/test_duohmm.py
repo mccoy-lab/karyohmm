@@ -81,9 +81,9 @@ def test_bph_sph():
 
 def test_data_integrity(data=data_disomy):
     """Test for some basic data sanity checks ..."""
-    for x in ["baf_embryo", "mat_haps", "pat_haps"]:
+    for x in ["baf", "mat_haps", "pat_haps"]:
         assert x in data
-    baf = data["baf_embryo"]
+    baf = data["baf"]
     pos = data["pos"]
     mat_haps = data["mat_haps"]
     pat_haps = data["pat_haps"]
@@ -101,7 +101,7 @@ def test_forward_algorithm(data):
     """Test the implementation of the forward algorithm."""
     hmm = DuoHMM()
     _, _, _, karyotypes, loglik = hmm.forward_algorithm(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         haps=data["mat_haps"],
     )
@@ -112,7 +112,7 @@ def test_backward_algorithm(data):
     """Test the implementation of the backward algorithm."""
     hmm = DuoHMM()
     _, _, _, karyotypes, loglik = hmm.backward_algorithm(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         haps=data["mat_haps"],
     )
@@ -124,12 +124,12 @@ def test_forward_vs_backward_loglik(data):
     hmm = DuoHMM()
 
     _, _, _, _, fwd_loglik = hmm.forward_algorithm(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         haps=data["mat_haps"],
     )
     _, _, _, _, bwd_loglik = hmm.backward_algorithm(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         haps=data["mat_haps"],
     )
@@ -141,7 +141,7 @@ def test_disomy_model(data):
     """Test implementation under a pure-disomy model."""
     hmm = DuoHMM(disomy=True)
     gammas, _, karyotypes = hmm.forward_backward(
-        bafs=data["baf_embryo"], pos=data["pos"], haps=data["mat_haps"]
+        bafs=data["baf"], pos=data["pos"], haps=data["mat_haps"]
     )
     assert np.all(np.isclose(np.sum(np.exp(gammas), axis=0), 1.0))
 
@@ -151,7 +151,7 @@ def test_fwd_bwd_algorithm(data):
     """Test the properties of the output from the fwd-bwd algorithm."""
     hmm = DuoHMM()
     gammas, _, karyotypes = hmm.forward_backward(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         haps=data["mat_haps"],
     )
@@ -168,7 +168,7 @@ def test_est_pi0_sigma(data):
     """Test the optimization routine on the forward-algorithm likelihood."""
     hmm = DuoHMM()
     pi0_est, sigma_est = hmm.est_sigma_pi0(
-        bafs=data["baf_embryo"], pos=data["pos"], haps=data["mat_haps"]
+        bafs=data["baf"], pos=data["pos"], haps=data["mat_haps"]
     )
     assert (pi0_est > 0) and (pi0_est < 1.0)
     assert (sigma_est > 0) and (sigma_est < 1.0)
@@ -190,7 +190,7 @@ def test_est_pi0_sigma_bad_pi0_bounds(data, pi0_bounds):
     with pytest.raises(Exception):
         hmm = DuoHMM()
         pi0_est, sigma_est = hmm.est_sigma_pi0(
-            bafs=data["baf_embryo"],
+            bafs=data["baf"],
             pos=data["pos"],
             haps=data["mat_haps"],
             pi0_bounds=pi0_bounds,
@@ -206,7 +206,7 @@ def test_est_pi0_sigma_bad_sigma_bounds(data, sigma_bounds):
     with pytest.raises(Exception):
         hmm = DuoHMM()
         pi0_est, sigma_est = hmm.est_sigma_pi0(
-            bafs=data["baf_embryo"],
+            bafs=data["baf"],
             pos=data["pos"],
             haps=data["mat_haps"],
             sigma_bounds=sigma_bounds,
@@ -272,7 +272,7 @@ def test_ploidy_correctness(data):
     """This actually tests that the posterior inference of whole-chromosome aneuploidies is correct here."""
     hmm = DuoHMM()
     gammas, _, karyotypes = hmm.forward_backward(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         haps=data["mat_haps"],
         pi0=0.7,
@@ -295,12 +295,12 @@ def test_ploidy_correctness_mle(data):
     """This actually tests that the posterior inference of whole-chromosome aneuploidies is correct under mle."""
     hmm = DuoHMM()
     pi0_est, sigma_est = hmm.est_sigma_pi0(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         haps=data["mat_haps"],
     )
     gammas, _, karyotypes = hmm.forward_backward(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         haps=data["mat_haps"],
         pi0=pi0_est,
@@ -321,23 +321,23 @@ def test_genotype_parent(data):
     """Test being able to genotype the unobserved parent."""
     hmm = DuoHMM()
     pi0_est, sigma_est = hmm.est_sigma_pi0(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         haps=data["mat_haps_prime"],
         global_opt=False,
     )
     gammas, _, karyotypes = hmm.forward_backward(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         haps=data["mat_haps"],
         pi0=pi0_est,
         std_dev=sigma_est,
     )
     geno_dosage = hmm.genotype_parent(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         haps=data["mat_haps"],
         gammas=gammas,
-        freqs=data["allele_freqs"],
+        freqs=data["af"],
         maternal=True,
         pi0=pi0_est,
         std_dev=sigma_est,
