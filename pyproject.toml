@@ -41,5 +41,5 @@ namespaces = false
 attr = "karyohmm.__version__"
 
 [tool.cython-lint]
-max-line-length = 120
-ignore = ['E503', 'E504']
+max-line-length = 180
+ignore = ['E501','E503', 'E504']

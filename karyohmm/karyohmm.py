@@ -1448,6 +1448,7 @@ class DuoHMMRef(MetaHMM):
         **kwargs,
     ):
         """Estimate sigma and pi0 using a reference panel model.
+
         Arguments:
             - bafs (`np.array`): B-allele frequencies across the all m sites
             - pos (`np.array`): basepair positions of the SNPs
