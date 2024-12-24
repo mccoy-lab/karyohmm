@@ -168,7 +168,7 @@ def test_est_pi0_sigma(data):
     """Test the optimization routine on the forward-algorithm likelihood."""
     hmm = DuoHMM()
     pi0_est, sigma_est = hmm.est_sigma_pi0(
-        bafs=data["baf"], pos=data["pos"], haps=data["mat_haps"]
+        bafs=data["baf"], pos=data["pos"], haps=data["mat_haps"], freqs=data["af"]
     )
     assert (pi0_est > 0) and (pi0_est < 1.0)
     assert (sigma_est > 0) and (sigma_est < 1.0)
@@ -275,6 +275,7 @@ def test_ploidy_correctness(data):
         bafs=data["baf"],
         pos=data["pos"],
         haps=data["mat_haps"],
+        freqs=data["af"],
         pi0=0.7,
         std_dev=0.1,
     )
@@ -295,14 +296,13 @@ def test_ploidy_correctness_mle(data):
     """This actually tests that the posterior inference of whole-chromosome aneuploidies is correct under mle."""
     hmm = DuoHMM()
     pi0_est, sigma_est = hmm.est_sigma_pi0(
-        bafs=data["baf"],
-        pos=data["pos"],
-        haps=data["mat_haps"],
+        bafs=data["baf"], pos=data["pos"], haps=data["mat_haps"], freqs=data["af"]
     )
     gammas, _, karyotypes = hmm.forward_backward(
         bafs=data["baf"],
         pos=data["pos"],
         haps=data["mat_haps"],
+        freqs=data["af"],
         pi0=pi0_est,
         std_dev=sigma_est,
     )
@@ -321,15 +321,13 @@ def test_genotype_parent(data):
     """Test being able to genotype the unobserved parent."""
     hmm = DuoHMM()
     pi0_est, sigma_est = hmm.est_sigma_pi0(
-        bafs=data["baf"],
-        pos=data["pos"],
-        haps=data["mat_haps_prime"],
-        global_opt=False,
+        bafs=data["baf"], pos=data["pos"], haps=data["mat_haps_prime"], freqs=data["af"]
     )
     gammas, _, karyotypes = hmm.forward_backward(
         bafs=data["baf"],
         pos=data["pos"],
         haps=data["mat_haps"],
+        freqs=data["af"],
         pi0=pi0_est,
         std_dev=sigma_est,
     )
