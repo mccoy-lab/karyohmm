@@ -374,17 +374,13 @@ class PGTSimBase:
         assert haps.ndim == 2
         assert haps.shape[1] > 0
         assert haps.shape[1] == pos.size
-        ref_panel = np.zeros((panel_size * 2, haps.shape[1]))
-        i = 0
-        for _ in range(panel_size):
+        ref_panel = np.zeros(shape=(panel_size, pos.size))
+        for i in range(panel_size):
             # NOTE: this just shuffles up the current parental haplotypes ...
-            _, _, sim_hap, _, _ = self.sim_haplotype_paths(
+            _, _, sim_hap1, _, _ = self.sim_haplotype_paths(
                 mat_haps=haps, pat_haps=haps, pos=pos, ploidy=2, **kwargs
             )
-            ref_panel[i, :] = sim_hap[0, :]
-            i += 1
-            ref_panel[i, :] = sim_hap[1, :]
-            i += 1
+            ref_panel[i, :] = sim_hap1
         return ref_panel
 
 

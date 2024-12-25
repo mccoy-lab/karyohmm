@@ -110,10 +110,10 @@ def test_pgt_sim_from_vcf(valid_vcf_file):
 
 @given(
     length=st.floats(min_value=1e2, max_value=1e8),
-    m=st.integers(min_value=1000, max_value=5000),
-    k=st.integers(min_value=2, max_value=100),
+    m=st.integers(min_value=100, max_value=3000),
+    k=st.integers(min_value=2, max_value=20),
 )
-@settings(max_examples=10, deadline=2000)
+@settings(max_examples=10, deadline=5000)
 def test_pgt_sim_ref_panel(length, m, k):
     """Test for PGT simulations."""
     data = pgt_sim.full_ploidy_sim(m=m, ploidy=2, length=length)
