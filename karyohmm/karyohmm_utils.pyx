@@ -766,6 +766,52 @@ def forward_algo_duo_panel(bafs, pos, haps, ref_panel, states, karyotypes, bint 
     return alphas, scaler, states, None, sum(scaler)
 
 
+def backward_algo_duo_panel(bafs, pos, haps, ref_panel, states, karyotypes, bint maternal=True, double r=1e-8, double a=1e-2, double pi0=0.8, double std_dev=0.2):
+    """Helper function for optimization for backward algorithm in the duo setting with a reference panel.
+
+    Ref panel is a K x M set of reference haplotypes
+    """
+    cdef int i, j, idx, n, m
+    cdef int zi, zj, k
+    cdef float di, cur_emission
+    cdef double[:] transitions
+    n = bafs.size
+    m = len(states)
+    k = ref_panel.shape[0]
+    ks = [sum([s >= 0 for s in state]) for state in states]
+    K0, K1 = create_index_arrays(karyotypes)
+    betas = np.zeros(shape=(m, k, k, n))
+    betas[:, :, :, 0] = log(1.0)
+    scaler = np.zeros(n)
+    scaler[-1] = logsumexp(betas[:, :, :, -1])
+    betas[:,:,: -1] -= scaler[-1]
+    for i in range(n - 2, -1, -1):
+        di = pos[i+1] - pos[i]
+        A_hat = transition_kernel(K0, K1, d=di, r=r, a=a)
+        cur_emission = np.zeros(shape=(m, k, k))
+        for j in range(m):
+            for zi in range(k):
+                for zj in range(k):
+                    x = [ref_panel[zi, i], ref_panel[zj, i]]
+                    if maternal:
+                        m_ij = mat_dosage(haps[:, i], states[j])
+                        p_ij = pat_dosage(x, states[j])
+                    else:
+                        m_ij = mat_dosage(x, states[j])
+                        p_ij = pat_dosage(haps[:, i], states[j])
+                    cur_emission[j,zi,zj] = emission_baf(
+                            bafs[i],
+                            m_ij,
+                            p_ij,
+                            pi0=pi0,
+                            std_dev=std_dev,
+                            k=ks[j])
+
+
+
+    return betas, scaler, states, None, sum(scaler) + scaler[-1]
+
+
 # -------- DANGER ZONE ---------- #
 def solve_trio(self, cg=0, fg=0, mg=0):
     """Solve the trio setup to phase the parents.

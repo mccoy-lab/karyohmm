@@ -20,6 +20,7 @@ import numpy as np
 from karyohmm_utils import (
     backward_algo,
     backward_algo_duo,
+    backward_algo_duo_panel,
     backward_algo_sibs,
     emission_baf,
     forward_algo,
@@ -1532,7 +1533,7 @@ class DuoHMMRef(MetaHMM):
         )
         return alphas, scaler, states, karyotypes, loglik
 
-    def viterbi_algorithm(
+    def forward_backward(
         self,
         bafs,
         pos,
@@ -1545,13 +1546,67 @@ class DuoHMMRef(MetaHMM):
         a=1e-2,
         unphased=False,
     ):
-        """XXX."""
-        pass
+        """Run the forward-backward algorithm using a reference panel.
+
+        Arguments:
+            - bafs (`np.array`): B-allele frequencies across the all m sites
+            - pos (`np.array`): m-length vector of basepair positions for sites
+            - haps (`np.array`): a 2 x m array of 0/1 parental haplotypes
+            - ref_panel (`np.array`): an KxM  array of haplotype references
+            - pi0 (`float`): sparsity parameter for B-allele emission model
+            - std_dev (`float`): standard deviation for B-allele emission model
+            - r (`float`): intra-karyotype transition rate (recombination)
+            - a (`float`): inter-karyotype transition rate
+            - unphased (`bool`): run the model in unphased mode
+
+        Returns:
+            - alphas (`np.array`): forward variable from hmm across k states
+            - scaler (`np.array`): m-length array of scale parameters
+            - states (`list`): tuple representation of states
+            - karyotypes (`np.array`):  array of karyotypes in the MetaHMM model
+            - loglik (`float`): total log-likelihood of B-allele frequency
+
+        """
+        assert bafs.ndim == 1
+        assert pos.ndim == 1
+        assert haps.ndim == 2
+        assert (pi0 > 0) & (pi0 < 1.0)
+        assert std_dev > 0
+        assert bafs.size == haps.shape[1]
+        assert bafs.size == pos.size
+        assert np.all(pos[1:] > pos[:-1])
+        assert r < 0.5 and r > 0
+        assert a < 0.5 and a > 0
+        assert ref_panel.ndim == 2
+        assert ref_panel.shape[1] == bafs.size
+        alphas, scaler, states, karyotypes, loglik = forward_algo_duo_panel(
+            bafs,
+            pos,
+            haps,
+            ref_panel,
+            pi0=pi0,
+            std_dev=std_dev,
+            r=r,
+            a=a,
+            maternal=maternal,
+        )
+        betas, scaler, states, karyotypes, loglik = backward_algo_duo_panel(
+            bafs,
+            pos,
+            haps,
+            ref_panel,
+            pi0=pi0,
+            std_dev=std_dev,
+            r=r,
+            a=a,
+            maternal=maternal,
+        )
+        return alphas, scaler, states, karyotypes, loglik
 
     def genotype_parent(
         self,
         bafs,
-        pos,
+        gammas,
         haps,
         ref_panel,
         maternal=True,
@@ -1562,7 +1617,9 @@ class DuoHMMRef(MetaHMM):
         unphased=False,
     ):
         """XXX."""
-        pass
+        raise NotImplementedError(
+            "Genotyping parents from haplotype reference panel not currently supported!"
+        )
 
 
 class MosaicEst:
