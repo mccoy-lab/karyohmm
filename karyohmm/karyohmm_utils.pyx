@@ -754,7 +754,7 @@ def forward_algo_duo_panel(bafs, pos, haps, ref_panel, states, karyotypes, bint 
                             k=ks[j],
                         )
                     idx = 0
-                    transitions = np.zero(m*k*k)
+                    transitions = np.zeros(m*k*k)
                     for j_ in range(m):
                         for zi_ in range(k):
                             for zj_ in range(k):
@@ -799,16 +799,25 @@ def backward_algo_duo_panel(bafs, pos, haps, ref_panel, states, karyotypes, bint
                     else:
                         m_ij = mat_dosage(x, states[j])
                         p_ij = pat_dosage(haps[:, i], states[j])
-                    cur_emission[j,zi,zj] = emission_baf(
+                    cur_emission = emission_baf(
                             bafs[i],
                             m_ij,
                             p_ij,
                             pi0=pi0,
                             std_dev=std_dev,
                             k=ks[j])
+                    updates = np.zeros(m*k*k)
+                    idx = 0
+                    for j_ in range(m):
+                        for zi_ in range(k):
+                            for zj_ in range(k):
+                                transition = A_hat[j, j_] + log((1.0 - exp(-r*di))*(zi != zi_) + (-r*di)*(zi == zi_)) + log((1.0 - exp(-r*di))*(zj != zj_) + (-r*di)*(zj == zj_))
+                                updates[idx] = transition + cur_emission + betas[j,zi,zj,i+1]
+                                idx += 1
+                betas[j, zi,zj, i] = logsumexp(updates)
 
-
-
+        scaler[i] = logsumexp(betas[:,:,:, i])
+        betas[:,:,:, i] -= scaler[i]
     return betas, scaler, states, None, sum(scaler) + scaler[-1]
 
 
