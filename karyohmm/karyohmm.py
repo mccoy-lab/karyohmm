@@ -1525,6 +1525,8 @@ class DuoHMMRef(MetaHMM):
             pos,
             haps,
             ref_panel,
+            states=self.states,
+            karyotypes=self.karyotypes,
             pi0=pi0,
             std_dev=std_dev,
             r=r,
@@ -1532,6 +1534,65 @@ class DuoHMMRef(MetaHMM):
             maternal=maternal,
         )
         return alphas, scaler, states, karyotypes, loglik
+
+    def backward_algorithm(
+        self,
+        bafs,
+        pos,
+        haps,
+        ref_panel,
+        maternal=True,
+        pi0=0.5,
+        std_dev=0.2,
+        r=1e-8,
+        a=1e-2,
+        unphased=False,
+    ):
+        """Run the backward-algorithm using a reference panel.
+
+        Arguments:
+            - bafs (`np.array`): B-allele frequencies across the all m sites
+            - pos (`np.array`): m-length vector of basepair positions for sites
+            - haps (`np.array`): a 2 x m array of 0/1 parental haplotypes
+            - ref_panel (`np.array`): an KxM  array of haplotype references
+            - pi0 (`float`): sparsity parameter for B-allele emission model
+            - std_dev (`float`): standard deviation for B-allele emission model
+            - r (`float`): intra-karyotype transition rate (recombination)
+            - a (`float`): inter-karyotype transition rate
+            - unphased (`bool`): run the model in unphased mode
+
+        Returns:
+            - alphas (`np.array`): forward variable from hmm across k states
+            - scaler (`np.array`): m-length array of scale parameters
+            - states (`list`): tuple representation of states
+            - karyotypes (`np.array`):  array of karyotypes in the MetaHMM model
+            - loglik (`float`): total log-likelihood of B-allele frequency
+
+        """
+        assert bafs.ndim == 1
+        assert pos.ndim == 1
+        assert haps.ndim == 2
+        assert (pi0 > 0) & (pi0 < 1.0)
+        assert std_dev > 0
+        assert bafs.size == haps.shape[1]
+        assert bafs.size == pos.size
+        assert np.all(pos[1:] > pos[:-1])
+        assert r < 0.5 and r > 0
+        assert a < 0.5 and a > 0
+        assert ref_panel.ndim == 2
+        assert ref_panel.shape[1] == bafs.size
+        betas, scaler, states, karyotypes, loglik = backward_algo_duo_panel(
+            bafs,
+            pos,
+            haps,
+            ref_panel,
+            pi0=pi0,
+            std_dev=std_dev,
+            r=r,
+            a=a,
+            maternal=maternal,
+        )
+        return betas, scaler, states, karyotypes, loglik
 
     def forward_backward(
         self,
@@ -1601,7 +1662,13 @@ class DuoHMMRef(MetaHMM):
             a=a,
             maternal=maternal,
         )
-        return alphas, scaler, states, karyotypes, loglik
+        scaler = logsumexp_sp(alphas + betas, axis=4)
+        gammas = alphas + betas
+        assert scaler.ndim == 1
+        assert scaler.size == gammas.shape[3]
+        for i in range(scaler.size):
+            gammas[:, :, :, i] -= scaler[i]
+        return gammas, scaler, states, karyotypes, loglik
 
     def genotype_parent(
         self,
@@ -1616,10 +1683,34 @@ class DuoHMMRef(MetaHMM):
         a=1e-2,
         unphased=False,
     ):
-        """XXX."""
-        raise NotImplementedError(
-            "Genotyping parents from haplotype reference panel not currently supported!"
-        )
+        """Genotyping the unobserved parent through traceback of the haplotype reference panel."""
+        assert gammas.ndim == 4
+        assert ref_panel.ndim == 2
+        (_, k, k2, m) = gammas.shape
+        assert k == k2
+        assert ref_panel.shape[0] == k
+        assert ref_panel.shape[1] == m
+        geno_dosage = np.zeros(shape=(3, m))
+        for i in range(m):
+            cur_gammas = gammas[:, :, :, i]
+            cur_hap = ref_panel[:, i]
+            for x1 in range(k):
+                for x2 in range(k):
+                    if (cur_hap[x1] + cur_hap[x2]) == 0:
+                        geno_dosage[0, i] += logsumexp_sp(cur_gammas[:, x1, x2])
+                    elif (cur_hap[x1] + cur_hap[x2]) == 1:
+                        geno_dosage[1, i] += logsumexp_sp(cur_gammas[:, x1, x2])
+                    elif (cur_hap[x1] + cur_hap[x2]) == 2:
+                        geno_dosage[2, i] += logsumexp_sp(cur_gammas[:, x1, x2])
+                    else:
+                        raise ValueError("Reference panel does not contain only 0|1 !")
+        geno_dosage_rev = np.zeros(shape=(3, m))
+        for i in range(m):
+            tot = logsumexp_sp(geno_dosage[:, i])
+            geno_dosage_rev[0, i] = geno_dosage[0, i] - tot
+            geno_dosage_rev[1, i] = geno_dosage[1, i] - tot
+            geno_dosage_rev[2, i] = geno_dosage[2, i] - tot
+        return geno_dosage_rev
 
 
 class MosaicEst:
