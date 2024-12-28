@@ -774,7 +774,7 @@ def backward_algo_duo_panel(bafs, pos, haps, ref_panel, states, karyotypes, bint
     cdef int i, j, idx, n, m
     cdef int zi, zj, k
     cdef float di, cur_emission
-    cdef double[:] transitions
+    cdef double[:] updates
     n = bafs.size
     m = len(states)
     k = ref_panel.shape[0]
@@ -784,7 +784,7 @@ def backward_algo_duo_panel(bafs, pos, haps, ref_panel, states, karyotypes, bint
     betas[:, :, :, 0] = log(1.0)
     scaler = np.zeros(n)
     scaler[-1] = logsumexp(betas[:, :, :, -1])
-    betas[:,:,: -1] -= scaler[-1]
+    betas[:, :, : -1] -= scaler[-1]
     for i in range(n - 2, -1, -1):
         di = pos[i+1] - pos[i]
         A_hat = transition_kernel(K0, K1, d=di, r=r, a=a)
@@ -792,32 +792,51 @@ def backward_algo_duo_panel(bafs, pos, haps, ref_panel, states, karyotypes, bint
         for j in range(m):
             for zi in range(k):
                 for zj in range(k):
-                    x = [ref_panel[zi, i], ref_panel[zj, i]]
-                    if maternal:
-                        m_ij = mat_dosage(haps[:, i], states[j])
-                        p_ij = pat_dosage(x, states[j])
-                    else:
-                        m_ij = mat_dosage(x, states[j])
-                        p_ij = pat_dosage(haps[:, i], states[j])
-                    cur_emission = emission_baf(
+                    updates = np.zeros(m*k*k)
+                    idx = 0
+                    for j_ in range(m):
+                        x = [ref_panel[zi, i], ref_panel[zj, i]]
+                        if maternal:
+                            m_ij = mat_dosage(haps[:, i], states[j_])
+                            p_ij = pat_dosage(x, states[j_])
+                        else:
+                            m_ij = mat_dosage(x, states[j_])
+                            p_ij = pat_dosage(haps[:, i], states[j_])
+                        cur_emission = emission_baf(
+                                bafs[i],
+                                m_ij,
+                                p_ij,
+                                pi0=pi0,
+                                std_dev=std_dev,
+                                k=ks[j_])
+                        for zi_ in range(k):
+                            for zj_ in range(k):
+                                transition = A_hat[j, j_] + log((1.0 - exp(-r*di))*(zi != zi_) + (-r*di)*(zi == zi_)) + log((1.0 - exp(-r*di))*(zj != zj_) + (-r*di)*(zj == zj_))
+                                updates[idx] = transition + cur_emission + betas[j_, zi_, zj_, i+1]
+                                idx += 1
+                betas[j, zi, zj, i] = logsumexp(updates)
+        if i == 0:
+            for j in range(m):
+                for zi in range(m):
+                    for zj in range(m):
+                        x = [ref_panel[zi, i], ref_panel[zj, i]]
+                        if maternal:
+                            m_ij = mat_dosage(haps[:, i], states[j])
+                            p_ij = pat_dosage(x, states[j])
+                        else:
+                            m_ij = mat_dosage(x, states[j])
+                            p_ij = pat_dosage(haps[:, i], states[j])
+                        cur_emission = emission_baf(
                             bafs[i],
                             m_ij,
                             p_ij,
                             pi0=pi0,
                             std_dev=std_dev,
-                            k=ks[j])
-                    updates = np.zeros(m*k*k)
-                    idx = 0
-                    for j_ in range(m):
-                        for zi_ in range(k):
-                            for zj_ in range(k):
-                                transition = A_hat[j, j_] + log((1.0 - exp(-r*di))*(zi != zi_) + (-r*di)*(zi == zi_)) + log((1.0 - exp(-r*di))*(zj != zj_) + (-r*di)*(zj == zj_))
-                                updates[idx] = transition + cur_emission + betas[j,zi,zj,i+1]
-                                idx += 1
-                betas[j, zi,zj, i] = logsumexp(updates)
-
-        scaler[i] = logsumexp(betas[:,:,:, i])
-        betas[:,:,:, i] -= scaler[i]
+                            k=ks[j],
+                        )
+                        betas[j, zi, zj, i] += log(1./(m*k*k)) + cur_emission
+        scaler[i] = logsumexp(betas[:, :, :, i])
+        betas[:, :, :, i] -= scaler[i]
     return betas, scaler, states, None, sum(scaler) + scaler[-1]
 
 
