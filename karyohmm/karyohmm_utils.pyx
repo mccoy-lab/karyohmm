@@ -728,7 +728,7 @@ def forward_algo_duo_panel(bafs, pos, haps, ref_panel, states, karyotypes, bint 
                         k=ks[j],
                     )
     scaler = np.zeros(n)
-    scaler[0] = logsumexp(alphas[:, :, :, 0])
+    scaler[0] = logsumexp(alphas[:, :, :, 0].flatten())
     alphas[:, :, :, 0] -= scaler[0]
     for i in range(1, n):
         di = pos[i] - pos[i-1]
@@ -761,7 +761,7 @@ def forward_algo_duo_panel(bafs, pos, haps, ref_panel, states, karyotypes, bint 
                                 transitions[idx] = A_hat[j_, j] + log((1.0 - exp(-r*di))*(zi_ != zi) + (-r*di)*(zi_ == zi)) + log((1.0 - exp(-r*di))*(zj_ != zj) + (-r*di)*(zj_ == zj)) + alphas[j_, zi_, zj_, (i-1)]
                                 idx += 1
                     alphas[j, zi, zj, i] = cur_emission + logsumexp(transitions)
-        scaler[i] = logsumexp(alphas[:, :, :, i])
+        scaler[i] = logsumexp(alphas[:, :, :, i].flatten())
         alphas[:, :, :, i] -= scaler[i]
     return alphas, scaler, states, None, sum(scaler)
 
