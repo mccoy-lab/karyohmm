@@ -368,6 +368,21 @@ class PGTSimBase:
             genos.append(geno)
         return true_haps1, true_haps2, haps1, haps2, bafs, genos
 
+    def sim_haplotype_ref_panel(self, haps, pos, panel_size=10, seed=42, **kwargs):
+        """Simulate a haplotype reference panel from haplotypes."""
+        assert panel_size > 0
+        assert haps.ndim == 2
+        assert haps.shape[1] > 0
+        assert haps.shape[1] == pos.size
+        ref_panel = np.zeros(shape=(panel_size, pos.size))
+        for i in range(panel_size):
+            # NOTE: this just shuffles up the current parental haplotypes ...
+            _, _, sim_hap1, _, _ = self.sim_haplotype_paths(
+                mat_haps=haps, pat_haps=haps, pos=pos, ploidy=2, **kwargs
+            )
+            ref_panel[i, :] = sim_hap1
+        return ref_panel
+
 
 class PGTSim(PGTSimBase):
     """Simulation of meiotic-origin whole chromosome ploidy changes."""

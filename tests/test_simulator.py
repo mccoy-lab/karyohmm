@@ -106,3 +106,24 @@ def test_pgt_sim_from_vcf(valid_vcf_file):
     )
     results = pgt_sim.sim_from_haps(mat_haps=mat_haps, pat_haps=pat_haps, pos=pos)
     assert "baf" in results
+
+
+@given(
+    length=st.floats(min_value=1e2, max_value=1e8),
+    m=st.integers(min_value=100, max_value=3000),
+    k=st.integers(min_value=2, max_value=20),
+)
+@settings(max_examples=10, deadline=5000)
+def test_pgt_sim_ref_panel(length, m, k):
+    """Test for PGT simulations."""
+    data = pgt_sim.full_ploidy_sim(m=m, ploidy=2, length=length)
+    assert data["m"] == m
+    assert data["length"] == length
+    assert np.max(data["pos"]) <= length
+    assert "baf" in data.keys()
+    ref_panel = pgt_sim.sim_haplotype_ref_panel(
+        haps=data["mat_haps"], pos=data["pos"], panel_size=k
+    )
+    assert ref_panel.ndim == 2
+    assert ref_panel.shape[0] == k
+    assert ref_panel.shape[1] == m
