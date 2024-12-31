@@ -39,3 +39,7 @@ namespaces = false
 
 [tool.setuptools.dynamic.version]
 attr = "karyohmm.__version__"
+
+[tool.cython-lint]
+max-line-length = 180
+ignore = ['E501','E503', 'E504']

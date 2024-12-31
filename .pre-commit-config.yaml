@@ -31,6 +31,11 @@ repos:
   hooks:
   - id: pydocstyle
     exclude: ^docs/
+- repo: https://github.com/MarcoGorelli/cython-lint
+  rev: v0.16.6
+  hooks:
+  - id: cython-lint
+  - id: double-quote-cython-strings
 # - repo: https://github.com/hhatto/autopep8
 #   rev: 'e66c80734f97df2dbdae1275368d0f69f8c13519'
 #   hooks:

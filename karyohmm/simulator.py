@@ -166,7 +166,7 @@ class PGTSimBase:
             # Drawing a maternal or paternal monosomy
             pat = binom.rvs(1, mat_skew)
             if pat:
-                # We have a paternal monosomy ...
+                # We have maternal monosomy (loss of maternal chromosome)
                 zs_maternal = None
                 zs_paternal[0] = binom.rvs(1, 0.5)
                 for i in range(1, m):
@@ -182,7 +182,7 @@ class PGTSimBase:
                 mat_real_hap = np.zeros(pat_real_hap.size)
                 aploid = "1p"
             else:
-                # We have a maternal monosomy ...
+                # We have a paternal monosomy (loss of paternal chrom)
                 zs_paternal = None
                 zs_maternal[0] = binom.rvs(1, 0.5)
                 for i in range(1, m):
@@ -199,7 +199,7 @@ class PGTSimBase:
                 aploid = "1m"
         elif ploidy == 3:
             # Drawing a maternal or paternal trisomy
-            pat = binom.rvs(1, mat_skew)
+            pat = binom.rvs(1, 1.0 - mat_skew)
             if pat:
                 # Simulate a paternal trisomy
                 zs_maternal[0] = binom.rvs(0, 0.5)
@@ -367,6 +367,21 @@ class PGTSimBase:
             bafs.append(b)
             genos.append(geno)
         return true_haps1, true_haps2, haps1, haps2, bafs, genos
+
+    def sim_haplotype_ref_panel(self, haps, pos, panel_size=10, seed=42, **kwargs):
+        """Simulate a haplotype reference panel from haplotypes."""
+        assert panel_size > 0
+        assert haps.ndim == 2
+        assert haps.shape[1] > 0
+        assert haps.shape[1] == pos.size
+        ref_panel = np.zeros(shape=(panel_size, pos.size))
+        for i in range(panel_size):
+            # NOTE: this just shuffles up the current parental haplotypes ...
+            _, _, sim_hap1, _, _ = self.sim_haplotype_paths(
+                mat_haps=haps, pat_haps=haps, pos=pos, ploidy=2, **kwargs
+            )
+            ref_panel[i, :] = sim_hap1
+        return ref_panel
 
 
 class PGTSim(PGTSimBase):
@@ -831,7 +846,7 @@ class PGTSimSegmental(PGTSimBase):
         elif ploidy == 2:
             aneu_type = "2"
         elif ploidy == 3:
-            pat = binom.rvs(1, mat_skew)
+            pat = binom.rvs(1, 1.0 - mat_skew)
             if pat:
                 aneu_type = "3p"
             else:
