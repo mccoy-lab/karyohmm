@@ -28,6 +28,23 @@ def test_pgt_sim(length, m, ploidy):
         assert np.any(data["baf"] == 0.0) | np.any(data["baf"] == 1.0)
 
 
+@pytest.mark.parametrize(
+    "mat_skew,ploidy,expected",
+    [
+        (0.9999, 1, "1p"),
+        (1e-4, 1, "1m"),
+        (0.9999, 3, "3m"),
+        (1e-4, 3, "3p"),
+        (0.9999, 2, "2"),
+        (1e-4, 2, "2"),
+    ],
+)
+def test_parental_origin_sim(mat_skew, ploidy, expected):
+    """Test the appropriate parental-origin for whole-chromosome simulations."""
+    data = pgt_sim.full_ploidy_sim(m=100, ploidy=ploidy, length=1e6, mat_skew=mat_skew)
+    assert data["aploid"] == expected
+
+
 @given(
     length=st.floats(min_value=1e2, max_value=1e8),
     m=st.integers(min_value=2, max_value=1000),
@@ -63,6 +80,25 @@ def test_pgt_segmental(m, ploidy, frac_chrom):
         assert not np.all(data["ploidies"] == 2)
     else:
         assert np.all(data["ploidies"] == 2)
+
+
+@pytest.mark.parametrize(
+    "mat_skew,ploidy,expected",
+    [
+        (0.9999, 1, "1p"),
+        (1e-4, 1, "1m"),
+        (0.9999, 3, "3m"),
+        (1e-4, 3, "3p"),
+        (0.9999, 2, "2"),
+        (1e-4, 2, "2"),
+    ],
+)
+def test_parental_origin_sim_segmental(mat_skew, ploidy, expected):
+    """Test the appropriate parental-origin for segmental simulation."""
+    data = pgt_sim_segmental.full_segmental_sim(
+        m=2000, ploidy=ploidy, mean_size=400, mat_skew=mat_skew
+    )
+    assert data["seg_aneuploidy_type"] == expected
 
 
 @pytest.fixture

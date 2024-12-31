@@ -166,7 +166,7 @@ class PGTSimBase:
             # Drawing a maternal or paternal monosomy
             pat = binom.rvs(1, mat_skew)
             if pat:
-                # We have a paternal monosomy ...
+                # We have maternal monosomy (loss of maternal chromosome)
                 zs_maternal = None
                 zs_paternal[0] = binom.rvs(1, 0.5)
                 for i in range(1, m):
@@ -182,7 +182,7 @@ class PGTSimBase:
                 mat_real_hap = np.zeros(pat_real_hap.size)
                 aploid = "1p"
             else:
-                # We have a maternal monosomy ...
+                # We have a paternal monosomy (loss of paternal chrom)
                 zs_paternal = None
                 zs_maternal[0] = binom.rvs(1, 0.5)
                 for i in range(1, m):
@@ -199,7 +199,7 @@ class PGTSimBase:
                 aploid = "1m"
         elif ploidy == 3:
             # Drawing a maternal or paternal trisomy
-            pat = binom.rvs(1, mat_skew)
+            pat = binom.rvs(1, 1.0 - mat_skew)
             if pat:
                 # Simulate a paternal trisomy
                 zs_maternal[0] = binom.rvs(0, 0.5)
@@ -846,7 +846,7 @@ class PGTSimSegmental(PGTSimBase):
         elif ploidy == 2:
             aneu_type = "2"
         elif ploidy == 3:
-            pat = binom.rvs(1, mat_skew)
+            pat = binom.rvs(1, 1.0 - mat_skew)
             if pat:
                 aneu_type = "3p"
             else:
