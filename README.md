@@ -16,7 +16,7 @@ While the majority of the interface uses `python`, many of the internal helper f
 
 ## `MetaHMM`
 
-The `MetaHMM` mode implements a characterization of embryo copy-number using primarily B-allele Frequency (BAF) data. However, we highly suggest orienting this to the `REF/ALT` allelic state of the parental haplotypes. We suggest applying the following steps on each chromosome for maximum performance:
+The `MetaHMM` mode infers embryo copy-number using primarily B-allele Frequency (BAF) data. However, we highly suggest orienting this to the `REF/ALT` allelic state of the parental haplotypes. We suggest applying the following steps on each chromosome for maximum performance:
 
 1. Estimate parameters ($\sigma, \pi_0$) via MLE using numerical optimization of the forward-algorithm.
 
@@ -33,17 +33,27 @@ The states in the `MetaHMM` model correspond to specific karyotypes for chromoso
 * `3m` - extra maternal chromosome (maternal trisomy)
 * `3p` - extra paternal chromosome (paternal trisomy)
 
+## DuoHMM
+
+The `DuoHMM` model similarly attempts to quantify the aneuploidy status of an embryo, but with the availability of only a **single**  parent. This is primarily accomplished by marginalizing over the full set of possible genotypes for the unobserved parent (with a prior based on allele frequency).
+
 ## CLI
 
-The installation of `karyohmm` also includes a `karyohmm-cli` implementation that can be run directly from the command-line. This is work in progress, but currently implements the majority of the `MetaHMM` inference steps for a single data file. To see this on a simulated example of three embryos:
+The installation of `karyohmm` also includes  `karyohmm-infer` and `karyohmm-simulate` command-line interfaces.
+
+The `karyohmm-infer` program includes all of implementation for inferring aneuploidy status that can be run directly from the command line. You can even specify the whether you are in `MetaHMM` or `DuoHMM` mode to indicate parental availability.
 
 ```
-karyohmm-cli -i data/test_disomy_embryo.tsv -o data/out_disomy
-karyohmm-cli -i data/test_mat_trisomy_embryo.tsv -o data/out_mat_trisomy
-karyohmm-cli -i data/test_combined_embryo.tsv -o data/out_combined
+karyohmm-infer -i data/test_disomy_embryo.tsv -o data/out_disomy
+karyohmm-infer -i data/test_mat_trisomy_embryo.tsv -o data/out_mat_trisomy
+karyohmm-infer -i data/test_combined_embryo.tsv -o data/out_combined
 ```
 
-This will run the `MetaHMM` model for two simulated datasets and output a simple table of posterior probabilities of each potential karyotypic outcome. To see the full display of options when running the model, you can run `karyohmm-cli --help`.
+For a full command-line set of options, run `karyohmm-infer --help`.
+
+To simulate different aneuploidy types, you can use the `karyohmm-simulate` program. Currently the modes that are supported are to simulate whole-chromosome or segmental aneuploidies. You can also use a pre-existing VCF file to sample parental haplotypes from for more realistic haplotype structure (and variant density). Currently, the simulation model only supports simulation of log-R ratio and B-allele frequency data to mimic Illumina arrays (we anticipate supporting read-based approaches like exome-capture quite soon).
+
+For a full set of command-line options for simulation, run `karyohmm-simulate --help`.
 
 ## Contact
 
