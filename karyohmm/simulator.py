@@ -539,7 +539,7 @@ class PGTSim(PGTSimBase):
         np.random.seed(seed)
 
         res_table = {}
-        mat_haps, pat_haps = self.draw_parental_genotypes(afs=None, m=m, seed=seed)
+        mat_haps, pat_haps, ps = self.draw_parental_genotypes(afs=None, m=m, seed=seed)
         # Simulate error in the parental genotypes first
         mat_haps_x, err_mat_x = self.create_parental_genotyping_errors(
             mat_haps, geno_err=geno_err_par, seed=seed

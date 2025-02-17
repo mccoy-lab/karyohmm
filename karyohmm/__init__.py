@@ -20,7 +20,7 @@ Modules exported are:
 * PGTSimVCF: module to generate synthetic PGT data based on parental data in a VCF.
 """
 
-__version__ = "0.5.5a"
+__version__ = "0.7.0a"
 
 from .io import DataReader
 from .karyohmm import (

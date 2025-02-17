@@ -123,12 +123,10 @@ cpdef double pat_dosage(pat_hap, state):
             p = pat_hap[state[2]]
     return p
 
-cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double std_dev=0.2, int k=2, double eps=1e-3):
-    """Emission distribution function for B-allele frequency in the sample.
 
-    NOTE: this should have some approximate error potentially?
-    """
-    cdef double mu_i, x, x0, x1, n0, l0, l1;
+cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double std_dev=0.2, int k=2, double eps=1e-3):
+    """Emission distribution function for B-allele frequency in the sample."""
+    cdef double mu_i, x, x0, x1, n0, l0, l1, e0, dos;
     n0 = truncnorm_pdf(baf, 0.0, 1.0, mu=0.5, sigma=std_dev)
     if (m == -1) & (p == -1):
         return n0
@@ -136,15 +134,46 @@ cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double
     x = truncnorm_pdf(baf, 0.0, 1.0, mu=mu_i, sigma=std_dev)
     x0 = truncnorm_pdf(baf, 0.0, 1.0, mu=0.0, sigma=2e-3)
     x1 = truncnorm_pdf(baf, 0.0, 1.0, mu=1.0, sigma=2e-3)
-    # NOTE: this just treats error as a local "nullisomy" ...
-    if mu_i == 0.0:
-        l0 = logaddexp(log(pi0) + x0, log((1 - pi0)) + x)
-        return logaddexp(log(1 - eps) + l0, log(eps) + n0)
-    if mu_i == 1.0:
-        l1 = logaddexp(log(pi0) + x1, log((1 - pi0)) + x)
-        return logaddexp(log(1 - eps) + l1, log(eps) + n0)
+    if eps > 0:
+        mat_errs = [m-2, m-1, m+1, m+2]
+        pat_errs = [p-2, p-1, p+1, p+2]
+        err_dist = []
+        for xm in mat_errs:
+            dos = (xm + p)/k
+            if (dos >= 0) and (dos <= 1):
+                if (dos == 1.0) or (dos == 0.0):
+                    err_dist.append(truncnorm_pdf(baf, 0.0, 1.0, mu=dos, sigma=2e-3))
+                else:
+                    err_dist.append(truncnorm_pdf(baf, 0.0, 1.0, mu=dos, sigma=std_dev))
+        for xp in pat_errs:
+            dos = (m + xp)/k
+            if (dos >= 0) and (dos <= 1):
+                if (dos == 1.0) or (dos == 0.0):
+                    err_dist.append(truncnorm_pdf(baf, 0.0, 1.0, mu=dos, sigma=2e-3))
+                else:
+                    err_dist.append(truncnorm_pdf(baf, 0.0, 1.0, mu=dos, sigma=std_dev))
+        err = np.array([log(eps/len(err_dist)) + x for x in err_dist])
+        e0 = logsumexp(err)
     else:
-        return logaddexp(logaddexp(log(1-eps) + x, log(eps/2) + x0), log(eps/2) + x1)
+        e0 = 0.0
+    if e0 != 0:
+        if mu_i == 0.0:
+            l0 = logaddexp(log(pi0) + x0, log((1 - pi0)) + x)
+            return logaddexp(log(1.0 - eps) + l0, e0)
+        if mu_i == 1.0:
+            l1 = logaddexp(log(pi0) + x1, log((1 - pi0)) + x)
+            return logaddexp(log(1 - eps) + l1, e0)
+        else:
+            return logaddexp(log(1 - eps) + x, e0)
+    else:
+        if mu_i == 0.0:
+            l0 = logaddexp(log(pi0) + x0, log((1 - pi0)) + x)
+            return l0
+        if mu_i == 1.0:
+            l1 = logaddexp(log(pi0) + x1, log((1 - pi0)) + x)
+            return l1
+        else:
+            return x
 
 cpdef double mix_loglik(double[:] bafs, double pi0=0.5, double theta=0.1, double std_dev=0.2):
     """Mixture log-likelihood for expected heterozygotes to estimate baf-deviation."""

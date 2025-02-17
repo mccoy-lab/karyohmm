@@ -111,8 +111,8 @@ def test_emission_trisomy(pi0, sigma, m, p):
 
 @given(
     baf=st.floats(min_value=0, max_value=0, allow_nan=False),
-    m=st.integers(min_value=1, max_value=1),
-    p=st.integers(min_value=1, max_value=1),
+    m=st.integers(min_value=0, max_value=1),
+    p=st.integers(min_value=0, max_value=1),
     sigma=st.floats(
         min_value=1e-2,
         max_value=1.0,
@@ -123,21 +123,14 @@ def test_emission_trisomy(pi0, sigma, m, p):
     k=st.integers(min_value=2, max_value=3),
 )
 def test_emission_overall(baf, m, p, k, sigma):
-    """Test the overall admissions distribution."""
+    """Test the overall admissions distribution matches (with no error)."""
     mu = (m + p) / k
     a, b = 0, 1
     true_logpdf = truncnorm.logpdf(
         baf, (a - mu) / sigma, (b - mu) / sigma, loc=mu, scale=sigma
     )
-    null_pdf = truncnorm.logpdf(
-        baf, (a - 0.5) / sigma, (b - 0.5) / sigma, loc=0.5, scale=sigma
-    )
-    true_scaled_logpdf = np.logaddexp(
-        np.log(1 - 1e-3) + true_logpdf, np.log(1e-3) + null_pdf
-    )
-    baf_log_pdf = emission_baf(baf, m=m, p=p, k=k, pi0=1e-12, std_dev=sigma)
-    assert np.isclose(baf_log_pdf, true_scaled_logpdf)
-
+    baf_log_pdf = emission_baf(baf, m=m, p=p, k=k, pi0=1e-12, eps=0.0, std_dev=sigma)
+    assert np.isclose(baf_log_pdf, true_logpdf)
 
 @given(
     pi0=st.floats(
