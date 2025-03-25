@@ -8,10 +8,10 @@ from karyohmm import MetaHMM, PGTSim
 
 # --- Generating test data for applications --- #
 pgt_sim = PGTSim()
-data_disomy = pgt_sim.full_ploidy_sim(m=2000, seed=42)
-data_trisomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=3, mat_skew=0, seed=42)
-data_monosomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=1, mat_skew=0, seed=42)
-data_nullisomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=0, mat_skew=0, seed=42)
+data_disomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=2, std_dev=0.15, mix_prop=0.7, seed=42)
+data_trisomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=3, mat_skew=0, std_dev=0.15, mix_prop=0.7, seed=42)
+data_monosomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=1, mat_skew=0, std_dev=0.15, mix_prop=0.7, seed=42)
+data_nullisomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=0, mat_skew=0, std_dev=0.15, mix_prop=0.7, seed=42)
 
 
 def bph(states):
@@ -74,9 +74,9 @@ def test_bph_sph():
 
 def test_data_integrity(data=data_disomy):
     """Test for some basic data sanity checks ..."""
-    for x in ["baf_embryo", "mat_haps", "pat_haps"]:
+    for x in ["baf", "mat_haps", "pat_haps"]:
         assert x in data
-    baf = data["baf_embryo"]
+    baf = data["baf"]
     pos = data["pos"]
     mat_haps = data["mat_haps"]
     pat_haps = data["pat_haps"]
@@ -94,7 +94,7 @@ def test_forward_algorithm(data):
     """Test the implementation of the forward algorithm."""
     hmm = MetaHMM()
     _, _, _, karyotypes, loglik = hmm.forward_algorithm(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
@@ -106,7 +106,7 @@ def test_backward_algorithm(data):
     """Test the implementation of the backward algorithm."""
     hmm = MetaHMM()
     _, _, _, karyotypes, loglik = hmm.backward_algorithm(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
@@ -118,19 +118,19 @@ def test_disomy_model(data):
     """Test implementation under a pure-disomy model."""
     hmm = MetaHMM(disomy=True)
     _, _, _, karyotypes, loglik = hmm.forward_algorithm(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
     )
     _, _, _, karyotypes, loglik = hmm.backward_algorithm(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
     )
     gammas, _, karyotypes = hmm.forward_backward(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
@@ -144,13 +144,13 @@ def test_forward_vs_backward_loglik(data):
     hmm = MetaHMM()
 
     _, _, _, _, fwd_loglik = hmm.forward_algorithm(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
     )
     _, _, _, _, bwd_loglik = hmm.backward_algorithm(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
@@ -163,7 +163,7 @@ def test_fwd_bwd_algorithm(data):
     """Test the properties of the output from the fwd-bwd algorithm."""
     hmm = MetaHMM()
     gammas, _, karyotypes = hmm.forward_backward(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
@@ -181,7 +181,7 @@ def test_est_pi0_sigma(data):
     """Test the optimization routine on the forward-algorithm likelihood."""
     hmm = MetaHMM()
     pi0_est, sigma_est = hmm.est_sigma_pi0(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
@@ -204,7 +204,7 @@ def test_est_pi0_sigma_bad_pi0_bounds(data, pi0_bounds):
     with pytest.raises(Exception):
         hmm = MetaHMM()
         pi0_est, sigma_est = hmm.est_sigma_pi0(
-            bafs=data["baf_embryo"],
+            bafs=data["baf"],
             pos=data["pos"],
             mat_haps=data["mat_haps"],
             pat_haps=data["pat_haps"],
@@ -221,7 +221,7 @@ def test_est_pi0_sigma_bad_sigma_bounds(data, sigma_bounds):
     with pytest.raises(Exception):
         hmm = MetaHMM()
         pi0_est, sigma_est = hmm.est_sigma_pi0(
-            bafs=data["baf_embryo"],
+            bafs=data["baf"],
             pos=data["pos"],
             mat_haps=data["mat_haps"],
             pat_haps=data["pat_haps"],
@@ -237,7 +237,7 @@ def test_est_pi0_sigma_algos(data, algo):
     """Test optimization of parameter estimates using different algorithms."""
     hmm = MetaHMM()
     pi0_est, sigma_est = hmm.est_sigma_pi0(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
@@ -306,7 +306,7 @@ def test_ploidy_correctness(data):
     """This actually tests that the posterior inference of whole-chromosome aneuploidies is correct here."""
     hmm = MetaHMM()
     gammas, _, karyotypes = hmm.forward_backward(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
@@ -330,14 +330,14 @@ def test_ploidy_correctness_mle(data):
     """This actually tests that the posterior inference of whole-chromosome aneuploidies is correct under mle."""
     hmm = MetaHMM()
     pi0_est, sigma_est = hmm.est_sigma_pi0(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
         algo="Powell",
     )
     gammas, _, karyotypes = hmm.forward_backward(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
@@ -359,14 +359,14 @@ def test_embryo_genotype(data):
     """Test that the embryo genotyping works as intended."""
     hmm = MetaHMM(disomy=True)
     pi0_est, sigma_est = hmm.est_sigma_pi0(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
         algo="Powell",
     )
     dosages = hmm.genotype_embryo(
-        bafs=data["baf_embryo"],
+        bafs=data["baf"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],

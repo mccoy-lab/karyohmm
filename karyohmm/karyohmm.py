@@ -288,6 +288,7 @@ class MetaHMM(AneuploidyHMM):
             a=a,
             pi0=pi0,
             std_dev=std_dev,
+            unphased=int(unphased),
         )
         return alphas, scaler, self.states, self.karyotypes, loglik
 
@@ -346,6 +347,7 @@ class MetaHMM(AneuploidyHMM):
             a=a,
             pi0=pi0,
             std_dev=std_dev,
+            unphased=int(unphased),
         )
         return betas, scaler, self.states, self.karyotypes, loglik
 
@@ -457,6 +459,7 @@ class MetaHMM(AneuploidyHMM):
             a=a,
             pi0=pi0,
             std_dev=std_dev,
+            unphased=int(unphased),
         )
         return path, states, deltas, psi
 
