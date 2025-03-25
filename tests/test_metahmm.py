@@ -310,8 +310,6 @@ def test_ploidy_correctness(data):
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
-        pi0=0.7,
-        std_dev=0.15,
     )
     # all of the columns must have a sum to 1
     assert np.all(np.isclose(np.sum(np.exp(gammas), axis=0), 1.0))
