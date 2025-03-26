@@ -8,10 +8,18 @@ from karyohmm import MetaHMM, PGTSim
 
 # --- Generating test data for applications --- #
 pgt_sim = PGTSim()
-data_disomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=2, std_dev=0.15, mix_prop=0.7, seed=42)
-data_trisomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=3, mat_skew=0, std_dev=0.15, mix_prop=0.7, seed=42)
-data_monosomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=1, mat_skew=0, std_dev=0.15, mix_prop=0.7, seed=42)
-data_nullisomy = pgt_sim.full_ploidy_sim(m=2000, ploidy=0, mat_skew=0, std_dev=0.15, mix_prop=0.7, seed=42)
+data_disomy = pgt_sim.full_ploidy_sim(
+    m=2000, ploidy=2, std_dev=0.15, mix_prop=0.7, seed=42
+)
+data_trisomy = pgt_sim.full_ploidy_sim(
+    m=2000, ploidy=3, mat_skew=0, std_dev=0.15, mix_prop=0.7, seed=42
+)
+data_monosomy = pgt_sim.full_ploidy_sim(
+    m=2000, ploidy=1, mat_skew=0, std_dev=0.15, mix_prop=0.7, seed=42
+)
+data_nullisomy = pgt_sim.full_ploidy_sim(
+    m=2000, ploidy=0, mat_skew=0, std_dev=0.15, mix_prop=0.7, seed=42
+)
 
 
 def bph(states):
