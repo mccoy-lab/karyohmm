@@ -1771,9 +1771,17 @@ class MosaicEst:
         self.het_bafs = self.bafs[pred_het_idx]
         self.het_idx = pred_het_idx
         self.n_het = self.het_bafs.size
-        self.signed_baf = False
         if self.n_het < 10:
             raise ValueError("Fewer than 10 expected heterozygotes!")
+        baf_signs = np.zeros(self.het_idx.size)
+        for i, j in enumerate(self.het_idx):
+            # If the alt allele is maternal we give this a positive sign ...
+            if self.mat_haps[karyo[path[j]][0], j] == 1:
+                baf_signs[i] = 1
+            else:
+                baf_signs[i] = -1
+        self.signed_baf = True
+        self.phased_baf = baf_signs * np.abs(self.het_bafs - 0.5)
 
     def phase_hets(self, **kwargs):
         """Inferring the phase of heterozygotes for signed BAF."""
@@ -1794,6 +1802,7 @@ class MosaicEst:
             else:
                 baf_signs[i] = -1
         self.signed_baf = True
+        self.phased_baf = baf_signs * np.abs(self.het_bafs - 0.5)
 
     def create_transition_matrix(self, switch_err=0.01, t_rate=1e-4):
         """Create the transition matrix.
@@ -1812,7 +1821,7 @@ class MosaicEst:
         assert (t_rate > 0) and (t_rate < 0.5)
         A = np.zeros(shape=(3, 3))
         # Just make this as a kind of switch error rate or something?
-        # 1. Transition rates here are the switch error rate effectively
+        # 1. Transition rates here are the switch error rate
         A[0, 2] = switch_err
         A[2, 0] = switch_err
         # 2. Transition rates
@@ -1835,33 +1844,45 @@ class MosaicEst:
         m = 3
         alphas = np.zeros(shape=(m, n))
         alphas[:, 0] = np.log(1.0 / m)
-        phased_baf = self.signed_baf * np.abs(self.het_bafs[0] - 0.5)
         # NOTE: I wonder if you don't have to use the truncation here and can instead just use the baf - 0.5f
-        alphas[0, 0] += norm_logl(phased_baf[0], -theta, std_dev)
-        alphas[1, 0] += norm_logl(phased_baf[0], 0.0, std_dev)
-        alphas[2, 0] += norm_logl(phased_baf[0], theta, std_dev)
+        alphas[0, 0] += norm_logl(self.phased_baf[0], -theta, std_dev)
+        alphas[1, 0] += norm_logl(self.phased_baf[0], 0.0, std_dev)
+        alphas[2, 0] += norm_logl(self.phased_baf[0], theta, std_dev)
         scaler = np.zeros(n)
         scaler[0] = logsumexp(alphas[:, 0])
         alphas[:, 0] -= scaler[0]
+        zs = [-theta, 0, theta]
         for i in range(1, n):
             for j in range(3):
-                # NOTE: there has to be a better way to do this ...
-                if j == 0:
-                    alphas[j, i] += norm_logl(phased_baf[i], -theta, std_dev)
-                elif j == 1:
-                    alphas[j, i] += norm_logl(phased_baf[i], 0.0, std_dev)
-                else:
-                    alphas[j, i] += norm_logl(phased_baf[i], theta, std_dev)
+                alphas[j, i] += norm_logl(self.phased_baf[i], zs[j], std_dev)
                 alphas[j, i] += logsumexp(self.A[:, j] + alphas[:, (i - 1)])
             scaler[i] = logsumexp(alphas[:, i])
             alphas[:, i] -= scaler[i]
         return alphas, scaler, np.sum(scaler)
 
-    def viterbi_algorithm(self, theta=0.0, std_dev=0.1):
-        """Viterbi algorithm implementation for phased BAF."""
-        raise NotImplementedError(
-            "Viterbi algorithm for boundary detection has not been implemented!"
-        )
+    def viterbi_algo_mix(self, theta=0.0, std_dev=0.1):
+        """Viterbi algorithm implementation for phased BAF decoding."""
+        assert theta >= 0
+        assert std_dev >= 0.0
+        assert self.A is not None
+        assert self.signed_baf
+        n = self.het_bafs.size
+        m = 3
+        deltas = np.zeros(shape=(m, n))
+        deltas[:, 0] = np.log(1.0 / m)
+        psi = np.zeros(shape=(m, n), dtype=int)
+        zs = [-theta, 0.0, theta]
+        for i in range(1, n):
+            for j in range(3):
+                deltas[j, i] = np.max(deltas[:, i - 1] + self.A[:, j])
+                deltas[j, i] += norm_logl(self.phased_baf[i], zs[j], std_dev)
+                psi[j, i] = np.argmax(deltas[:, i - 1] + self.A[:, j]).astype(int)
+        path = np.zeros(n, dtype=int)
+        path[-1] = np.argmax(deltas[:, -1]).astype(int)
+        for i in range(n - 2, -1, -1):
+            path[i] = psi[path[i + 1], i]
+        path[0] = psi[path[1], 1]
+        return path, zs, deltas, psi
 
     def lrt_theta(self, std_dev=0.1):
         """LRT of Theta not being 0."""
