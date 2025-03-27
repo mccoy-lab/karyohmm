@@ -1743,11 +1743,12 @@ class MosaicEst:
             (mat_geno == 2) & (pat_geno == 0)
         )
         self.het_bafs = self.bafs[exp_het_idx]
-        self.het_idx = exp_het_idx
         self.n_het = self.het_bafs.size
         self.signed_baf = False
         if self.n_het < 10:
             raise ValueError("Fewer than 10 expected heterozygotes!")
+        assert exp_het_idx.ndim == 1
+        self.het_idx = np.flatnonzero(exp_het_idx)
 
     def viterbi_hets(self, **kwargs):
         """Predict the embryo genotype using viterbi traceback from parental haplotypes (under disomy)."""
@@ -1769,7 +1770,8 @@ class MosaicEst:
             )
         pred_het_idx = embryo_geno == 1
         self.het_bafs = self.bafs[pred_het_idx]
-        self.het_idx = pred_het_idx
+        assert pred_het_idx.ndim == 1
+        self.het_idx = np.flatnonzero(pred_het_idx)
         self.n_het = self.het_bafs.size
         if self.n_het < 10:
             raise ValueError("Fewer than 10 expected heterozygotes!")
@@ -1844,14 +1846,13 @@ class MosaicEst:
         m = 3
         alphas = np.zeros(shape=(m, n))
         alphas[:, 0] = np.log(1.0 / m)
+        zs = [-theta, 0, theta]
         # NOTE: I wonder if you don't have to use the truncation here and can instead just use the baf - 0.5f
-        alphas[0, 0] += norm_logl(self.phased_baf[0], -theta, std_dev)
-        alphas[1, 0] += norm_logl(self.phased_baf[0], 0.0, std_dev)
-        alphas[2, 0] += norm_logl(self.phased_baf[0], theta, std_dev)
+        for j in range(3):
+            alphas[j, 0] += norm_logl(self.phased_baf[0], zs[j], std_dev)
         scaler = np.zeros(n)
         scaler[0] = logsumexp(alphas[:, 0])
         alphas[:, 0] -= scaler[0]
-        zs = [-theta, 0, theta]
         for i in range(1, n):
             for j in range(3):
                 alphas[j, i] += norm_logl(self.phased_baf[i], zs[j], std_dev)
