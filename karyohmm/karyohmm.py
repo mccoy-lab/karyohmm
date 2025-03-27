@@ -1743,7 +1743,9 @@ class MosaicEst:
             (mat_geno == 2) & (pat_geno == 0)
         )
         self.het_bafs = self.bafs[exp_het_idx]
+        self.het_idx = exp_het_idx
         self.n_het = self.het_bafs.size
+        self.signed_baf = False
         if self.n_het < 10:
             raise ValueError("Fewer than 10 expected heterozygotes!")
 
@@ -1767,12 +1769,36 @@ class MosaicEst:
             )
         pred_het_idx = embryo_geno == 1
         self.het_bafs = self.bafs[pred_het_idx]
+        self.het_idx = pred_het_idx
         self.n_het = self.het_bafs.size
+        self.signed_baf = False
         if self.n_het < 10:
             raise ValueError("Fewer than 10 expected heterozygotes!")
 
+    def phase_hets(self, **kwargs):
+        """Inferring the phase of heterozygotes for signed BAF."""
+        meta_hmm = MetaHMM(disomy=True)
+        path, karyo, _, _ = meta_hmm.viterbi_algorithm(
+            pos=self.pos,
+            mat_haps=self.mat_haps,
+            pat_haps=self.pat_haps,
+            bafs=self.bafs,
+            **kwargs,
+        )
+        # Conduct the phasing of heterozygotes here
+        baf_signs = np.zeros(self.het_idx.size)
+        for i, j in enumerate(self.het_idx):
+            # If the alt allele is maternal we give this a positive sign ...
+            if self.mat_haps[karyo[path[j]][0], j] == 1:
+                baf_signs[i] = 1
+            else:
+                baf_signs[i] = -1
+        self.signed_baf = True
+
     def create_transition_matrix(self, switch_err=0.01, t_rate=1e-4):
         """Create the transition matrix.
+
+        NOTE: should allow for asymmetry in the t_rates ...
 
         Arguments:
             - switch_err (`float`): rate parameter sibling copying model...
@@ -1804,14 +1830,16 @@ class MosaicEst:
         assert theta >= 0
         assert std_dev > 0.0
         assert self.A is not None
+        assert self.signed_baf
         n = self.het_bafs.size
         m = 3
         alphas = np.zeros(shape=(m, n))
         alphas[:, 0] = np.log(1.0 / m)
+        phased_baf = self.signed_baf * np.abs(self.het_bafs[0] - 0.5)
         # NOTE: I wonder if you don't have to use the truncation here and can instead just use the baf - 0.5f
-        alphas[0, 0] += norm_logl(self.het_bafs[0] - 0.5, -theta, std_dev)
-        alphas[1, 0] += norm_logl(self.het_bafs[0] - 0.5, 0.0, std_dev)
-        alphas[2, 0] += norm_logl(self.het_bafs[0] - 0.5, +theta, std_dev)
+        alphas[0, 0] += norm_logl(phased_baf[0], -theta, std_dev)
+        alphas[1, 0] += norm_logl(phased_baf[0], 0.0, std_dev)
+        alphas[2, 0] += norm_logl(phased_baf[0], theta, std_dev)
         scaler = np.zeros(n)
         scaler[0] = logsumexp(alphas[:, 0])
         alphas[:, 0] -= scaler[0]
@@ -1819,15 +1847,21 @@ class MosaicEst:
             for j in range(3):
                 # NOTE: there has to be a better way to do this ...
                 if j == 0:
-                    alphas[j, i] += norm_logl(self.het_bafs[i] - 0.5, -theta, std_dev)
+                    alphas[j, i] += norm_logl(phased_baf[i], -theta, std_dev)
                 elif j == 1:
-                    alphas[j, i] += norm_logl(self.het_bafs[i] - 0.5, 0.0, std_dev)
+                    alphas[j, i] += norm_logl(phased_baf[i], 0.0, std_dev)
                 else:
-                    alphas[j, i] += norm_logl(self.het_bafs[i] - 0.5, theta, std_dev)
+                    alphas[j, i] += norm_logl(phased_baf[i], theta, std_dev)
                 alphas[j, i] += logsumexp(self.A[:, j] + alphas[:, (i - 1)])
             scaler[i] = logsumexp(alphas[:, i])
             alphas[:, i] -= scaler[i]
         return alphas, scaler, np.sum(scaler)
+
+    def viterbi_algorithm(self, theta=0.0, std_dev=0.1):
+        """Viterbi algorithm implementation for phased BAF."""
+        raise NotImplementedError(
+            "Viterbi algorithm for boundary detection has not been implemented!"
+        )
 
     def lrt_theta(self, std_dev=0.1):
         """LRT of Theta not being 0."""
