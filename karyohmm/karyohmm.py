@@ -37,7 +37,7 @@ from karyohmm_utils import (
     viterbi_algo,
     viterbi_algo_sibs,
 )
-from scipy.optimize import brentq, brute, minimize
+from scipy.optimize import brentq, minimize
 from scipy.special import logsumexp as logsumexp_sp
 
 
@@ -1901,8 +1901,9 @@ class MosaicEst:
         """Estimate the MLE estimate of theta."""
         try:
             f = lambda x: -self.forward_algo_mix(theta=x, std_dev=std_dev)[2]
-            x0 = brute(func=f, ranges=[[0.0, 0.5]], disp=True, finish=None, Ns=25)
-            opt_res = minimize(f, x0=[x0], bounds=[(0.0, 0.5)])
+            opt_res = minimize(
+                f, x0=[0.1], method="Powell", tol=1e-4, bounds=[(0.0, 0.5)]
+            )
             self.mle_theta = opt_res.x[0]
         except ValueError:
             self.mle_theta = np.nan
