@@ -28,6 +28,23 @@ def test_pgt_sim(length, m, ploidy):
         assert np.any(data["baf"] == 0.0) | np.any(data["baf"] == 1.0)
 
 
+@pytest.mark.parametrize(
+    "mat_skew,ploidy,expected",
+    [
+        (0.9999, 1, "1p"),
+        (1e-4, 1, "1m"),
+        (0.9999, 3, "3m"),
+        (1e-4, 3, "3p"),
+        (0.9999, 2, "2"),
+        (1e-4, 2, "2"),
+    ],
+)
+def test_parental_origin_sim(mat_skew, ploidy, expected):
+    """Test the appropriate parental-origin for whole-chromosome simulations."""
+    data = pgt_sim.full_ploidy_sim(m=100, ploidy=ploidy, length=1e6, mat_skew=mat_skew)
+    assert data["aploid"] == expected
+
+
 @given(
     length=st.floats(min_value=1e2, max_value=1e8),
     m=st.integers(min_value=2, max_value=1000),
@@ -63,6 +80,25 @@ def test_pgt_segmental(m, ploidy, frac_chrom):
         assert not np.all(data["ploidies"] == 2)
     else:
         assert np.all(data["ploidies"] == 2)
+
+
+@pytest.mark.parametrize(
+    "mat_skew,ploidy,expected",
+    [
+        (0.9999, 1, "1p"),
+        (1e-4, 1, "1m"),
+        (0.9999, 3, "3m"),
+        (1e-4, 3, "3p"),
+        (0.9999, 2, "2"),
+        (1e-4, 2, "2"),
+    ],
+)
+def test_parental_origin_sim_segmental(mat_skew, ploidy, expected):
+    """Test the appropriate parental-origin for segmental simulation."""
+    data = pgt_sim_segmental.full_segmental_sim(
+        m=2000, ploidy=ploidy, mean_size=400, mat_skew=mat_skew
+    )
+    assert data["seg_aneuploidy_type"] == expected
 
 
 @pytest.fixture
@@ -106,3 +142,24 @@ def test_pgt_sim_from_vcf(valid_vcf_file):
     )
     results = pgt_sim.sim_from_haps(mat_haps=mat_haps, pat_haps=pat_haps, pos=pos)
     assert "baf" in results
+
+
+@given(
+    length=st.floats(min_value=1e2, max_value=1e8),
+    m=st.integers(min_value=100, max_value=3000),
+    k=st.integers(min_value=2, max_value=20),
+)
+@settings(max_examples=10, deadline=5000)
+def test_pgt_sim_ref_panel(length, m, k):
+    """Test for PGT simulations."""
+    data = pgt_sim.full_ploidy_sim(m=m, ploidy=2, length=length)
+    assert data["m"] == m
+    assert data["length"] == length
+    assert np.max(data["pos"]) <= length
+    assert "baf" in data.keys()
+    ref_panel = pgt_sim.sim_haplotype_ref_panel(
+        haps=data["mat_haps"], pos=data["pos"], panel_size=k
+    )
+    assert ref_panel.ndim == 2
+    assert ref_panel.shape[0] == k
+    assert ref_panel.shape[1] == m
