@@ -137,6 +137,23 @@ Options:
   --help                          Show this message and exit.
 ```
 
+### Use in Real Datasets
+
+For use in large-scale datasets, please refer to the following medRxiv preprint: 
+
+```
+Common variation in meiosis genes shapes human recombination phenotypes and aneuploidy risk
+Sara A. Carioscia, Arjun Biddanda, Margaret R. Starostik, Xiaona Tang, Eva R. Hoffmann, Zachary P. Demko, Rajiv C. McCoy
+medRxiv 2025.04.02.25325097; doi: https://doi.org/10.1101/2025.04.02.25325097
+```
+
+There is  also a set of two accompanying repositories that use `karyohmm` as an importable package in larger pipelines for aneuploidy discovery and recombination inference for the above preprint:
+
+```
+https://github.com/mccoy-lab/natera_aneuploidy
+https://github.com/mccoy-lab/natera_recomb
+```
+
 ## Contact
 
 Please submit an issue or contact @aabiddanda
