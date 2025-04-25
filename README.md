@@ -12,15 +12,23 @@ cd karyohmm/
 pip install .
 ```
 
-To install the package without cloning the entire repository, you can run: 
+To install the package without cloning the entire repository, you can run (though this will exclude some of the test data): 
 
 ```
 pip install git+https://github.com/mccoy-lab/karyohmm
 ```
 
-which should handle all of the key dependencies.
+which should handle all of the key dependencies. Installation should be completed within two minutes.
 
 While the majority of the interface uses `python`, many of the internal helper functions built using `Cython` (see the `karyohmm_utils.pyx` file)
+
+The software was tested on Mac OSX and Linux with the following dependencies and versions (using `python 3.10`): 
+```
+cyvcf2                               0.31.1
+numpy                                2.1.3
+pandas                               2.2.2
+scipy                                1.15.0
+```
 
 ## `MetaHMM`
 
