@@ -51,6 +51,10 @@ cdef double psi(double x):
     else:
         return log((1.0 + erf(x / sqrt2))) - log(2.0)
 
+cdef double logbinomial(int alt, int ref, double p):
+    """Log-probability mass function of the binomial distribution."""
+    return alt * log(p) + ref*log(1. - p)
+
 cdef double norm_pdf(double x):
     """PDF for the normal distribution function in log-space.
 
@@ -142,6 +146,19 @@ cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double
         return logaddexp(log(pi0) + x1, log((1 - pi0)) + x)
     else:
         return x
+
+
+cpdef double emission_readcounts(int alt, int ref, double m, double p, int k=2, double eps=1e-6):
+    """Emission distribution for read counts at specific SNVs.
+
+    NOTE: currently this only includes the emission for the balance between alleles
+    """
+    cdef double mu_i
+    if (m == -1) & (p == -1):
+        # This is the nullisomy case for allelic balance
+        return logbinomial(alt, ref, p=eps)
+    mu_i = (m + p)/k
+    return logbinomial(alt, ref, p=mu_i)
 
 cpdef double mix_loglik(double[:] bafs, double pi0=0.5, double theta=0.1, double std_dev=0.2):
     """Mixture log-likelihood for expected heterozygotes to estimate baf-deviation."""
