@@ -3,6 +3,7 @@
 import numpy as np
 from scipy.stats import (
     beta,
+    betabinom,
     binom,
     norm,
     poisson,
@@ -342,9 +343,45 @@ class PGTSimBase:
         lrr = norm.rvs(self.lrr_mu[ploidy], scale=self.lrr_sd[ploidy] * alpha, size=m)
         return lrr
 
-    def sim_read_counts(self, mat_hap, pat_hap, coverage=1.0):
-        """Simulate read counts for embryos."""
-        raise NotImplementedError("NGS-based simulation is not available yet!")
+    def sim_read_counts(
+        self, mat_hap, pat_hap, ploidy, coverage=1.0, a=10.0, b=10.0, seed=42
+    ):
+        """Simulate read counts for embryo biopsies.
+
+        Args:
+            mat_hap (`np.array`): 1 x M numpy array for maternal haplotype.
+            pat_hap (`np.array`): 1 x M numpy array for paternal haplotype.
+            pos (`np.array`): position of individual variants.
+            ploidy (`int`): integer of number of chromosomes being simulated.
+            coverage (`float`): mean coverage for a standard diploid individual.
+            a (`float`): shape parameter for beta-binomial.
+            b (`float`): scale parameter for beta-binomial.
+            seed (`int`): random number seed.
+
+
+        Output:
+            true_geno (`np.array`): the true genotype of the embryo.
+            alt_reads (`np.array`): the number of reads with alt. allele.
+            ref_reads (`np.array`): the number of reads with ref. allele.
+
+        """
+        assert seed > 0
+        assert coverage > 0.0
+        assert mat_hap.size == pat_hap.size
+        assert (a > 0) & (b > 0)
+        np.random.seed(seed)
+        true_geno = mat_hap + pat_hap
+        alt_read_cnt, ref_read_cnt = np.zeros(
+            true_geno.size, dtype=np.uint16
+        ), np.zeros(true_geno.size, dtype=np.uint16)
+        for i, g in enumerate(true_geno):
+            # 1. Simulate the total number of reads at the site
+            tot_reads = poisson.rvs(mean=coverage)
+            # 2. Simulate the total allelic balance
+            if tot_reads > 0:
+                alt_read_cnt[i] = betabinom.rvs(n=tot_reads, a=a, b=b)
+                ref_read_cnt[i] = tot_reads - alt_read_cnt[i]
+        return true_geno, alt_read_cnt, ref_read_cnt
 
     def sim_joint_het(self, switch=False, nsibs=1, meta_seed=42, **kwargs):
         """Simulate a joint heterozygote and potential switch error."""
