@@ -376,7 +376,7 @@ class PGTSimBase:
         ), np.zeros(true_geno.size, dtype=np.uint16)
         for i, g in enumerate(true_geno):
             # 1. Simulate the total number of reads at the site
-            tot_reads = poisson.rvs(mean=coverage)
+            tot_reads = poisson.rvs(mu=coverage)
             # 2. Simulate the total allelic balance
             if tot_reads > 0:
                 alt_read_cnt[i] = betabinom.rvs(n=tot_reads, a=a, b=b)
