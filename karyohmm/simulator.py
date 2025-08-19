@@ -432,7 +432,7 @@ class PGTSim(PGTSimBase):
         """
         super().__init__()
 
-    def full_ploidy_sim(
+    def full_ploidy_sim_baf(
         self,
         afs=None,
         ploidy=2,
@@ -503,7 +503,84 @@ class PGTSim(PGTSimBase):
         }
         return res_table
 
-    def sibling_euploid_sim(
+    def full_ploidy_sim_reads(
+        self,
+        afs=None,
+        ploidy=2,
+        m=10000,
+        length=1e7,
+        rec_rate=1e-4,
+        mat_skew=0.5,
+        std_dev=0.15,
+        mix_prop=0.3,
+        alpha=1.0,
+        coverage=5.0,
+        a=10.0,
+        b=10.0,
+        switch_err_rate=1e-2,
+        seed=42,
+    ):
+        """Simulate a single embryo biopsy with read-based data with a given ploidy status."""
+        np.random.seed(seed)
+        mat_haps, pat_haps, ps = self.draw_parental_genotypes(afs=afs, m=m, seed=seed)
+        pos = np.sort(np.random.uniform(high=length, size=m))
+        zs_maternal, zs_paternal, mat_hap1, pat_hap1, aploid = self.sim_haplotype_paths(
+            mat_haps,
+            pat_haps,
+            pos,
+            ploidy=ploidy,
+            mat_skew=mat_skew,
+            rec_rate=rec_rate,
+            seed=seed,
+        )
+        geno, alt_reads, ref_reads = self.sim_read_counts(
+            mat_hap1,
+            pat_hap1,
+            ploidy=ploidy,
+            coverage=coverage,
+            a=a,
+            b=b,
+            seed=seed,
+        )
+        (
+            mat_haps_prime,
+            pat_haps_prime,
+            mat_switch,
+            pat_switch,
+        ) = self.create_switch_errors(
+            mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
+        )
+        assert geno.size == m
+        assert alt_reads.size == m
+        assert ref_reads.size == m
+        assert pos.size == m
+        res_table = {
+            "mat_haps": mat_haps,
+            "pat_haps": pat_haps,
+            "mat_haps_prime": mat_haps_prime,
+            "pat_haps_prime": pat_haps_prime,
+            "mat_switch": mat_switch,
+            "pat_switch": pat_switch,
+            "zs_maternal": zs_maternal,
+            "zs_paternal": zs_paternal,
+            "geno_embryo": geno,
+            "alt_reads": alt_reads,
+            "ref_reads": ref_reads,
+            "pos": pos,
+            "af": ps,
+            "m": m,
+            "length": length,
+            "aploid": aploid,
+            "ploidy": ploidy,
+            "rec_rate": rec_rate,
+            "std_dev": std_dev,
+            "mix_prop": mix_prop,
+            "alpha": alpha,
+            "seed": seed,
+        }
+        return res_table
+
+    def sibling_euploid_sim_baf(
         self,
         afs=None,
         ploidy=2,
@@ -579,7 +656,7 @@ class PGTSim(PGTSimBase):
             res_table[f"zs_paternal{i}"] = zs_paternal
         return res_table
 
-    def sim_from_haps(
+    def sim_from_haps_baf(
         self,
         mat_haps,
         pat_haps,
