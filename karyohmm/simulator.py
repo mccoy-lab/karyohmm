@@ -683,6 +683,8 @@ class PGTSim(PGTSimBase):
                 mix_prop=mix_prop,
                 seed=seed,
             )
+            alt_reads = None
+            ref_reads = None
             assert geno.size == baf.size
             assert baf.size == pos.size
         res_table = {

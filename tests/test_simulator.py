@@ -19,7 +19,7 @@ pgt_sim_segmental = PGTSimSegmental()
 @settings(max_examples=100, deadline=5000)
 def test_pgt_sim_baf(length, m, ploidy):
     """Test for PGT simulations."""
-    data = pgt_sim.full_ploidy_sim_baf(m=m, ploidy=ploidy, length=length)
+    data = pgt_sim.full_ploidy_sim(m=m, ploidy=ploidy, length=length)
     assert data["m"] == m
     assert data["length"] == length
     assert np.max(data["pos"]) <= length
@@ -36,7 +36,7 @@ def test_pgt_sim_baf(length, m, ploidy):
 @settings(max_examples=100, deadline=5000)
 def test_pgt_sim_reads(length, m, ploidy):
     """Test for PGT simulations."""
-    data = pgt_sim.full_ploidy_sim_reads(m=m, ploidy=ploidy, length=length)
+    data = pgt_sim.full_ploidy_sim(m=m, reads=True, ploidy=ploidy, length=length)
     assert data["m"] == m
     assert data["length"] == length
     assert np.max(data["pos"]) <= length
@@ -59,9 +59,7 @@ def test_pgt_sim_reads(length, m, ploidy):
 )
 def test_parental_origin_sim(mat_skew, ploidy, expected):
     """Test the appropriate parental-origin for whole-chromosome simulations."""
-    data = pgt_sim.full_ploidy_sim_baf(
-        m=100, ploidy=ploidy, length=1e6, mat_skew=mat_skew
-    )
+    data = pgt_sim.full_ploidy_sim(m=100, ploidy=ploidy, length=1e6, mat_skew=mat_skew)
     assert data["aploid"] == expected
 
 
@@ -73,7 +71,7 @@ def test_parental_origin_sim(mat_skew, ploidy, expected):
 @settings(max_examples=20, deadline=5000)
 def test_pgt_siblings(length, m, nsib):
     """Test for PGT simulations."""
-    data = pgt_sim.sibling_euploid_sim_baf(nsibs=nsib, m=m, length=length)
+    data = pgt_sim.sibling_euploid_sim(nsibs=nsib, m=m, length=length)
     assert data["m"] == m
     assert data["length"] == length
     assert data["nsibs"] == nsib
@@ -81,6 +79,24 @@ def test_pgt_siblings(length, m, nsib):
     for i in range(nsib):
         assert f"baf_embryo{i}" in data.keys()
         assert f"geno_embryo{i}" in data.keys()
+
+
+@given(
+    length=st.floats(min_value=1e2, max_value=1e8),
+    m=st.integers(min_value=2, max_value=1000),
+    nsib=st.integers(min_value=2, max_value=5),
+)
+@settings(max_examples=20, deadline=5000)
+def test_pgt_siblings_reads(length, m, nsib):
+    """Test for PGT simulations."""
+    data = pgt_sim.sibling_euploid_sim(nsibs=nsib, reads=True, m=m, length=length)
+    assert data["m"] == m
+    assert data["length"] == length
+    assert data["nsibs"] == nsib
+    assert np.max(data["pos"]) <= length
+    for i in range(nsib):
+        assert f"alt_reads{i}" in data.keys()
+        assert f"ref_reads{i}" in data.keys()
 
 
 @given(
@@ -160,8 +176,12 @@ def test_pgt_sim_from_vcf(valid_vcf_file):
         gts012=True,
         threads=4,
     )
-    results = pgt_sim.sim_from_haps_baf(mat_haps=mat_haps, pat_haps=pat_haps, pos=pos)
+    results = pgt_sim.sim_from_haps(mat_haps=mat_haps, pat_haps=pat_haps, pos=pos)
     assert "baf" in results
+    assert "alt_reads" in results
+    assert "ref_reads" in results
+    assert results["alt_reads"] is None
+    assert results["ref_reads"] is None
 
 
 @given(
@@ -172,7 +192,7 @@ def test_pgt_sim_from_vcf(valid_vcf_file):
 @settings(max_examples=10, deadline=5000)
 def test_pgt_sim_ref_panel(length, m, k):
     """Test for PGT simulations."""
-    data = pgt_sim.full_ploidy_sim_baf(m=m, ploidy=2, length=length)
+    data = pgt_sim.full_ploidy_sim(m=m, ploidy=2, length=length)
     assert data["m"] == m
     assert data["length"] == length
     assert np.max(data["pos"]) <= length
