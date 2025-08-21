@@ -13,8 +13,6 @@ from scipy.stats import (
     uniform,
 )
 
-# These are the different classes of aneuploidy that we can putatively simulate from
-
 
 class PGTSimBase:
     """Base-class for simulation of PGT-A data."""
@@ -377,7 +375,7 @@ class PGTSimBase:
         for i, g in enumerate(true_geno):
             # 1. Simulate the total number of reads at the site
             tot_reads = poisson.rvs(mu=coverage)
-            # 2. Simulate the total allelic balance
+            # 2. Simulate the total allelic balance as beta-binomial
             if tot_reads > 0:
                 alt_read_cnt[i] = betabinom.rvs(n=tot_reads, a=a, b=b)
                 ref_read_cnt[i] = tot_reads - alt_read_cnt[i]
@@ -432,9 +430,10 @@ class PGTSim(PGTSimBase):
         """
         super().__init__()
 
-    def full_ploidy_sim_baf(
+    def full_ploidy_sim(
         self,
         afs=None,
+        reads=False,
         ploidy=2,
         m=10000,
         length=1e7,
@@ -443,6 +442,9 @@ class PGTSim(PGTSimBase):
         std_dev=0.15,
         mix_prop=0.3,
         alpha=1.0,
+        coverage=5.0,
+        a=10.0,
+        b=10.0,
         switch_err_rate=1e-2,
         seed=42,
     ):
@@ -459,14 +461,6 @@ class PGTSim(PGTSimBase):
             rec_rate=rec_rate,
             seed=seed,
         )
-        geno, baf = self.sim_b_allele_freq(
-            mat_hap1,
-            pat_hap1,
-            ploidy=ploidy,
-            std_dev=std_dev,
-            mix_prop=mix_prop,
-            seed=seed,
-        )
         (
             mat_haps_prime,
             pat_haps_prime,
@@ -475,8 +469,33 @@ class PGTSim(PGTSimBase):
         ) = self.create_switch_errors(
             mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
         )
-        assert geno.size == m
-        assert baf.size == m
+        if reads:
+            geno, alt_reads, ref_reads = self.sim_read_counts(
+                mat_hap1,
+                pat_hap1,
+                ploidy=ploidy,
+                coverage=coverage,
+                a=a,
+                b=b,
+                seed=seed,
+            )
+            baf = None
+            assert geno.size == m
+            assert alt_reads.size == m
+            assert ref_reads.size == m
+        else:
+            geno, baf = self.sim_b_allele_freq(
+                mat_hap1,
+                pat_hap1,
+                ploidy=ploidy,
+                std_dev=std_dev,
+                mix_prop=mix_prop,
+                seed=seed,
+            )
+            alt_reads = None
+            ref_reads = None
+            assert geno.size == m
+            assert baf.size == m
         assert pos.size == m
         res_table = {
             "mat_haps": mat_haps,
@@ -489,81 +508,6 @@ class PGTSim(PGTSimBase):
             "zs_paternal": zs_paternal,
             "geno_embryo": geno,
             "baf": baf,
-            "pos": pos,
-            "af": ps,
-            "m": m,
-            "length": length,
-            "aploid": aploid,
-            "ploidy": ploidy,
-            "rec_rate": rec_rate,
-            "std_dev": std_dev,
-            "mix_prop": mix_prop,
-            "alpha": alpha,
-            "seed": seed,
-        }
-        return res_table
-
-    def full_ploidy_sim_reads(
-        self,
-        afs=None,
-        ploidy=2,
-        m=10000,
-        length=1e7,
-        rec_rate=1e-4,
-        mat_skew=0.5,
-        std_dev=0.15,
-        mix_prop=0.3,
-        alpha=1.0,
-        coverage=5.0,
-        a=10.0,
-        b=10.0,
-        switch_err_rate=1e-2,
-        seed=42,
-    ):
-        """Simulate a single embryo biopsy with read-based data with a given ploidy status."""
-        np.random.seed(seed)
-        mat_haps, pat_haps, ps = self.draw_parental_genotypes(afs=afs, m=m, seed=seed)
-        pos = np.sort(np.random.uniform(high=length, size=m))
-        zs_maternal, zs_paternal, mat_hap1, pat_hap1, aploid = self.sim_haplotype_paths(
-            mat_haps,
-            pat_haps,
-            pos,
-            ploidy=ploidy,
-            mat_skew=mat_skew,
-            rec_rate=rec_rate,
-            seed=seed,
-        )
-        geno, alt_reads, ref_reads = self.sim_read_counts(
-            mat_hap1,
-            pat_hap1,
-            ploidy=ploidy,
-            coverage=coverage,
-            a=a,
-            b=b,
-            seed=seed,
-        )
-        (
-            mat_haps_prime,
-            pat_haps_prime,
-            mat_switch,
-            pat_switch,
-        ) = self.create_switch_errors(
-            mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
-        )
-        assert geno.size == m
-        assert alt_reads.size == m
-        assert ref_reads.size == m
-        assert pos.size == m
-        res_table = {
-            "mat_haps": mat_haps,
-            "pat_haps": pat_haps,
-            "mat_haps_prime": mat_haps_prime,
-            "pat_haps_prime": pat_haps_prime,
-            "mat_switch": mat_switch,
-            "pat_switch": pat_switch,
-            "zs_maternal": zs_maternal,
-            "zs_paternal": zs_paternal,
-            "geno_embryo": geno,
             "alt_reads": alt_reads,
             "ref_reads": ref_reads,
             "pos": pos,
@@ -580,9 +524,10 @@ class PGTSim(PGTSimBase):
         }
         return res_table
 
-    def sibling_euploid_sim_baf(
+    def sibling_euploid_sim(
         self,
         afs=None,
+        reads=False,
         ploidy=2,
         m=10000,
         length=1e7,
@@ -590,6 +535,10 @@ class PGTSim(PGTSimBase):
         rec_rate=1e-8,
         std_dev=0.15,
         mix_prop=0.3,
+        alpha=1.0,
+        coverage=5.0,
+        a=10.0,
+        b=10.0,
         switch_err_rate=1e-2,
         seed=42,
     ):
@@ -639,28 +588,47 @@ class PGTSim(PGTSimBase):
                 rec_rate=rec_rate,
                 seed=seed + i,
             )
-            geno, baf = self.sim_b_allele_freq(
-                mat_hap1,
-                pat_hap1,
-                ploidy=ploidy,
-                std_dev=std_dev,
-                mix_prop=mix_prop,
-                seed=seed + i,
-            )
-
-            assert geno.size == m
-            assert baf.size == m
+            if reads:
+                geno, alt_reads, ref_reads = self.sim_read_counts(
+                    mat_hap1,
+                    pat_hap1,
+                    ploidy=ploidy,
+                    coverage=coverage,
+                    a=a,
+                    b=b,
+                    seed=seed,
+                )
+                baf = None
+                assert geno.size == m
+                assert alt_reads.size == m
+                assert ref_reads.size == m
+            else:
+                geno, baf = self.sim_b_allele_freq(
+                    mat_hap1,
+                    pat_hap1,
+                    ploidy=ploidy,
+                    std_dev=std_dev,
+                    mix_prop=mix_prop,
+                    seed=seed + i,
+                )
+                alt_reads = None
+                ref_reads = None
+                assert geno.size == m
+                assert baf.size == m
             res_table[f"baf_embryo{i}"] = baf
             res_table[f"geno_embryo{i}"] = geno
+            res_table[f"alt_reads{i}"] = alt_reads
+            res_table[f"ref_reads{i}"] = ref_reads
             res_table[f"zs_maternal{i}"] = zs_maternal
             res_table[f"zs_paternal{i}"] = zs_paternal
         return res_table
 
-    def sim_from_haps_baf(
+    def sim_from_haps(
         self,
         mat_haps,
         pat_haps,
         pos,
+        reads=False,
         afs=None,
         ploidy=2,
         rec_rate=1e-8,
@@ -668,6 +636,9 @@ class PGTSim(PGTSimBase):
         std_dev=0.15,
         mix_prop=0.3,
         alpha=1.0,
+        coverage=5.0,
+        a=10.0,
+        b=10.0,
         switch_err_rate=1e-2,
         seed=42,
     ):
@@ -681,14 +652,6 @@ class PGTSim(PGTSimBase):
             rec_rate=rec_rate,
             seed=seed,
         )
-        geno, baf = self.sim_b_allele_freq(
-            mat_hap1,
-            pat_hap1,
-            ploidy=ploidy,
-            std_dev=std_dev,
-            mix_prop=mix_prop,
-            seed=seed,
-        )
         (
             mat_haps_prime,
             pat_haps_prime,
@@ -697,8 +660,31 @@ class PGTSim(PGTSimBase):
         ) = self.create_switch_errors(
             mat_haps, pat_haps, err_rate=switch_err_rate, seed=seed
         )
-        assert geno.size == baf.size
-        assert pos.size == baf.size
+        if reads:
+            geno, alt_reads, ref_reads = self.sim_read_counts(
+                mat_hap1,
+                pat_hap1,
+                ploidy=ploidy,
+                coverage=coverage,
+                a=a,
+                b=b,
+                seed=seed,
+            )
+            baf = None
+            assert geno.size == pos.size
+            assert alt_reads.size == pos.size
+            assert ref_reads.size == pos.size
+        else:
+            geno, baf = self.sim_b_allele_freq(
+                mat_hap1,
+                pat_hap1,
+                ploidy=ploidy,
+                std_dev=std_dev,
+                mix_prop=mix_prop,
+                seed=seed,
+            )
+            assert geno.size == baf.size
+            assert baf.size == pos.size
         res_table = {
             "mat_haps": mat_haps,
             "pat_haps": pat_haps,
@@ -710,6 +696,8 @@ class PGTSim(PGTSimBase):
             "zs_paternal": zs_paternal,
             "geno_embryo": geno,
             "baf": baf,
+            "alt_reads": alt_reads,
+            "ref_reads": ref_reads,
             "pos": pos,
             "af": np.ones(baf.size) * np.nan if afs is None else afs,
             "aploid": aploid,

@@ -242,7 +242,9 @@ def create_index_arrays(karyotypes):
 
 
 cpdef transition_kernel(K0, K1, double d=1e3, double r=1e-8, double a=1e-2, int unphased=0):
-    # NOTE: should see if we need to do this in log-space for numerics ...
+    """Estimates the transition functions
+
+    """
     cdef int i, m
     cdef double rho, alpha
     m = K0.shape[0]
