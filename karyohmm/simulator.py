@@ -342,7 +342,7 @@ class PGTSimBase:
         return lrr
 
     def sim_read_counts(
-        self, mat_hap, pat_hap, ploidy, coverage=1.0, a=10.0, b=10.0, seed=42
+        self, mat_hap, pat_hap, ploidy, coverage=1.0, a=10.0, b=10.0, eps=1e-2, seed=42
     ):
         """Simulate read counts for embryo biopsies.
 
@@ -354,6 +354,7 @@ class PGTSimBase:
             coverage (`float`): mean coverage for a standard diploid individual.
             a (`float`): shape parameter for beta-binomial.
             b (`float`): scale parameter for beta-binomial.
+            eps (`float`):
             seed (`int`): random number seed.
 
 
@@ -367,6 +368,8 @@ class PGTSimBase:
         assert coverage > 0.0
         assert mat_hap.size == pat_hap.size
         assert (a > 0) & (b > 0)
+        assert ploidy in [0, 1, 2, 3]
+        assert (0 < eps) & (eps <= 0.5)
         np.random.seed(seed)
         true_geno = mat_hap + pat_hap
         alt_read_cnt, ref_read_cnt = np.zeros(
@@ -374,10 +377,15 @@ class PGTSimBase:
         ), np.zeros(true_geno.size, dtype=np.uint16)
         for i, g in enumerate(true_geno):
             # 1. Simulate the total number of reads at the site
-            tot_reads = poisson.rvs(mu=coverage)
-            # 2. Simulate the total allelic balance as beta-binomial
+            tot_reads = poisson.rvs(mu=coverage * ((ploidy + eps) / 2.0))
+            # 2. Simulate the total allelic balance as from a beta-binomial random-variable
             if tot_reads > 0:
-                alt_read_cnt[i] = betabinom.rvs(n=tot_reads, a=a, b=b)
+                p = (g + eps) / ploidy if ploidy > 0 else eps
+                p = (p - 2 * eps) if p > 1 else p
+                assert (p > 0) & (p < 1)
+                alt_read_cnt[i] = betabinom.rvs(
+                    n=tot_reads, a=p * (a + b), b=(1.0 - p) * (a + b)
+                )
                 ref_read_cnt[i] = tot_reads - alt_read_cnt[i]
         return true_geno, alt_read_cnt, ref_read_cnt
 
