@@ -1221,6 +1221,7 @@ class PGTSimSegmental(PGTSimBase):
 
     def full_segmental_sim(
         self,
+        reads=False,
         afs=None,
         ploidy=2,
         m=10000,
@@ -1230,6 +1231,9 @@ class PGTSimSegmental(PGTSimBase):
         std_dev=0.1,
         mix_prop=0.7,
         mean_size=10,
+        coverage=5.0,
+        a=10.0,
+        b=10.0,
         switch_err_rate=1e-2,
         seed=42,
     ):
@@ -1261,9 +1265,31 @@ class PGTSimSegmental(PGTSimBase):
             rec_rate=rec_rate,
             seed=seed,
         )
-        geno, baf, _ = self.sim_b_allele_freq_segmental(
-            mat_hap1, pat_hap1, ploidies, std_dev=std_dev, mix_prop=mix_prop, seed=seed
-        )
+        if reads:
+            geno, alt_reads, ref_reads = self.sim_read_counts(
+                mat_hap1,
+                pat_hap1,
+                ploidy=ploidies,
+                coverage=coverage,
+                a=a,
+                b=b,
+                seed=seed,
+            )
+            baf = None
+            assert geno.size == m
+            assert alt_reads.size == m
+            assert ref_reads.size == m
+        else:
+            geno, baf, _ = self.sim_b_allele_freq_segmental(
+                mat_hap1,
+                pat_hap1,
+                ploidies,
+                std_dev=std_dev,
+                mix_prop=mix_prop,
+                seed=seed,
+            )
+            alt_reads = None
+            ref_reads = None
         (
             mat_haps_prime,
             pat_haps_prime,
@@ -1285,6 +1311,8 @@ class PGTSimSegmental(PGTSimBase):
             "seg_end": end,
             "geno_embryo": geno,
             "baf": baf,
+            "alt_reads": alt_reads,
+            "ref_reads": ref_reads,
             "af": ps,
             "pos": pos,
             "m": m,
@@ -1300,15 +1328,25 @@ class PGTSimSegmental(PGTSimBase):
         mat_haps,
         pat_haps,
         pos,
+        reads=False,
         afs=None,
         rec_rate=1e-4,
         std_dev=0.1,
         mix_prop=0.7,
         mean_size=10,
+        coverage=5.0,
+        a=10.0,
+        b=10.0,
         switch_err_rate=1e-2,
         seed=42,
     ):
         """Simulate a segmental aneuploidy from known haplotypes."""
+        assert mat_haps.ndim == 2
+        assert pat_haps.ndim == 2
+        assert mat_haps.size == pat_haps.size
+        assert mat_haps.shape[1] == pos.size
+        assert pat_haps.shape[1] == pos.size
+        m = pos.size
         (
             mat_hap1,
             pat_hap1,
@@ -1328,9 +1366,29 @@ class PGTSimSegmental(PGTSimBase):
             mean_size=mean_size,
             seed=seed,
         )
-        geno, baf, ploidies = self.sim_b_allele_freq_segmental(
-            mat_hap1, pat_hap1, ploidies, std_dev=std_dev, mix_prop=mix_prop, seed=seed
-        )
+        if reads:
+            geno, alt_reads, ref_reads = self.sim_read_counts(
+                mat_hap1,
+                pat_hap1,
+                ploidy=ploidies,
+                coverage=coverage,
+                a=a,
+                b=b,
+                seed=seed,
+            )
+            baf = None
+            assert geno.size == m
+            assert alt_reads.size == m
+            assert ref_reads.size == m
+        else:
+            geno, baf, ploidies = self.sim_b_allele_freq_segmental(
+                mat_hap1,
+                pat_hap1,
+                ploidies,
+                std_dev=std_dev,
+                mix_prop=mix_prop,
+                seed=seed,
+            )
         (
             mat_haps_prime,
             pat_haps_prime,
@@ -1350,6 +1408,8 @@ class PGTSimSegmental(PGTSimBase):
             "seg_end": end,
             "geno_embryo": geno,
             "baf": baf,
+            "alt_reads": alt_reads,
+            "ref_reads": ref_reads,
             "af": np.ones(baf.size) * np.nan if afs is None else afs,
             "pos": pos,
             "rec_rate": rec_rate,
