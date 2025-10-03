@@ -354,9 +354,8 @@ class PGTSimBase:
             coverage (`float`): mean coverage for a standard diploid individual.
             a (`float`): shape parameter for beta-binomial.
             b (`float`): scale parameter for beta-binomial.
-            eps (`float`):
+            eps (`float`): small noise parameter.
             seed (`int`): random number seed.
-
 
         Output:
             true_geno (`np.array`): the true genotype of the embryo.
@@ -1164,6 +1163,61 @@ class PGTSimSegmental(PGTSimBase):
                 else:
                     baf[i] = truncnorm.rvs(a, b, loc=mu_i, scale=std_dev)
         return true_geno, baf, ploidies
+
+    def sim_read_counts_segmental(
+        self,
+        mat_hap,
+        pat_hap,
+        ploidies,
+        coverage=1.0,
+        a=10.0,
+        b=10.0,
+        eps=1e-2,
+        seed=42,
+    ):
+        """Simulate read counts for segmental embryo biopsies.
+
+        Args:
+            mat_hap (`np.array`): 1 x M numpy array for maternal haplotype.
+            pat_hap (`np.array`): 1 x M numpy array for paternal haplotype.
+            ploidies (`np.array`): ploidy count of number of chromosomes being simulated.
+            coverage (`float`): mean coverage for a standard diploid individual.
+            a (`float`): shape parameter for beta-binomial.
+            b (`float`): scale parameter for beta-binomial.
+            eps (`float`): small noise parameter.
+            seed (`int`): random number seed.
+
+        Output:
+            true_geno (`np.array`): the true genotype of the embryo.
+            alt_reads (`np.array`): the number of reads with alt. allele.
+            ref_reads (`np.array`): the number of reads with ref. allele.
+
+        """
+        assert seed > 0
+        assert coverage > 0.0
+        assert mat_hap.size == pat_hap.size
+        assert ploidies.size == mat_hap.size
+        assert (a > 0) & (b > 0)
+        assert np.all(np.isin(ploidies, [0, 1, 2, 3]))
+        assert (0 < eps) & (eps <= 0.5)
+        np.random.seed(seed)
+        true_geno = mat_hap + pat_hap
+        alt_read_cnt, ref_read_cnt = np.zeros(
+            true_geno.size, dtype=np.uint16
+        ), np.zeros(true_geno.size, dtype=np.uint16)
+        for i, g in enumerate(true_geno):
+            # 1. Simulate the total number of reads at the site
+            tot_reads = poisson.rvs(mu=coverage * ((ploidies[i] + eps) / 2.0))
+            # 2. Simulate the total allelic balance as from a beta-binomial random-variable
+            if tot_reads > 0:
+                p = (g + eps) / ploidies[i] if ploidies[i] > 0 else eps
+                p = (p - 2 * eps) if p > 1 else p
+                assert (p > 0) & (p < 1)
+                alt_read_cnt[i] = betabinom.rvs(
+                    n=tot_reads, a=p * (a + b), b=(1.0 - p) * (a + b)
+                )
+                ref_read_cnt[i] = tot_reads - alt_read_cnt[i]
+        return true_geno, alt_read_cnt, ref_read_cnt
 
     def full_segmental_sim(
         self,
