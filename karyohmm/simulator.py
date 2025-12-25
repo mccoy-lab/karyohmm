@@ -719,6 +719,25 @@ class PGTSim(PGTSimBase):
         }
         return res_table
 
+    def sim_cell_contamination(self, baf, haps, fraction=0.01, seed=42, **kwargs):
+        """
+        Draft method to simulate cell contamination.
+        """
+        assert fraction >= 0.0
+        assert fraction < 1.0
+        assert baf.ndim == 1
+        assert haps.ndim == 2
+        assert baf.size == haps.shape[1]
+        assert seed > 0
+        np.random.seed(seed)
+        m = baf.size
+        cc_baf = np.zeros(m)
+        for i in range(m):
+            geno = np.sum(haps[:, i]) / 2.0
+            # Generally the estimates should be
+            cc_baf[i] = (1.0 - fraction) * baf[i] + fraction * geno
+        return cc_baf
+
 
 class PGTSimMosaic(PGTSimBase):
     """Simulator for mosaic aneuploidies."""
