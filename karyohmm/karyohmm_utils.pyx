@@ -148,6 +148,10 @@ cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double
         return x
 
 
+cpdef double emission_lrr(double lrr, double std_dev=0.2):
+    """"""
+    pass
+
 cpdef double emission_readcounts(int alt, int ref, double m, double p, int k=2, double eps=1e-6):
     """Emission distribution for read counts at specific SNVs.
 

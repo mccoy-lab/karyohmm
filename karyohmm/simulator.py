@@ -733,8 +733,9 @@ class PGTSim(PGTSimBase):
         m = baf.size
         cc_baf = np.zeros(m)
         for i in range(m):
+            # Dosage of the parental individual
             geno = np.sum(haps[:, i]) / 2.0
-            # Generally the estimates should be
+            # Mixture of 
             cc_baf[i] = (1.0 - fraction) * baf[i] + fraction * geno
         return cc_baf
 
