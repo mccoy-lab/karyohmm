@@ -19,7 +19,7 @@ class PGTSimBase:
 
     def __init__(self):
         """Initialize the PGT-A Simulator."""
-        # NOTE: the initial SDs are derived from the PENNCNV source code
+        # NOTE: the initial SDs are derived from the PENNCNV source code - but scaled
         self.lrr_mu = {0: -3.527211, 1: np.log2(0.5), 2: np.log2(1.0), 3: np.log2(1.5)}
         self.lrr_sd = {0: 1.329152, 1: 0.284338, 2: 0.159645, 3: 0.209089}
 
@@ -265,10 +265,7 @@ class PGTSimBase:
                     ]
                 )
                 pat_real_hap = np.array(
-                    [
-                        pat_haps[i, p]
-                        for p, (i, j) in enumerate(zip(zs0_paternal, zs1_paternal))
-                    ]
+                    [pat_haps[i, p] for p, (i, j) in enumerate(zs_paternal)]
                 )
                 aploid = "3m"
         elif ploidy == 2:
@@ -293,6 +290,122 @@ class PGTSimBase:
             aploid = "2"
         else:
             raise ValueError(f"{ploidy} should be between 0 and 3!")
+        return zs_maternal, zs_paternal, mat_real_hap, pat_real_hap, aploid
+
+    def sim_haplotype_paths_upd(
+        self,
+        mat_haps,
+        pat_haps,
+        pos,
+        ploidy=2,
+        aploid="2p0",
+        rec_rate=1e-8,
+        mat_skew=0.5,
+        seed=42,
+    ):
+        """Extension to simulate haplotype-copying paths under uniparental disomy."""
+        assert mat_haps.size == pat_haps.size
+        assert (pos.ndim == 1) and (pos.size == mat_haps.shape[1])
+        assert np.all(np.diff(pos) > 0)
+        assert aploid in ["2p0", "2p1", "2m0", "2m1"]
+        if ploidy != 2:
+            raise ValueError(f"{ploidy} should be 2 when simulating a UPD event!")
+        np.random.seed(seed)
+        m = mat_haps.shape[1]
+        # Simulating the hidden variables ...
+        zs_maternal = np.zeros(m, dtype=np.uint16)
+        zs_paternal = np.zeros(m, dtype=np.uint16)
+        zs0_maternal = np.zeros(m, dtype=np.uint16)
+        zs1_maternal = np.zeros(m, dtype=np.uint16)
+        zs0_paternal = np.zeros(m, dtype=np.uint16)
+        zs1_paternal = np.zeros(m, dtype=np.uint16)
+        if aploid == "2p0":
+            # Case: paternal isodisomy
+            zs_paternal[0] = binom.rvs(0, 0.5)
+            for i in range(1, m):
+                # We switch with a specific probability
+                d = pos[i] - pos[i - 1]
+                zs_paternal[i] = (
+                    1 - zs_paternal[i - 1]
+                    if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
+                    else zs_paternal[i - 1]
+                )
+            pat_real_hap = np.array(
+                [
+                    pat_haps[i, p] + pat_haps[j, p]
+                    for p, (i, j) in enumerate(zip(zs_paternal, zs_paternal))
+                ]
+            )
+            mat_real_hap = np.zeros(m, dtype=np.uint16)
+        elif aploid == "2p1":
+            # Case: paternal heterodisomy
+            zs0_paternal[0] = binom.rvs(0, 0.5)
+            zs1_paternal[0] = binom.rvs(0, 0.5)
+            # We switch with a specific probability
+            for i in range(1, m):
+                d = pos[i] - pos[i - 1]
+                zs0_paternal[i] = (
+                    1 - zs0_paternal[i - 1]
+                    if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
+                    else zs0_paternal[i - 1]
+                )
+                zs1_paternal[i] = (
+                    1 - zs1_paternal[i - 1]
+                    if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
+                    else zs1_paternal[i - 1]
+                )
+            zs_paternal = np.vstack([zs0_paternal, zs1_paternal])
+            pat_real_hap = np.array(
+                [
+                    pat_haps[i, p] + pat_haps[j, p]
+                    for p, (i, j) in enumerate(zip(zs0_paternal, zs1_paternal))
+                ]
+            )
+            mat_real_hap = np.zeros(m, dtype=np.uint16)
+        elif aploid == "2m0":
+            # Case: maternal isodisomy
+            zs_maternal[0] = binom.rvs(0, 0.5)
+            for i in range(1, m):
+                # We switch with a specific probability
+                d = pos[i] - pos[i - 1]
+                zs_maternal[i] = (
+                    1 - zs_maternal[i - 1]
+                    if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
+                    else zs_maternal[i - 1]
+                )
+            mat_real_hap = np.array(
+                [
+                    mat_haps[i, p] + mat_haps[j, p]
+                    for p, (i, j) in enumerate(zip(zs_maternal, zs_maternal))
+                ]
+            )
+            pat_real_hap = np.zeros(m, dtype=np.uint16)
+        else:
+            # Case: maternal heterodisomy
+            zs0_maternal[0] = binom.rvs(0, 0.5)
+            zs1_maternal[0] = binom.rvs(0, 0.5)
+            # We switch with a specific probability
+            for i in range(1, m):
+                d = pos[i] - pos[i - 1]
+                zs0_maternal[i] = (
+                    1 - zs0_paternal[i - 1]
+                    if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
+                    else zs0_maternal[i - 1]
+                )
+                zs1_paternal[i] = (
+                    1 - zs1_maternal[i - 1]
+                    if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
+                    else zs1_maternal[i - 1]
+                )
+            zs_maternal = np.vstack([zs0_maternal, zs1_maternal])
+            mat_real_hap = np.array(
+                [
+                    pat_haps[i, p] + pat_haps[j, p]
+                    for p, (i, j) in enumerate(zip(zs0_maternal, zs1_maternal))
+                ]
+            )
+            pat_real_hap = np.zeros(m, dtype=np.uint16)
+            aploid = "2m1"
         return zs_maternal, zs_paternal, mat_real_hap, pat_real_hap, aploid
 
     def sim_b_allele_freq(
