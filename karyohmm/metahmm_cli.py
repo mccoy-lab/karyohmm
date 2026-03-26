@@ -34,13 +34,6 @@ logging.basicConfig(
     help="Viterbi algorithm for tracing ploidy states.",
 )
 @click.option(
-    "--mode",
-    required=True,
-    default="Meta",
-    type=click.Choice(["Meta", "Duo"]),
-    show_default=True,
-)
-@click.option(
     "--algo",
     required=False,
     default="Powell",
@@ -103,7 +96,6 @@ logging.basicConfig(
 def main(
     input,
     viterbi=False,
-    mode="Meta",
     algo="Powell",
     thin=1,
     recomb_rate=1e-8,
@@ -118,14 +110,7 @@ def main(
     data_df = data_reader.read_data(input)
     assert data_df is not None
     logging.info(f"Finished reading in {input}.")
-    if mode == "Meta":
-        hmm = MetaHMM()
-    elif mode == "Duo":
-        hmm = DuoHMM()
-    else:
-        raise NotImplementedError(
-            f"Mode {mode} is not currently supported  in karyoHMM!"
-        )
+    hmm = MetaHMM()
     # Keep accumulators of the various dataframes to be output
     kar_dfs = []
     path_dfs = []

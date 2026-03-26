@@ -23,6 +23,11 @@ data_disomy_sibs_test_3percent = pgt_sim.sibling_euploid_sim(
 )
 
 
+def geno2baf(geno):
+    """Simple function to take a genotype and convert to BAF."""
+    return geno / 2.0
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -73,7 +78,7 @@ def test_phase_correct_viterbi(data):
 )
 def test_phase_perfect_viterbi(data):
     """Test a phase correction using the viterbi-copying path under disomy."""
-    geno2baf = lambda geno: geno / 2.0
+
     phase_correct = PhaseCorrect(
         mat_haps=data["mat_haps_real"], pat_haps=data["pat_haps_real"], pos=data["pos"]
     )

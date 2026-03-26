@@ -1,4 +1,4 @@
-"""CLI for karyohmm."""
+"""CLI for karyohmm applied to products-of-conception."""
 
 import logging
 
@@ -6,7 +6,7 @@ import rich_click as click
 import numpy as np
 import pandas as pd
 
-from karyohmm import DataReader
+from karyohmm import DataReader, MetaHMM
 
 # Setup the logging configuration for the CLI
 logging.basicConfig(
@@ -121,7 +121,7 @@ def main(
     if mode == "Meta":
         hmm = MetaHMM()
     elif mode == "Duo":
-        hmm = DuoHMM()
+        hmm = PocHMM()
     else:
         raise NotImplementedError(
             f"Mode {mode} is not currently supported  in karyoHMM!"

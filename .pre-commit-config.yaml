@@ -22,6 +22,7 @@ repos:
   - id: ruff-check
     types_or: [ python, pyi ]
     args: [--fix]
+    ignore: [E731]
   - id: ruff-format
     types_or: [ python, pyi ]
 - repo: https://github.com/MarcoGorelli/cython-lint

@@ -557,6 +557,7 @@ class PGTSim(PGTSimBase):
         reads=False,
         ploidy=2,
         m=10000,
+        upd=None,
         length=1e7,
         rec_rate=1e-4,
         mat_skew=0.5,
@@ -573,15 +574,31 @@ class PGTSim(PGTSimBase):
         np.random.seed(seed)
         mat_haps, pat_haps, ps = self.draw_parental_genotypes(afs=afs, m=m, seed=seed)
         pos = np.sort(np.random.uniform(high=length, size=m))
-        zs_maternal, zs_paternal, mat_hap1, pat_hap1, aploid = self.sim_haplotype_paths(
-            mat_haps,
-            pat_haps,
-            pos,
-            ploidy=ploidy,
-            mat_skew=mat_skew,
-            rec_rate=rec_rate,
-            seed=seed,
-        )
+        if (ploidy == 2) and (upd is not None):
+            assert upd in ["2p0", "2p1", "2m0", "2m1"]
+            zs_maternal, zs_paternal, mat_hap1, pat_hap1, aploid = (
+                self.sim_haplotype_paths(
+                    mat_haps,
+                    pat_haps,
+                    pos,
+                    ploidy=ploidy,
+                    aploid=upd,
+                    rec_rate=rec_rate,
+                    seed=seed,
+                )
+            )
+        else:
+            zs_maternal, zs_paternal, mat_hap1, pat_hap1, aploid = (
+                self.sim_haplotype_paths(
+                    mat_haps,
+                    pat_haps,
+                    pos,
+                    ploidy=ploidy,
+                    mat_skew=mat_skew,
+                    rec_rate=rec_rate,
+                    seed=seed,
+                )
+            )
         (
             mat_haps_prime,
             pat_haps_prime,
