@@ -3,7 +3,7 @@
 import gzip as gz
 import logging
 
-import click
+import rich_click as click
 import numpy as np
 
 from karyohmm import PGTSim, PGTSimSegmental, PGTSimVCF

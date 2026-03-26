@@ -2,11 +2,11 @@
 
 import logging
 
-import click
+import rich_click as click
 import numpy as np
 import pandas as pd
 
-from karyohmm import DataReader, DuoHMM, MetaHMM
+from karyohmm import DataReader, MetaHMM
 
 # Setup the logging configuration for the CLI
 logging.basicConfig(

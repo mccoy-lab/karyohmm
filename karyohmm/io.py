@@ -1,6 +1,6 @@
 """Classes for reading in data for karyoHMM.
 
-Implements methods for both MetaHMM and DuoHMM-based datasets.
+Implements methods for both MetaHMM and PoCHMM-based datasets.
 """
 
 import numpy as np
@@ -119,13 +119,7 @@ class DataReader:
         elif ".txt" in input_fp:
             sep = " "
         df = pd.read_csv(input_fp, dtype=self.dtypes, sep=sep)
-        for x in [
-            "chrom",
-            "pos",
-            "ref",
-            "alt",
-            "baf",
-        ]:
+        for x in ["chrom", "pos", "ref", "alt", "baf", "lrr"]:
             assert x in df.columns
         if self.mode != "Duo":
             for x in ["mat_hap0", "mat_hap1", "pat_hap0", "pat_hap1"]:
