@@ -1,4 +1,5 @@
 """Test suite for karyoHMM MetaHMM."""
+
 import numpy as np
 import pytest
 from karyohmm_utils import create_index_arrays, transition_kernel

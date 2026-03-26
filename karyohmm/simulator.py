@@ -371,9 +371,10 @@ class PGTSimBase:
         assert (0 < eps) & (eps <= 0.5)
         np.random.seed(seed)
         true_geno = mat_hap + pat_hap
-        alt_read_cnt, ref_read_cnt = np.zeros(
-            true_geno.size, dtype=np.uint16
-        ), np.zeros(true_geno.size, dtype=np.uint16)
+        alt_read_cnt, ref_read_cnt = (
+            np.zeros(true_geno.size, dtype=np.uint16),
+            np.zeros(true_geno.size, dtype=np.uint16),
+        )
         for i, g in enumerate(true_geno):
             # 1. Simulate the total number of reads at the site
             tot_reads = poisson.rvs(mu=coverage * ((ploidy + eps) / 2.0))
@@ -487,6 +488,7 @@ class PGTSim(PGTSimBase):
                 seed=seed,
             )
             baf = None
+            lrr = None
             assert geno.size == m
             assert alt_reads.size == m
             assert ref_reads.size == m
@@ -498,6 +500,9 @@ class PGTSim(PGTSimBase):
                 std_dev=std_dev,
                 mix_prop=mix_prop,
                 seed=seed,
+            )
+            lrr = self.sim_logR_ratio(
+                mat_hap1, pat_hap1, ploidy=ploidy, alpha=alpha, seed=seed
             )
             alt_reads = None
             ref_reads = None
@@ -515,6 +520,7 @@ class PGTSim(PGTSimBase):
             "zs_paternal": zs_paternal,
             "geno_embryo": geno,
             "baf": baf,
+            "lrr": lrr,
             "alt_reads": alt_reads,
             "ref_reads": ref_reads,
             "pos": pos,
@@ -606,6 +612,7 @@ class PGTSim(PGTSimBase):
                     seed=seed,
                 )
                 baf = None
+                lrr = None
                 assert geno.size == m
                 assert alt_reads.size == m
                 assert ref_reads.size == m
@@ -618,11 +625,15 @@ class PGTSim(PGTSimBase):
                     mix_prop=mix_prop,
                     seed=seed + i,
                 )
+                lrr = self.sim_logR_ratio(
+                    mat_hap1, pat_hap1, ploidy=ploidy, alpha=alpha, seed=seed
+                )
                 alt_reads = None
                 ref_reads = None
                 assert geno.size == m
                 assert baf.size == m
             res_table[f"baf_embryo{i}"] = baf
+            res_table[f"lrr_embryo{i}"] = lrr
             res_table[f"geno_embryo{i}"] = geno
             res_table[f"alt_reads{i}"] = alt_reads
             res_table[f"ref_reads{i}"] = ref_reads
@@ -678,6 +689,7 @@ class PGTSim(PGTSimBase):
                 seed=seed,
             )
             baf = None
+            lrr = None
             assert geno.size == pos.size
             assert alt_reads.size == pos.size
             assert ref_reads.size == pos.size
@@ -689,6 +701,9 @@ class PGTSim(PGTSimBase):
                 std_dev=std_dev,
                 mix_prop=mix_prop,
                 seed=seed,
+            )
+            lrr = self.sim_logR_ratio(
+                mat_hap1, pat_hap1, ploidy=ploidy, alpha=alpha, seed=seed
             )
             alt_reads = None
             ref_reads = None
@@ -705,6 +720,7 @@ class PGTSim(PGTSimBase):
             "zs_paternal": zs_paternal,
             "geno_embryo": geno,
             "baf": baf,
+            "lrr": lrr,
             "alt_reads": alt_reads,
             "ref_reads": ref_reads,
             "pos": pos,
@@ -733,9 +749,9 @@ class PGTSim(PGTSimBase):
         m = baf.size
         cc_baf = np.zeros(m)
         for i in range(m):
-            # Dosage of the parental individual
+            # Dosage of the contaminating parental individual
             geno = np.sum(haps[:, i]) / 2.0
-            # Mixture of 
+            # Mixture of the existing BAF + genotype-specific BAF ...
             cc_baf[i] = (1.0 - fraction) * baf[i] + fraction * geno
         return cc_baf
 
@@ -1222,9 +1238,10 @@ class PGTSimSegmental(PGTSimBase):
         assert (0 < eps) & (eps <= 0.5)
         np.random.seed(seed)
         true_geno = mat_hap + pat_hap
-        alt_read_cnt, ref_read_cnt = np.zeros(
-            true_geno.size, dtype=np.uint16
-        ), np.zeros(true_geno.size, dtype=np.uint16)
+        alt_read_cnt, ref_read_cnt = (
+            np.zeros(true_geno.size, dtype=np.uint16),
+            np.zeros(true_geno.size, dtype=np.uint16),
+        )
         for i, g in enumerate(true_geno):
             # 1. Simulate the total number of reads at the site
             tot_reads = poisson.rvs(mu=coverage * ((ploidies[i] + eps) / 2.0))

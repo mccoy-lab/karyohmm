@@ -1,4 +1,5 @@
 """Test suite for simulation of PGT-A data."""
+
 import numpy as np
 import pytest
 from hypothesis import given, settings

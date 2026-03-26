@@ -1,13 +1,12 @@
 """CLI for simulating synthetic aneuploidy data in karyoHMM."""
+
 import gzip as gz
 import logging
-import sys
 
 import click
 import numpy as np
-import pandas as pd
 
-from karyohmm import PGTSim, PGTSimMosaic, PGTSimSegmental, PGTSimVCF
+from karyohmm import PGTSim, PGTSimSegmental, PGTSimVCF
 
 # Setup the logging configuration for the CLI
 logging.basicConfig(

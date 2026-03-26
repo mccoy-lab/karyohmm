@@ -147,21 +147,25 @@ cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double
     else:
         return x
 
-
-cpdef double emission_lrr(double lrr, double std_dev=0.2):
-    """"""
-    pass
+cpdef double emission_lrr(double lrr, int k=2, double std_dev=0.2):
+    """Calculate the emission for LRR conditional on ploidy."""
+    mu_i = {0: -3,
+        1: -1,
+        2: 0,
+        3: np.log2(1.5)
+    }
+    return norm_logl(lrr, mu_i[k], std_dev)
 
 cpdef double emission_readcounts(int alt, int ref, double m, double p, int k=2, double eps=1e-6):
     """Emission distribution for read counts at specific SNVs.
 
-    NOTE: currently this only includes the emission for the balance between alleles
+    NOTE: currently this only includes the emission for the balance between alleles vs. total coverage
     """
     cdef double mu_i
     if (m == -1) & (p == -1):
         # This is the nullisomy case for allelic balance
         return logbinomial(alt, ref, p=eps)
-    mu_i = (m + p)/k
+    mu_i = (m + p) / k
     return logbinomial(alt, ref, p=mu_i)
 
 cpdef double mix_loglik(double[:] bafs, double pi0=0.5, double theta=0.1, double std_dev=0.2):

@@ -1,12 +1,12 @@
 """CLI for karyohmm."""
+
 import logging
-import sys
 
 import click
 import numpy as np
 import pandas as pd
 
-from karyohmm import DataReader, DuoHMM, MetaHMM, RecombEst
+from karyohmm import DataReader, DuoHMM, MetaHMM
 
 # Setup the logging configuration for the CLI
 logging.basicConfig(

@@ -1,9 +1,7 @@
 """Test suite for karyoHMM DuoHMM."""
+
 import numpy as np
 import pytest
-from karyohmm_utils import create_index_arrays, transition_kernel
-from scipy.special import logsumexp as logsumexp_sp
-from scipy.stats import mode
 
 from karyohmm import DuoHMMRef, PGTSim
 

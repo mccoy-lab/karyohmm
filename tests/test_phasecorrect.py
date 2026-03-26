@@ -2,8 +2,6 @@
 
 import numpy as np
 import pytest
-from hypothesis import given, settings
-from hypothesis import strategies as st
 
 from karyohmm import PGTSim, PhaseCorrect, QuadHMM
 
@@ -75,7 +73,7 @@ def test_phase_correct_viterbi(data):
 )
 def test_phase_perfect_viterbi(data):
     """Test a phase correction using the viterbi-copying path under disomy."""
-    geno2baf = lambda geno: (geno / 2.0)
+    geno2baf = lambda geno: geno / 2.0
     phase_correct = PhaseCorrect(
         mat_haps=data["mat_haps_real"], pat_haps=data["pat_haps_real"], pos=data["pos"]
     )
