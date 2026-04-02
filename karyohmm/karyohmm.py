@@ -27,6 +27,7 @@ from karyohmm_utils import (
     forward_algo_sibs,
     logaddexp,
     logsumexp,
+    loglik_mcc,
     mat_dosage,
     norm_logl,
     pat_dosage,
@@ -1409,6 +1410,80 @@ class PocHMM(MetaHMM):
             )
             geno_dosage_rev[2, i] = geno_dosage[3, i] - tot
         return geno_dosage_rev
+
+
+class MccEst:
+    """Class containing estimator of maternal-cell contamination."""
+
+    def __init__(self):
+        """Initialize the maternal cell contamination estimates."""
+        pass
+
+    def loglik_mcc_poc(self, bafs, mat_haps, freqs, c=0.0, std_dev=0.1):
+        """Calculate the log-likelihood of MCC for the POC samples."""
+        assert bafs.ndim == 1
+        assert mat_haps.ndim == 2
+        assert bafs.size == mat_haps.shape[1]
+        assert freqs.ndim == 1
+        assert freqs.size == bafs.size
+        assert np.all((bafs >= 0) & (bafs <= 1))
+        assert np.all((freqs >= 0) & (freqs <= 1))
+        assert (c >= 0) and (c < 0.5)
+        assert std_dev > 0
+        mat_geno = np.sum(mat_haps, axis=0).astype(np.int32)
+        assert np.all(np.isin(mat_geno, [0, 1, 2]))
+        logll = 0.0
+        for i in range(bafs.size):
+            ll_p0 = 2*np.log(1. - freqs[i]) + loglik_mcc(baf=bafs[i], mg = mat_geno[i], pg=0, c=c, std_dev=std_dev)
+            ll_p1 = np.log(2*freqs[i]*(1 - freqs[i])) + loglik_mcc(baf=bafs[i], mg = mat_geno[i], pg=1, c=c, std_dev=std_dev)
+            ll_p2 = 2*np.log(freqs[i]**2) + loglik_mcc(baf=bafs[i], mg = mat_geno[i], pg=2, c=c, std_dev=std_dev)
+            logll += logsumexp([ll_p0, ll_p1, ll_p2])
+        return logll
+
+    def loglik_mcc_trio(self, bafs, mat_haps, pat_haps, c=0.0, std_dev=0.1):
+        """Calculate the log-likelihood of MCC for the POC samples."""
+        assert bafs.ndim == 1
+        assert mat_haps.ndim == 2
+        assert pat_haps.ndim == 2
+        assert bafs.size == mat_haps.shape[1]
+        assert bafs.size == pat_haps.shape[1]
+        assert np.all((bafs >=0) & (bafs <= 1))
+        assert (c >= 0) and (c < 0.5)
+        assert std_dev > 0
+        mat_geno = np.sum(mat_haps, axis=0).astype(np.int32)
+        pat_geno = np.sum(mat_haps, axis=0).astype(np.int32)
+        assert np.all(np.isin(mat_geno, [0, 1, 2]))
+        assert np.all(np.isin(pat_geno, [0, 1, 2]))
+        logll = 0.0
+        for i in range(bafs.size):
+            logll += loglik_mcc(baf=bafs[i], mg = mat_geno[i], pg=pat_geno[i], c=c, std_dev=std_dev)
+        return logll
+
+
+    def est_mcc_poc(self, bafs, mat_haps, freqs, algo='Nelder-Mead'):
+        """Estimate maternal cell-contamination using MLE within mother-child duos."""
+        assert mat_haps.ndim == 2
+        assert bafs.ndim == 2
+        mat_geno = np.sum(mat_haps, axis=0)
+        opt_res = minimize(
+            lambda x: (
+                -self.loglik_mcc_poc(
+                    bafs=bafs,
+                    mat_haps=mat_haps,
+                    freqs=freqs,
+                    c=x[0],
+                    std_dev=x[1],
+                )[4]
+            ),
+            x0=[0.25, 0.1],
+            method=algo,
+            bounds=[(0, 0.5), (1e-3, 0.3)],
+            tol=1e-4,
+            options={"disp": True, "ftol": 1e-4, "xtol": 1e-4},
+        )
+        c_est = opt_res.x[0]
+        sigma_est = opt_res.x[1]
+        return c_est, sigma_est
 
 
 class MosaicEst:

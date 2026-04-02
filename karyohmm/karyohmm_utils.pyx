@@ -148,13 +148,50 @@ cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double
         return x
 
 cpdef double emission_lrr(double lrr, int k=2, double std_dev=0.2):
-    """Calculate the emission for LRR conditional on ploidy."""
+    """Calculate the emission for LRR conditional on ploidy.
+        NOTE: this may have to change ...
+    """
     mu_i = {0: -3,
         1: -1,
         2: 0,
         3: np.log2(1.5)
     }
     return norm_logl(lrr, mu_i[k], std_dev)
+
+
+cpdef double loglik_mcc(double baf, int mg, int pg, double std_dev=0.1, double c=0.1):
+    """Log-likelihood of bafs under maternal cell contamination in the full-conditional model."""
+    assert std_dev > 0.0
+    assert (c >= 0) and (c < 0.5)
+    if (pg == 0):
+        if (mg == 0):
+            return truncnorm_pdf(baf, 0.0, 1.0, mu=0.0, sigma=std_dev)
+        elif (mg == 1):
+            return logaddexp(np.log(0.5)+truncnorm_pdf(baf, 0.0, 1.0, mu=0.0, sigma=std_dev),
+                np.log(0.5)+truncnorm_pdf(baf, 0.0, 1.0, mu=0.5+(c/2), sigma=std_dev))
+        else:
+            return truncnorm_pdf(baf, 0.0, 1.0, mu=(0.5+c), sigma=std_dev)
+    elif (pg == 1):
+        if (mg == 0):
+            return logaddexp(np.log(0.5)+truncnorm_pdf(baf, 0.0, 1.0, mu=0.0, sigma=std_dev),
+                np.log(0.5)+truncnorm_pdf(baf, 0.0, 1.0, mu=0.5-(c/2), sigma=std_dev))
+        elif (mg == 1):
+            return logaddexp(logaddexp(np.log(0.25)+truncnorm_pdf(baf, 0.0, 1.0, mu=0.0+c/2, sigma=std_dev),
+                np.log(0.25)+truncnorm_pdf(baf, 0.0, 1.0, mu=0.5-(c/2), sigma=std_dev)),
+            np.log(0.5) + truncnorm_pdf(baf, 0.0, 1.0, mu=0.5, sigma=std_dev))
+        else:
+            return logaddexp(np.log(0.5)+truncnorm_pdf(baf, 0.0, 1.0, mu=1.0, sigma=std_dev),
+                np.log(0.5)+truncnorm_pdf(baf, 0.0, 1.0, mu=0.5+c, sigma=std_dev))
+    elif (pg == 2):
+        if (mg == 0):
+            return truncnorm_pdf(baf, 0.0, 1.0, mu=(0.5+c), sigma=std_dev)
+        elif (mg == 1):
+            return logaddexp(np.log(0.5)+truncnorm_pdf(baf, 0.0, 1.0, mu=1.0-c/2, sigma=std_dev),
+                np.log(0.5)+truncnorm_pdf(baf, 0.0, 1.0, mu=0.5+c/2, sigma=std_dev))
+        else:
+            return truncnorm_pdf(baf, 0.0, 1.0, mu=1.0, sigma=std_dev)
+    else:
+        return -1
 
 cpdef double emission_readcounts(int alt, int ref, double m, double p, int k=2, double eps=1e-6):
     """Emission distribution for read counts at specific SNVs.

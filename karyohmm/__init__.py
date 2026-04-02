@@ -14,6 +14,7 @@ Modules exported are:
 * RecombEst: module for heuristic estimation of crossover recombination based on Coop et al 2007.
 * PhaseCorrect: module implementing Mendelian phase correction for parental haplotypes.
 * MosaicEst: module for estimating mosaic cell fraction from shifts in BAF.
+* MccEst: module for estimating maternal cell contamination fraction from shifts in BAF.
 * PGTSim: module to generate synthetic PGT data for full aneuploidies.
 * PGTSimSegmental: module to generate synthetic PGT data for a segmental aneuploidy.
 * PGTSimMosaic: module to generate synthetic PGT data for a mosaic biopsy.
@@ -27,6 +28,7 @@ from .karyohmm import (
     PocHMM,
     MetaHMM,
     MosaicEst,
+    MccEst,
     PhaseCorrect,
     QuadHMM,
     RecombEst,
