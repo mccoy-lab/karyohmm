@@ -1434,10 +1434,16 @@ class MccEst:
         assert np.all(np.isin(mat_geno, [0, 1, 2]))
         logll = 0.0
         for i in range(bafs.size):
-            ll_p0 = 2*np.log(1. - freqs[i]) + loglik_mcc(baf=bafs[i], mg = mat_geno[i], pg=0, c=c, std_dev=std_dev)
-            ll_p1 = np.log(2*freqs[i]*(1 - freqs[i])) + loglik_mcc(baf=bafs[i], mg = mat_geno[i], pg=1, c=c, std_dev=std_dev)
-            ll_p2 = 2*np.log(freqs[i]**2) + loglik_mcc(baf=bafs[i], mg = mat_geno[i], pg=2, c=c, std_dev=std_dev)
-            logll += logsumexp([ll_p0, ll_p1, ll_p2])
+            ll_p0 = 2 * np.log(1.0 - freqs[i]) + loglik_mcc(
+                baf=bafs[i], mg=mat_geno[i], pg=0, c=c, std_dev=std_dev
+            )
+            ll_p1 = np.log(2 * freqs[i] * (1 - freqs[i])) + loglik_mcc(
+                baf=bafs[i], mg=mat_geno[i], pg=1, c=c, std_dev=std_dev
+            )
+            ll_p2 = 2 * np.log(freqs[i] ** 2) + loglik_mcc(
+                baf=bafs[i], mg=mat_geno[i], pg=2, c=c, std_dev=std_dev
+            )
+            logll += logsumexp(np.array([ll_p0, ll_p1, ll_p2]))
         return logll
 
     def loglik_mcc_trio(self, bafs, mat_haps, pat_haps, c=0.0, std_dev=0.1):
@@ -1447,7 +1453,7 @@ class MccEst:
         assert pat_haps.ndim == 2
         assert bafs.size == mat_haps.shape[1]
         assert bafs.size == pat_haps.shape[1]
-        assert np.all((bafs >=0) & (bafs <= 1))
+        assert np.all((bafs >= 0) & (bafs <= 1))
         assert (c >= 0) and (c < 0.5)
         assert std_dev > 0
         mat_geno = np.sum(mat_haps, axis=0).astype(np.int32)
@@ -1456,11 +1462,12 @@ class MccEst:
         assert np.all(np.isin(pat_geno, [0, 1, 2]))
         logll = 0.0
         for i in range(bafs.size):
-            logll += loglik_mcc(baf=bafs[i], mg = mat_geno[i], pg=pat_geno[i], c=c, std_dev=std_dev)
+            logll += loglik_mcc(
+                baf=bafs[i], mg=mat_geno[i], pg=pat_geno[i], c=c, std_dev=std_dev
+            )
         return logll
 
-
-    def est_mcc_poc(self, bafs, mat_haps, freqs, algo='Nelder-Mead'):
+    def est_mcc_poc(self, bafs, mat_haps, freqs, algo="Nelder-Mead"):
         """Estimate maternal cell-contamination using MLE within mother-child duos."""
         assert mat_haps.ndim == 2
         assert bafs.ndim == 2

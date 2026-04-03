@@ -204,3 +204,25 @@ def test_pgt_sim_ref_panel(length, m, k):
     assert ref_panel.ndim == 2
     assert ref_panel.shape[0] == k
     assert ref_panel.shape[1] == m
+
+
+@given(
+    length=st.floats(min_value=1e2, max_value=1e8),
+    m=st.integers(min_value=100, max_value=1000),
+    cc=st.floats(min_value=0.0, max_value=0.5),
+)
+@settings(max_examples=10, deadline=5000)
+def test_sim_mcc(length, m, cc):
+    """Test for PGT simulations."""
+    data = pgt_sim.full_ploidy_sim(m=m, ploidy=2, length=length)
+    assert data["m"] == m
+    assert data["length"] == length
+    assert np.max(data["pos"]) <= length
+    assert "baf" in data.keys()
+    cc_baf = pgt_sim.sim_cell_contamination(
+        baf=data["baf"], haps=data["mat_haps"], fraction=cc, seed=42
+    )
+    baf = data["baf"]
+    idx = (baf != 0) & (baf != 1)
+    if ~np.isclose(cc, 0):
+        assert np.all(cc_baf[idx] != baf[idx])

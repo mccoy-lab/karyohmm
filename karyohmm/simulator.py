@@ -165,7 +165,7 @@ class PGTSimBase:
             # Drawing a maternal or paternal monosomy
             pat = binom.rvs(1, mat_skew)
             if pat:
-                # We have maternal monosomy (loss of maternal chromosome)
+                # We have maternal monosomy (loss of hromosome)
                 zs_maternal = None
                 zs_paternal[0] = binom.rvs(1, 0.5)
                 for i in range(1, m):
@@ -265,7 +265,7 @@ class PGTSimBase:
                     ]
                 )
                 pat_real_hap = np.array(
-                    [pat_haps[i, p] for p, (i, j) in enumerate(zs_paternal)]
+                    [pat_haps[i, p] for p, i in enumerate(zs_paternal)]
                 )
                 aploid = "3m"
         elif ploidy == 2:
@@ -865,7 +865,7 @@ class PGTSim(PGTSimBase):
         }
         return res_table
 
-    def sim_cell_contamination(self, baf, haps, fraction=0.01, seed=42, **kwargs):
+    def sim_cell_contamination(self, baf, haps, fraction=0.01, seed=42):
         """
         Draft method to simulate cell contamination.
         """

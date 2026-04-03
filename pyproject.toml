@@ -25,7 +25,7 @@ authors = [{name = "Arjun Biddanda", email = "abiddan1@jhu.edu"}]
 Homepage = "https://github.com/aabiddanda/karyohmm"
 
 [project.optional-dependencies]
-tests = [ "pytest", "pytest-cov", "hypothesis", "flake8", "sphinx"]
+tests = [ "pytest", "pytest-cov", "hypothesis", "pytest-xdist"]
 
 [project.scripts]
 metahmm-infer = "karyohmm.metahmm_cli:main"
