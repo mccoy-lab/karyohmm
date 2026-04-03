@@ -163,35 +163,35 @@ cpdef double loglik_mcc(double baf, int mg, int pg, double std_dev=0.1, double c
     """Log-likelihood of bafs under maternal cell contamination in the full-conditional model."""
     assert std_dev > 0.0
     assert (c >= 0) and (c < 0.5)
+
     if (pg == 0):
         if (mg == 0):
             return truncnorm_pdf(baf, 0.0, 1.0, mu=0.0, sigma=std_dev)
-        elif (mg == 1):
+        if (mg == 1):
             return logaddexp(np.log(0.5)+truncnorm_pdf(baf, 0.0, 1.0, mu=0.0, sigma=std_dev),
                 np.log(0.5)+truncnorm_pdf(baf, 0.0, 1.0, mu=0.5+(c/2), sigma=std_dev))
-        else:
+        if (mg == 2):
             return truncnorm_pdf(baf, 0.0, 1.0, mu=(0.5+c), sigma=std_dev)
     elif (pg == 1):
         if (mg == 0):
             return logaddexp(np.log(0.5)+truncnorm_pdf(baf, 0.0, 1.0, mu=0.0, sigma=std_dev),
                 np.log(0.5)+truncnorm_pdf(baf, 0.0, 1.0, mu=0.5-(c/2), sigma=std_dev))
-        elif (mg == 1):
+        if (mg == 1):
             return logaddexp(logaddexp(np.log(0.25)+truncnorm_pdf(baf, 0.0, 1.0, mu=0.0+c/2, sigma=std_dev),
                 np.log(0.25)+truncnorm_pdf(baf, 0.0, 1.0, mu=0.5-(c/2), sigma=std_dev)),
             np.log(0.5) + truncnorm_pdf(baf, 0.0, 1.0, mu=0.5, sigma=std_dev))
-        else:
+        if (mg == 2):
             return logaddexp(np.log(0.5)+truncnorm_pdf(baf, 0.0, 1.0, mu=1.0, sigma=std_dev),
                 np.log(0.5)+truncnorm_pdf(baf, 0.0, 1.0, mu=0.5+c, sigma=std_dev))
-    elif (pg == 2):
+    if (pg == 2):
         if (mg == 0):
-            return truncnorm_pdf(baf, 0.0, 1.0, mu=(0.5+c), sigma=std_dev)
-        elif (mg == 1):
+            return truncnorm_pdf(baf, 0.0, 1.0, mu=(0.5-c), sigma=std_dev)
+        if (mg == 1):
             return logaddexp(np.log(0.5)+truncnorm_pdf(baf, 0.0, 1.0, mu=1.0-c/2, sigma=std_dev),
                 np.log(0.5)+truncnorm_pdf(baf, 0.0, 1.0, mu=0.5+c/2, sigma=std_dev))
-        else:
+        if (mg == 2):
             return truncnorm_pdf(baf, 0.0, 1.0, mu=1.0, sigma=std_dev)
-    else:
-        return -1
+    return 0.0
 
 cpdef double emission_readcounts(int alt, int ref, double m, double p, int k=2, double eps=1e-6):
     """Emission distribution for read counts at specific SNVs.

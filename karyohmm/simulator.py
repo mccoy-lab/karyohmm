@@ -867,7 +867,7 @@ class PGTSim(PGTSimBase):
 
     def sim_cell_contamination(self, baf, haps, fraction=0.01, seed=42):
         """
-        Draft method to simulate cell contamination.
+        Simulate parental cell contamination (typically maternal)
         """
         assert fraction >= 0.0
         assert fraction < 1.0

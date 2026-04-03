@@ -1440,7 +1440,7 @@ class MccEst:
             ll_p1 = np.log(2 * freqs[i] * (1 - freqs[i])) + loglik_mcc(
                 baf=bafs[i], mg=mat_geno[i], pg=1, c=c, std_dev=std_dev
             )
-            ll_p2 = 2 * np.log(freqs[i] ** 2) + loglik_mcc(
+            ll_p2 = 2 * np.log(freqs[i]) + loglik_mcc(
                 baf=bafs[i], mg=mat_geno[i], pg=2, c=c, std_dev=std_dev
             )
             logll += logsumexp(np.array([ll_p0, ll_p1, ll_p2]))
@@ -1456,22 +1456,23 @@ class MccEst:
         assert np.all((bafs >= 0) & (bafs <= 1))
         assert (c >= 0) and (c < 0.5)
         assert std_dev > 0
-        mat_geno = np.sum(mat_haps, axis=0).astype(np.int32)
-        pat_geno = np.sum(mat_haps, axis=0).astype(np.int32)
+        mat_geno = np.sum(mat_haps, axis=0)
+        pat_geno = np.sum(pat_haps, axis=0)
         assert np.all(np.isin(mat_geno, [0, 1, 2]))
         assert np.all(np.isin(pat_geno, [0, 1, 2]))
         logll = 0.0
         for i in range(bafs.size):
             logll += loglik_mcc(
-                baf=bafs[i], mg=mat_geno[i], pg=pat_geno[i], c=c, std_dev=std_dev
+                baf=bafs[i],
+                mg=mat_geno[i],
+                pg=pat_geno[i],
+                c=c,
+                std_dev=std_dev,
             )
         return logll
 
     def est_mcc_poc(self, bafs, mat_haps, freqs, algo="Nelder-Mead"):
         """Estimate maternal cell-contamination using MLE within mother-child duos."""
-        assert mat_haps.ndim == 2
-        assert bafs.ndim == 2
-        mat_geno = np.sum(mat_haps, axis=0)
         opt_res = minimize(
             lambda x: (
                 -self.loglik_mcc_poc(
@@ -1480,7 +1481,29 @@ class MccEst:
                     freqs=freqs,
                     c=x[0],
                     std_dev=x[1],
-                )[4]
+                )
+            ),
+            x0=[0.25, 0.1],
+            method=algo,
+            bounds=[(0, 0.5), (1e-3, 0.3)],
+            tol=1e-4,
+            options={"disp": True, "ftol": 1e-4, "xtol": 1e-4},
+        )
+        c_est = opt_res.x[0]
+        sigma_est = opt_res.x[1]
+        return c_est, sigma_est
+
+    def est_mcc_trio(self, bafs, mat_haps, pat_haps, algo="Nelder-Mead"):
+        """Estimate maternal cell-contamination using MLE within mother-child duos."""
+        opt_res = minimize(
+            lambda x: (
+                -self.loglik_mcc_trio(
+                    bafs=bafs,
+                    mat_haps=mat_haps,
+                    pat_haps=pat_haps,
+                    c=x[0],
+                    std_dev=x[1],
+                )
             ),
             x0=[0.25, 0.1],
             method=algo,
