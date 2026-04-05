@@ -6,7 +6,7 @@ import rich_click as click
 import numpy as np
 import pandas as pd
 
-from karyohmm import DataReader, MetaHMM
+from karyohmm import DataReader, PocHMM
 
 # Setup the logging configuration for the CLI
 logging.basicConfig(

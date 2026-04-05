@@ -36,6 +36,7 @@ from karyohmm_utils import (
 )
 from scipy.optimize import brentq, minimize
 from scipy.special import logsumexp as logsumexp_sp
+from scipy.stats import norm
 
 
 class AneuploidyHMM:
@@ -1428,7 +1429,7 @@ class MccEst:
         assert freqs.size == bafs.size
         assert np.all((bafs >= 0) & (bafs <= 1))
         assert np.all((freqs >= 0) & (freqs <= 1))
-        assert (c >= 0) and (c < 0.5)
+        assert (c >= 0) and (c <= 0.5)
         assert std_dev > 0
         mat_geno = np.sum(mat_haps, axis=0).astype(np.int32)
         assert np.all(np.isin(mat_geno, [0, 1, 2]))
@@ -1454,7 +1455,7 @@ class MccEst:
         assert bafs.size == mat_haps.shape[1]
         assert bafs.size == pat_haps.shape[1]
         assert np.all((bafs >= 0) & (bafs <= 1))
-        assert (c >= 0) and (c < 0.5)
+        assert (c >= 0) and (c <= 0.5)
         assert std_dev > 0
         mat_geno = np.sum(mat_haps, axis=0)
         pat_geno = np.sum(pat_haps, axis=0)
@@ -1471,7 +1472,7 @@ class MccEst:
             )
         return logll
 
-    def est_mcc_poc(self, bafs, mat_haps, freqs, algo="Nelder-Mead"):
+    def est_mcc_poc(self, bafs, mat_haps, freqs, algo="Nelder-Mead", **kwargs):
         """Estimate maternal cell-contamination using MLE within mother-child duos."""
         opt_res = minimize(
             lambda x: (
@@ -1483,18 +1484,17 @@ class MccEst:
                     std_dev=x[1],
                 )
             ),
-            x0=[0.25, 0.1],
+            x0=[0.05, 0.1],
             method=algo,
             bounds=[(0, 0.5), (1e-3, 0.3)],
-            tol=1e-4,
-            options={"disp": True, "ftol": 1e-4, "xtol": 1e-4},
+            **kwargs,
         )
         c_est = opt_res.x[0]
         sigma_est = opt_res.x[1]
         return c_est, sigma_est
 
-    def est_mcc_trio(self, bafs, mat_haps, pat_haps, algo="Nelder-Mead"):
-        """Estimate maternal cell-contamination using MLE within mother-child duos."""
+    def est_mcc_trio(self, bafs, mat_haps, pat_haps, algo="Nelder-Mead", **kwargs):
+        """Estimate maternal cell-contamination using MLE within full trios."""
         opt_res = minimize(
             lambda x: (
                 -self.loglik_mcc_trio(
@@ -1505,15 +1505,57 @@ class MccEst:
                     std_dev=x[1],
                 )
             ),
-            x0=[0.25, 0.1],
+            x0=[0.05, 0.1],
             method=algo,
             bounds=[(0, 0.5), (1e-3, 0.3)],
-            tol=1e-4,
-            options={"disp": True, "ftol": 1e-4, "xtol": 1e-4},
+            **kwargs,
         )
         c_est = opt_res.x[0]
         sigma_est = opt_res.x[1]
         return c_est, sigma_est
+
+    def mcc_ci_poc(
+        self, bafs, mat_haps, freqs, c_hat=0.0, std_dev=0.1, h=1e-5, alpha=0.05
+    ):
+        """Obtain a confidence interval for the MCC estimates in the POC model."""
+        assert (c_hat >= 0) and (c_hat <= 0.5)
+        assert std_dev > 0
+        assert (alpha > 0) and (alpha < 1)
+        assert h > 0
+        z_crit = norm.ppf(alpha / 2)
+        ll = lambda x: self.loglik_mcc_poc(
+            bafs=bafs, mat_haps=mat_haps, freqs=freqs, c=x, std_dev=std_dev
+        )
+        d2 = lambda ll, c, h: (
+            (ll(np.minimum(c + h, 0.5)) - 2 * ll(c) + ll(np.maximum(c - h, 0.0)))
+            / (h**2)
+        )
+        fisher_I_inv = 1.0 / -d2(ll, c=c_hat, h=h)
+        # NOTE: in certain cases this might need to be flipped ...
+        lower_CI = c_hat - z_crit * np.sqrt(1 / bafs.size * fisher_I_inv)
+        upper_CI = c_hat + z_crit * np.sqrt(1 / bafs.size * fisher_I_inv)
+        return (lower_CI, c_hat, upper_CI)
+
+    def mcc_ci_trio(
+        self, bafs, mat_haps, pat_haps, c_hat=0.0, std_dev=0.1, h=1e-5, alpha=0.95
+    ):
+        """Obtain the CI for the estimated contamination in trios..."""
+        assert (c_hat >= 0) and (c_hat <= 0.5)
+        assert std_dev > 0
+        assert (alpha > 0) and (alpha < 1)
+        assert h > 0
+        z_crit = norm.ppf(alpha / 2)
+        ll = lambda x: self.loglik_mcc_trio(
+            bafs=bafs, mat_haps=mat_haps, pat_haps=pat_haps, c=x, std_dev=std_dev
+        )  # noqa
+        d2 = lambda ll, c, h: (
+            (ll(np.minimum(c + h, 0.5)) - 2 * ll(c) + ll(np.maximum(c - h, 0.0)))
+            / (h**2)
+        )  # noqa
+        fisher_I_inv = 1.0 / -d2(ll, c=c_hat, h=h)
+        lower_CI = c_hat - z_crit * np.sqrt(1 / bafs.size * fisher_I_inv)
+        upper_CI = c_hat + z_crit * np.sqrt(1 / bafs.size * fisher_I_inv)
+        return (lower_CI, c_hat, upper_CI)
 
 
 class MosaicEst:
