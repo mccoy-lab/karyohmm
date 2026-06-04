@@ -1,13 +1,12 @@
 """CLI for simulating synthetic aneuploidy data in karyoHMM."""
+
 import gzip as gz
 import logging
-import sys
 
-import click
+import rich_click as click
 import numpy as np
-import pandas as pd
 
-from karyohmm import PGTSim, PGTSimMosaic, PGTSimSegmental, PGTSimVCF
+from karyohmm import PGTSim, PGTSimSegmental, PGTSimVCF
 
 # Setup the logging configuration for the CLI
 logging.basicConfig(
@@ -129,6 +128,14 @@ logging.basicConfig(
     help="Probability of being a maternal-origin aneuploidy.",
 )
 @click.option(
+    "--maternal_cell_contamination",
+    required=False,
+    default=0.0,
+    type=float,
+    show_default=True,
+    help="Fraction of maternal cell contamination.",
+)
+@click.option(
     "--mean_size",
     required=False,
     default=100,
@@ -201,6 +208,7 @@ def main(
     std_dev=0.2,
     pi0=0.5,
     mat_skew=0.5,
+    maternal_cell_contamination=0.0,
     duo_maternal=None,
     mean_size=100,
     switch_err_rate=1e-2,
@@ -305,6 +313,18 @@ def main(
             )
     elif mode == "Mosaic":
         raise NotImplementedError("Mosaic simulation not currently implemented!")
+    if maternal_cell_contamination > 0:
+        assert maternal_cell_contamination <= 1.0
+        logging.info(
+            f"Simulating at a maternal cell contamination of {maternal_cell_contamination * 100}% ..."
+        )
+        cc_baf = pgt_sim.sim_cell_contamination(
+            bafs=results["baf"],
+            haps=results["mat_haps_prime"],
+            fraction=maternal_cell_contamination,
+            seed=seed,
+        )
+        results["baf"] = cc_baf
     if format == "tsv":
         logging.info(
             "Writing output in TSV format (note: not all intermediate data will be kept) ..."
@@ -331,7 +351,7 @@ def main(
             out_fp = f"{out}.tsv"
             with open(out_fp, "w+") as outfile:
                 outfile.write(
-                    "chrom\tpos\tref\talt\taf\tploidy\tmat_hap0\tmat_hap1\tpat_hap0\tpat_hap1\tbaf\n"
+                    "chrom\tpos\tref\talt\taf\tploidy\tmat_hap0\tmat_hap1\tpat_hap0\tpat_hap1\tbaf\tlrr\tsigmas\n"
                 )
                 if "aploid" in results:
                     for i in range(m):

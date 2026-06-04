@@ -151,3 +151,31 @@ def test_estimate_sharing(data):
     )
     assert tot_len <= data["length"]
     assert tot_len == (data["pos"][-1] - data["pos"][0])
+
+
+@pytest.mark.parametrize(
+    "data", [data_disomy_sibs, data_disomy_sibs_v2, data_disomy_sibs_v3]
+)
+def test_flag_parental_genotype_errors(data):
+    """Test that flag_parental_genotype_errors returns valid per-site error scores."""
+    hmm = QuadHMM()
+    gammas, states, _ = hmm.forward_backward(
+        bafs=[data["baf_embryo0"], data["baf_embryo1"]],
+        pos=data["pos"],
+        mat_haps=data["mat_haps_true"],
+        pat_haps=data["pat_haps_true"],
+    )
+    mat_err, pat_err = hmm.flag_parental_genotype_errors(
+        gammas=gammas,
+        states=states,
+        bafs=[data["baf_embryo0"], data["baf_embryo1"]],
+        mat_haps=data["mat_haps_true"],
+        pat_haps=data["pat_haps_true"],
+    )
+    assert mat_err.shape == (data["pos"].size,)
+    assert pat_err.shape == (data["pos"].size,)
+    # Scores must be non-negative: the best alternative is always >= the called genotype
+    assert np.all(mat_err >= 0.0)
+    assert np.all(pat_err >= 0.0)
+    assert np.all(np.isfinite(mat_err))
+    assert np.all(np.isfinite(pat_err))
