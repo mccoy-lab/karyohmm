@@ -153,6 +153,15 @@ logging.basicConfig(
     help="Switch error rate in parental haplotypes.",
 )
 @click.option(
+    "--geno_err_rate",
+    "-ge",
+    required=False,
+    default=1e-3,
+    type=float,
+    show_default=True,
+    help="Genotyping error rate in parental haplotypes.",
+)
+@click.option(
     "--seed",
     required=True,
     default=42,
@@ -212,6 +221,7 @@ def main(
     duo_maternal=None,
     mean_size=100,
     switch_err_rate=1e-2,
+    geno_err_rate=1e-3,
     seed=42,
     threads=1,
     gzip=False,
@@ -257,6 +267,7 @@ def main(
                 mix_prop=pi0,
                 alpha=1.0,
                 switch_err_rate=switch_err_rate,
+                err_rate=geno_err_rate,
                 seed=seed,
             )
             results["af"] = ps
@@ -273,6 +284,7 @@ def main(
                 mix_prop=pi0,
                 alpha=1.0,
                 switch_err_rate=switch_err_rate,
+                err_rate=geno_err_rate,
                 seed=seed,
             )
     elif mode == "Segmental":
@@ -293,6 +305,7 @@ def main(
                 mix_prop=pi0,
                 mean_size=mean_size,
                 switch_err_rate=switch_err_rate,
+                err_rate=geno_err_rate,
                 seed=seed,
             )
             results["af"] = ps
@@ -309,6 +322,7 @@ def main(
                 mix_prop=pi0,
                 mean_size=mean_size,
                 switch_err_rate=switch_err_rate,
+                err_rate=geno_err_rate,
                 seed=seed,
             )
     elif mode == "Mosaic":
