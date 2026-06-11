@@ -19,8 +19,8 @@ cpdef double logsumexp(double[:] x):
     return m + log(c)
 
 cdef double logdiffexp(double a, double b):
-    """Log-sum-exp trick but for differences."""
-    return log(exp(a) - exp(b) + 1e-124)
+    """Log of exp(a) - exp(b), numerically stable (requires a > b)."""
+    return a + log1mexp(a - b)
 
 cpdef double logaddexp(double a, double b):
     cdef double m = -1e32
@@ -76,55 +76,62 @@ cpdef double truncnorm_pdf(double x, double a, double b, double mu=0.5, double s
     p = norm_pdf(eta) - log(sigma) - z
     return p
 
-cpdef double mat_dosage(mat_hap, state):
-    """Obtain the maternal dosage."""
-    cdef int i, j, k
-    cdef double m
-    k = 0
-    m = 0.
-    j = len(state)
-    for i in range(j):
-        k += (state[i] >= 0)
+cpdef double mat_dosage(mat_hap, state, int k=-1):
+    """Obtain the maternal dosage.
+
+    k: precomputed ploidy (number of non-(-1) entries in state). Pass it from
+    callers that already have it to skip the counting loop.
+    """
+    cdef double m = 0.
+    if k < 0:
+        k = 0
+        if state[0] >= 0:
+            k += 1
+        if state[1] >= 0:
+            k += 1
+        if state[2] >= 0:
+            k += 1
+        if state[3] >= 0:
+            k += 1
     if k == 0:
-        m = -1
+        return -1.
     elif k == 1:
         if state[0] != -1:
-            m = mat_hap[state[0]]
-    elif k == 2:
+            return <double>mat_hap[state[0]]
+    elif k >= 2:
         if state[1] != -1:
-            m = mat_hap[state[0]] + mat_hap[state[1]]
+            return <double>mat_hap[state[0]] + <double>mat_hap[state[1]]
         else:
-            m = mat_hap[state[0]]
-    elif k == 3:
-        if state[1] != -1:
-            m = mat_hap[state[0]] + mat_hap[state[1]]
-        else:
-            m = mat_hap[state[0]]
+            return <double>mat_hap[state[0]]
     return m
 
-cpdef double pat_dosage(pat_hap, state):
-    cdef int i, j, k
-    cdef double p
-    k = 0
-    p = 0.
-    j = len(state)
-    for i in range(j):
-        k += (state[i] >= 0)
+cpdef double pat_dosage(pat_hap, state, int k=-1):
+    """Obtain the paternal dosage.
+
+    k: precomputed ploidy (number of non-(-1) entries in state). Pass it from
+    callers that already have it to skip the counting loop.
+    """
+    cdef double p = 0.
+    if k < 0:
+        k = 0
+        if state[0] >= 0:
+            k += 1
+        if state[1] >= 0:
+            k += 1
+        if state[2] >= 0:
+            k += 1
+        if state[3] >= 0:
+            k += 1
     if k == 0:
-        p = -1
+        return -1.
     elif k == 1:
         if state[2] != -1:
-            p = pat_hap[state[2]]
-    elif k == 2:
+            return <double>pat_hap[state[2]]
+    elif k >= 2:
         if state[3] != -1:
-            p = pat_hap[state[2]] + pat_hap[state[3]]
+            return <double>pat_hap[state[2]] + <double>pat_hap[state[3]]
         else:
-            p = pat_hap[state[2]]
-    elif k == 3:
-        if state[3] != -1:
-            p = pat_hap[state[2]] + pat_hap[state[3]]
-        else:
-            p = pat_hap[state[2]]
+            return <double>pat_hap[state[2]]
     return p
 
 cpdef double emission_baf(double baf, double m, double p, double pi0=0.2, double std_dev=0.2, int k=2, double eps=1e-3):
@@ -195,8 +202,8 @@ cpdef double emission_baf_parent_err(
     components = []
     for mat_g, w_m in zip(mat_alts, mat_weights):
         for pat_g, w_p in zip(pat_alts, pat_weights):
-            m_ij = mat_dosage(mat_g, state)
-            p_ij = pat_dosage(pat_g, state)
+            m_ij = mat_dosage(mat_g, state, k=k)
+            p_ij = pat_dosage(pat_g, state, k=k)
             components.append(
                 log(w_m) + log(w_p) + emission_baf(baf, m_ij, p_ij, pi0=pi0, std_dev=std_dev, k=k)
             )
@@ -255,10 +262,10 @@ cpdef double emission_baf_sibs_parent_err(
     components = []
     for mat_g, w_m in zip(mat_alts, mat_weights):
         for pat_g, w_p in zip(pat_alts, pat_weights):
-            m_ij0 = mat_dosage(mat_g, state0)
-            p_ij0 = pat_dosage(pat_g, state0)
-            m_ij1 = mat_dosage(mat_g, state1)
-            p_ij1 = pat_dosage(pat_g, state1)
+            m_ij0 = mat_dosage(mat_g, state0, k=2)
+            p_ij0 = pat_dosage(pat_g, state0, k=2)
+            m_ij1 = mat_dosage(mat_g, state1, k=2)
+            p_ij1 = pat_dosage(pat_g, state1, k=2)
             components.append(
                 log(w_m) + log(w_p)
                 + emission_baf(baf0, m_ij0, p_ij0, pi0=pi0_0, std_dev=std_dev_0, k=2)
@@ -427,21 +434,23 @@ def forward_algo(bafs, lrrs, sigmas, pos, mat_haps, pat_haps, states, karyotypes
     m = len(states)
     ks = [sum([s >= 0 for s in state]) for state in states]
     K0, K1 = create_index_arrays(karyotypes)
-    alphas = np.zeros(shape=(m, n))
-    alphas[:, 0] = log(1.0 / m)
+    # Precompute full emission matrix (m x n) — independent of HMM recursion
+    emit = np.empty((m, n))
     for j in range(m):
-        if mat_err > 0.0 or pat_err > 0.0:
-            cur_emission = emission_baf_parent_err(
-                bafs[0], mat_haps[:, 0], pat_haps[:, 0], states[j],
-                pi0=pi0, std_dev=std_dev, k=ks[j], mat_err=mat_err, pat_err=pat_err,
-            ) + emission_lrr(lrrs[0], k=ks[j], std_dev=sigmas[0])
-        else:
-            m_ij = mat_dosage(mat_haps[:, 0], states[j])
-            p_ij = pat_dosage(pat_haps[:, 0], states[j])
-            cur_emission = emission_baf(
-                    bafs[0], m_ij, p_ij, pi0=pi0, std_dev=std_dev, k=ks[j],
-                ) + emission_lrr(lrrs[0], k=ks[j], std_dev=sigmas[0])
-        alphas[j, 0] += cur_emission
+        for i in range(n):
+            if mat_err > 0.0 or pat_err > 0.0:
+                emit[j, i] = emission_baf_parent_err(
+                    bafs[i], mat_haps[:, i], pat_haps[:, i], states[j],
+                    pi0=pi0, std_dev=std_dev, k=ks[j], mat_err=mat_err, pat_err=pat_err,
+                ) + emission_lrr(lrrs[i], k=ks[j], std_dev=sigmas[i])
+            else:
+                m_ij = mat_dosage(mat_haps[:, i], states[j], k=ks[j])
+                p_ij = pat_dosage(pat_haps[:, i], states[j], k=ks[j])
+                emit[j, i] = emission_baf(
+                    bafs[i], m_ij, p_ij, pi0=pi0, std_dev=std_dev, k=ks[j],
+                ) + emission_lrr(lrrs[i], k=ks[j], std_dev=sigmas[i])
+    alphas = np.zeros(shape=(m, n))
+    alphas[:, 0] = log(1.0 / m) + emit[:, 0]
     scaler = np.zeros(n)
     scaler[0] = logsumexp(alphas[:, 0])
     alphas[:, 0] -= scaler[0]
@@ -449,18 +458,7 @@ def forward_algo(bafs, lrrs, sigmas, pos, mat_haps, pat_haps, states, karyotypes
         di = pos[i] - pos[i-1]
         A_hat = transition_kernel(K0, K1, d=di, r=r, a=a, unphased=unphased)
         for j in range(m):
-            if mat_err > 0.0 or pat_err > 0.0:
-                cur_emission = emission_baf_parent_err(
-                    bafs[i], mat_haps[:, i], pat_haps[:, i], states[j],
-                    pi0=pi0, std_dev=std_dev, k=ks[j], mat_err=mat_err, pat_err=pat_err,
-                ) + emission_lrr(lrrs[i], k=ks[j], std_dev=sigmas[i])
-            else:
-                m_ij = mat_dosage(mat_haps[:, i], states[j])
-                p_ij = pat_dosage(pat_haps[:, i], states[j])
-                cur_emission = emission_baf(
-                        bafs[i], m_ij, p_ij, pi0=pi0, std_dev=std_dev, k=ks[j],
-                    ) + emission_lrr(lrrs[i], k=ks[j], std_dev=sigmas[i])
-            alphas[j, i] = cur_emission + logsumexp(A_hat[:, j] + alphas[:, (i - 1)])
+            alphas[j, i] = emit[j, i] + logsumexp(A_hat[:, j] + alphas[:, (i - 1)])
         scaler[i] = logsumexp(alphas[:, i])
         alphas[:, i] -= scaler[i]
     return alphas, scaler, states, None, sum(scaler)
@@ -474,6 +472,21 @@ def backward_algo(bafs, lrrs, sigmas, pos, mat_haps, pat_haps, states, karyotype
     m = len(states)
     ks = [sum([s >= 0 for s in state]) for state in states]
     K0, K1 = create_index_arrays(karyotypes)
+    # Precompute full emission matrix (m x n) — independent of HMM recursion
+    emit = np.empty((m, n))
+    for j in range(m):
+        for i in range(n):
+            if mat_err > 0.0 or pat_err > 0.0:
+                emit[j, i] = emission_baf_parent_err(
+                    bafs[i], mat_haps[:, i], pat_haps[:, i], states[j],
+                    pi0=pi0, std_dev=std_dev, k=ks[j], mat_err=mat_err, pat_err=pat_err,
+                ) + emission_lrr(lrrs[i], k=ks[j], std_dev=sigmas[i])
+            else:
+                m_ij = mat_dosage(mat_haps[:, i], states[j], k=ks[j])
+                p_ij = pat_dosage(pat_haps[:, i], states[j], k=ks[j])
+                emit[j, i] = emission_baf(
+                    bafs[i], m_ij, p_ij, pi0=pi0, std_dev=std_dev, k=ks[j],
+                ) + emission_lrr(lrrs[i], k=ks[j], std_dev=sigmas[i])
     betas = np.zeros(shape=(m, n))
     betas[:, -1] = log(1)
     scaler = np.zeros(n)
@@ -482,35 +495,10 @@ def backward_algo(bafs, lrrs, sigmas, pos, mat_haps, pat_haps, states, karyotype
     for i in range(n - 2, -1, -1):
         di = pos[i+1] - pos[i]
         A_hat = transition_kernel(K0, K1, d=di, r=r, a=a, unphased=unphased)
-        cur_emissions = np.zeros(m)
         for j in range(m):
-            if mat_err > 0.0 or pat_err > 0.0:
-                cur_emissions[j] = emission_baf_parent_err(
-                    bafs[i + 1], mat_haps[:, i+1], pat_haps[:, i+1], states[j],
-                    pi0=pi0, std_dev=std_dev, k=ks[j], mat_err=mat_err, pat_err=pat_err,
-                ) + emission_lrr(lrrs[i+1], k=ks[j], std_dev=sigmas[i+1])
-            else:
-                m_ij = mat_dosage(mat_haps[:, i+1], states[j])
-                p_ij = pat_dosage(pat_haps[:, i+1], states[j])
-                cur_emissions[j] = emission_baf(
-                        bafs[i + 1], m_ij, p_ij, pi0=pi0, std_dev=std_dev, k=ks[j],
-                    ) + emission_lrr(lrrs[i+1], k=ks[j], std_dev=sigmas[i+1])
-        for j in range(m):
-            betas[j, i] = logsumexp(A_hat[:, j] + cur_emissions + betas[:, (i + 1)])
+            betas[j, i] = logsumexp(A_hat[:, j] + emit[:, i + 1] + betas[:, (i + 1)])
         if i == 0:
-            for j in range(m):
-                if mat_err > 0.0 or pat_err > 0.0:
-                    cur_emission = emission_baf_parent_err(
-                        bafs[i], mat_haps[:, i], pat_haps[:, i], states[j],
-                        pi0=pi0, std_dev=std_dev, k=ks[j], mat_err=mat_err, pat_err=pat_err,
-                    ) + emission_lrr(lrrs[i], k=ks[j], std_dev=sigmas[i])
-                else:
-                    m_ij = mat_dosage(mat_haps[:, i], states[j])
-                    p_ij = pat_dosage(pat_haps[:, i], states[j])
-                    cur_emission = emission_baf(
-                            bafs[i], m_ij, p_ij, pi0=pi0, std_dev=std_dev, k=ks[j],
-                        ) + emission_lrr(lrrs[i], k=ks[j], std_dev=sigmas[i])
-                betas[j, i] += log(1/m) + cur_emission
+            betas[:, 0] += log(1.0 / m) + emit[:, 0]
         scaler[i] = logsumexp(betas[:, i])
         betas[:, i] -= scaler[i]
     return betas, scaler, states, None, sum(scaler)
@@ -522,28 +510,33 @@ def viterbi_algo(bafs, lrrs, sigmas, pos, mat_haps, pat_haps, states, karyotypes
     cdef float di
     n = bafs.size
     m = len(states)
-    deltas = np.zeros(shape=(m, n))
-    deltas[:, 0] = log(1.0 / m)
-    psi = np.zeros(shape=(m, n), dtype=int)
     ks = [sum([s >= 0 for s in state]) for state in states]
     K0, K1 = create_index_arrays(karyotypes)
-    for i in range(1, n):
-        di = pos[i] - pos[i-1]
-        A_hat = transition_kernel(K0, K1, d=di, r=r, a=a, unphased=unphased)
-        for j in range(m):
-            deltas[j, i] = np.max(deltas[:, i-1] + A_hat[:, j])
+    # Precompute full emission matrix (m x n) — independent of HMM recursion
+    emit = np.empty((m, n))
+    for j in range(m):
+        for i in range(n):
             if mat_err > 0.0 or pat_err > 0.0:
-                deltas[j, i] += emission_baf_parent_err(
+                emit[j, i] = emission_baf_parent_err(
                     bafs[i], mat_haps[:, i], pat_haps[:, i], states[j],
                     pi0=pi0, std_dev=std_dev, k=ks[j], mat_err=mat_err, pat_err=pat_err,
                 ) + emission_lrr(lrrs[i], k=ks[j], std_dev=sigmas[i])
             else:
-                m_ij = mat_dosage(mat_haps[:, i], states[j])
-                p_ij = pat_dosage(pat_haps[:, i], states[j])
-                deltas[j, i] += emission_baf(
-                        bafs[i], m_ij, p_ij, pi0=pi0, std_dev=std_dev, k=ks[j],
-                    ) + emission_lrr(lrrs[i], k=ks[j], std_dev=sigmas[i])
-            psi[j, i] = np.argmax(deltas[:, i - 1] + A_hat[:, j]).astype(int)
+                m_ij = mat_dosage(mat_haps[:, i], states[j], k=ks[j])
+                p_ij = pat_dosage(pat_haps[:, i], states[j], k=ks[j])
+                emit[j, i] = emission_baf(
+                    bafs[i], m_ij, p_ij, pi0=pi0, std_dev=std_dev, k=ks[j],
+                ) + emission_lrr(lrrs[i], k=ks[j], std_dev=sigmas[i])
+    deltas = np.zeros(shape=(m, n))
+    deltas[:, 0] = log(1.0 / m)
+    psi = np.zeros(shape=(m, n), dtype=int)
+    for i in range(1, n):
+        di = pos[i] - pos[i-1]
+        A_hat = transition_kernel(K0, K1, d=di, r=r, a=a, unphased=unphased)
+        for j in range(m):
+            tmp = deltas[:, i - 1] + A_hat[:, j]
+            deltas[j, i] = np.max(tmp) + emit[j, i]
+            psi[j, i] = np.argmax(tmp)
     path = np.zeros(n, dtype=int)
     path[-1] = np.argmax(deltas[:, -1]).astype(int)
     for i in range(n - 2, -1, -1):
@@ -561,38 +554,12 @@ def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double 
     n = bafs[0].size
     m = len(states)
     K0, K1 = create_index_arrays(karyotypes)
-    alphas = np.zeros(shape=(m, n))
-    alphas[:, 0] = log(1.0 / m)
+    # Precompute full emission matrix (m x n) — independent of HMM recursion
+    emit = np.empty((m, n))
     for j in range(m):
-        if mat_err > 0.0 or pat_err > 0.0:
-            cur_emission = emission_baf_sibs_parent_err(
-                bafs[0][0], bafs[1][0],
-                mat_haps[:, 0], pat_haps[:, 0],
-                states[j][0], states[j][1],
-                pi0_0=pi0[0], pi0_1=pi0[1],
-                std_dev_0=std_dev[0], std_dev_1=std_dev[1],
-                mat_err=mat_err, pat_err=pat_err,
-            )
-        else:
-            m_ij0 = mat_dosage(mat_haps[:, 0], states[j][0])
-            p_ij0 = pat_dosage(pat_haps[:, 0], states[j][0])
-            m_ij1 = mat_dosage(mat_haps[:, 0], states[j][1])
-            p_ij1 = pat_dosage(pat_haps[:, 0], states[j][1])
-            cur_emission = emission_baf(
-                    bafs[0][0], m_ij0, p_ij0, pi0=pi0[0], std_dev=std_dev[0], k=2,
-                ) + emission_baf(
-                    bafs[1][0], m_ij1, p_ij1, pi0=pi0[1], std_dev=std_dev[1], k=2,
-                )
-        alphas[j, 0] += cur_emission
-    scaler = np.zeros(n)
-    scaler[0] = logsumexp(alphas[:, 0])
-    alphas[:, 0] -= scaler[0]
-    for i in range(1, n):
-        di = pos[i] - pos[i-1]
-        A_hat = transition_kernel(K0, K1, d=di, r=r, a=a)
-        for j in range(m):
+        for i in range(n):
             if mat_err > 0.0 or pat_err > 0.0:
-                cur_emission = emission_baf_sibs_parent_err(
+                emit[j, i] = emission_baf_sibs_parent_err(
                     bafs[0][i], bafs[1][i],
                     mat_haps[:, i], pat_haps[:, i],
                     states[j][0], states[j][1],
@@ -601,16 +568,25 @@ def forward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double 
                     mat_err=mat_err, pat_err=pat_err,
                 )
             else:
-                m_ij0 = mat_dosage(mat_haps[:, i], states[j][0])
-                p_ij0 = pat_dosage(pat_haps[:, i], states[j][0])
-                m_ij1 = mat_dosage(mat_haps[:, i], states[j][1])
-                p_ij1 = pat_dosage(pat_haps[:, i], states[j][1])
-                cur_emission = emission_baf(
-                        bafs[0][i], m_ij0, p_ij0, pi0=pi0[0], std_dev=std_dev[0], k=2,
-                    ) + emission_baf(
-                        bafs[1][i], m_ij1, p_ij1, pi0=pi0[1], std_dev=std_dev[1], k=2,
-                    )
-            alphas[j, i] = cur_emission + logsumexp(A_hat[:, j] + alphas[:, i - 1])
+                m_ij0 = mat_dosage(mat_haps[:, i], states[j][0], k=2)
+                p_ij0 = pat_dosage(pat_haps[:, i], states[j][0], k=2)
+                m_ij1 = mat_dosage(mat_haps[:, i], states[j][1], k=2)
+                p_ij1 = pat_dosage(pat_haps[:, i], states[j][1], k=2)
+                emit[j, i] = emission_baf(
+                    bafs[0][i], m_ij0, p_ij0, pi0=pi0[0], std_dev=std_dev[0], k=2,
+                ) + emission_baf(
+                    bafs[1][i], m_ij1, p_ij1, pi0=pi0[1], std_dev=std_dev[1], k=2,
+                )
+    alphas = np.zeros(shape=(m, n))
+    alphas[:, 0] = log(1.0 / m) + emit[:, 0]
+    scaler = np.zeros(n)
+    scaler[0] = logsumexp(alphas[:, 0])
+    alphas[:, 0] -= scaler[0]
+    for i in range(1, n):
+        di = pos[i] - pos[i-1]
+        A_hat = transition_kernel(K0, K1, d=di, r=r, a=a)
+        for j in range(m):
+            alphas[j, i] = emit[j, i] + logsumexp(A_hat[:, j] + alphas[:, i - 1])
         scaler[i] = logsumexp(alphas[:, i])
         alphas[:, i] -= scaler[i]
     return alphas, scaler, states, None, sum(scaler)
@@ -625,6 +601,29 @@ def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double
     n = bafs[0].size
     m = len(states)
     K0, K1 = create_index_arrays(karyotypes)
+    # Precompute full emission matrix (m x n) — independent of HMM recursion
+    emit = np.empty((m, n))
+    for j in range(m):
+        for i in range(n):
+            if mat_err > 0.0 or pat_err > 0.0:
+                emit[j, i] = emission_baf_sibs_parent_err(
+                    bafs[0][i], bafs[1][i],
+                    mat_haps[:, i], pat_haps[:, i],
+                    states[j][0], states[j][1],
+                    pi0_0=pi0[0], pi0_1=pi0[1],
+                    std_dev_0=std_dev[0], std_dev_1=std_dev[1],
+                    mat_err=mat_err, pat_err=pat_err,
+                )
+            else:
+                m_ij0 = mat_dosage(mat_haps[:, i], states[j][0], k=2)
+                p_ij0 = pat_dosage(pat_haps[:, i], states[j][0], k=2)
+                m_ij1 = mat_dosage(mat_haps[:, i], states[j][1], k=2)
+                p_ij1 = pat_dosage(pat_haps[:, i], states[j][1], k=2)
+                emit[j, i] = emission_baf(
+                    bafs[0][i], m_ij0, p_ij0, pi0=pi0[0], std_dev=std_dev[0], k=2,
+                ) + emission_baf(
+                    bafs[1][i], m_ij1, p_ij1, pi0=pi0[1], std_dev=std_dev[1], k=2,
+                )
     betas = np.zeros(shape=(m, n))
     betas[:, -1] = log(1.0)
     scaler = np.zeros(n)
@@ -633,51 +632,10 @@ def backward_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double
     for i in range(n - 2, -1, -1):
         di = min(pos[i+1] - pos[i], 1e6)
         A_hat = transition_kernel(K0, K1, d=di, r=r, a=a)
-        cur_emissions = np.zeros(m)
         for j in range(m):
-            if mat_err > 0.0 or pat_err > 0.0:
-                cur_emissions[j] = emission_baf_sibs_parent_err(
-                    bafs[0][i + 1], bafs[1][i + 1],
-                    mat_haps[:, i+1], pat_haps[:, i+1],
-                    states[j][0], states[j][1],
-                    pi0_0=pi0[0], pi0_1=pi0[1],
-                    std_dev_0=std_dev[0], std_dev_1=std_dev[1],
-                    mat_err=mat_err, pat_err=pat_err,
-                )
-            else:
-                m_ij0 = mat_dosage(mat_haps[:, i+1], states[j][0])
-                p_ij0 = pat_dosage(pat_haps[:, i+1], states[j][0])
-                m_ij1 = mat_dosage(mat_haps[:, i+1], states[j][1])
-                p_ij1 = pat_dosage(pat_haps[:, i+1], states[j][1])
-                cur_emissions[j] = emission_baf(
-                        bafs[0][i + 1], m_ij0, p_ij0, pi0=pi0[0], std_dev=std_dev[0], k=2,
-                    ) + emission_baf(
-                        bafs[1][i + 1], m_ij1, p_ij1, pi0=pi0[1], std_dev=std_dev[1], k=2,
-                    )
-        for j in range(m):
-            betas[j, i] = logsumexp(A_hat[:, j] + cur_emissions + betas[:, (i + 1)])
+            betas[j, i] = logsumexp(A_hat[:, j] + emit[:, i + 1] + betas[:, (i + 1)])
         if i == 0:
-            for j in range(m):
-                if mat_err > 0.0 or pat_err > 0.0:
-                    cur_emission = emission_baf_sibs_parent_err(
-                        bafs[0][i], bafs[1][i],
-                        mat_haps[:, i], pat_haps[:, i],
-                        states[j][0], states[j][1],
-                        pi0_0=pi0[0], pi0_1=pi0[1],
-                        std_dev_0=std_dev[0], std_dev_1=std_dev[1],
-                        mat_err=mat_err, pat_err=pat_err,
-                    )
-                else:
-                    m_ij0 = mat_dosage(mat_haps[:, i], states[j][0])
-                    p_ij0 = pat_dosage(pat_haps[:, i], states[j][0])
-                    m_ij1 = mat_dosage(mat_haps[:, i], states[j][1])
-                    p_ij1 = pat_dosage(pat_haps[:, i], states[j][1])
-                    cur_emission = emission_baf(
-                            bafs[0][i], m_ij0, p_ij0, pi0=pi0[0], std_dev=std_dev[0], k=2,
-                        ) + emission_baf(
-                            bafs[1][i], m_ij1, p_ij1, pi0=pi0[1], std_dev=std_dev[1], k=2,
-                        )
-                betas[j, i] += log(1/m) + cur_emission
+            betas[:, 0] += log(1.0 / m) + emit[:, 0]
         scaler[i] = logsumexp(betas[:, i])
         betas[:, i] -= scaler[i]
     return betas, scaler, states, None, sum(scaler)
@@ -692,16 +650,12 @@ def viterbi_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double 
     n = bafs[0].size
     m = len(states)
     K0, K1 = create_index_arrays(karyotypes)
-    deltas = np.zeros(shape=(m, n))
-    deltas[:, 0] = log(1.0 / m)
-    psi = np.zeros(shape=(m, n), dtype=int)
-    for i in range(1, n):
-        di = pos[i] - pos[i-1]
-        A_hat = transition_kernel(K0, K1, d=di, r=r, a=a)
-        for j in range(m):
-            deltas[j, i] = np.max(deltas[:, i-1] + A_hat[:, j])
+    # Precompute full emission matrix (m x n) — independent of HMM recursion
+    emit = np.empty((m, n))
+    for j in range(m):
+        for i in range(n):
             if mat_err > 0.0 or pat_err > 0.0:
-                deltas[j, i] += emission_baf_sibs_parent_err(
+                emit[j, i] = emission_baf_sibs_parent_err(
                     bafs[0][i], bafs[1][i],
                     mat_haps[:, i], pat_haps[:, i],
                     states[j][0], states[j][1],
@@ -710,16 +664,25 @@ def viterbi_algo_sibs(bafs, pos, mat_haps, pat_haps, states, karyotypes, double 
                     mat_err=mat_err, pat_err=pat_err,
                 )
             else:
-                m_ij0 = mat_dosage(mat_haps[:, i], states[j][0])
-                p_ij0 = pat_dosage(pat_haps[:, i], states[j][0])
-                m_ij1 = mat_dosage(mat_haps[:, i], states[j][1])
-                p_ij1 = pat_dosage(pat_haps[:, i], states[j][1])
-                deltas[j, i] += emission_baf(
-                        bafs[0][i], m_ij0, p_ij0, pi0=pi0[0], std_dev=std_dev[0], k=2,
-                    ) + emission_baf(
-                        bafs[1][i], m_ij1, p_ij1, pi0=pi0[1], std_dev=std_dev[1], k=2,
-                    )
-            psi[j, i] = np.argmax(deltas[:, i - 1] + A_hat[:, j]).astype(int)
+                m_ij0 = mat_dosage(mat_haps[:, i], states[j][0], k=2)
+                p_ij0 = pat_dosage(pat_haps[:, i], states[j][0], k=2)
+                m_ij1 = mat_dosage(mat_haps[:, i], states[j][1], k=2)
+                p_ij1 = pat_dosage(pat_haps[:, i], states[j][1], k=2)
+                emit[j, i] = emission_baf(
+                    bafs[0][i], m_ij0, p_ij0, pi0=pi0[0], std_dev=std_dev[0], k=2,
+                ) + emission_baf(
+                    bafs[1][i], m_ij1, p_ij1, pi0=pi0[1], std_dev=std_dev[1], k=2,
+                )
+    deltas = np.zeros(shape=(m, n))
+    deltas[:, 0] = log(1.0 / m)
+    psi = np.zeros(shape=(m, n), dtype=int)
+    for i in range(1, n):
+        di = pos[i] - pos[i-1]
+        A_hat = transition_kernel(K0, K1, d=di, r=r, a=a)
+        for j in range(m):
+            tmp = deltas[:, i - 1] + A_hat[:, j]
+            deltas[j, i] = np.max(tmp) + emit[j, i]
+            psi[j, i] = np.argmax(tmp)
     path = np.zeros(n, dtype=int)
     path[-1] = np.argmax(deltas[:, -1]).astype(int)
     for i in range(n - 2, -1, -1):
