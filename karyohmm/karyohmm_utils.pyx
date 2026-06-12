@@ -736,7 +736,7 @@ def forward_algo_duo(bafs, lrrs, sigmas, pos, haps, freqs, states, karyotypes, b
                         emission_baf(bafs[0], m_ij, p_ij, pi0=pi0, std_dev=std_dev, k=ks[j])
                         + emission_lrr(lrrs[0], k=ks[j], std_dev=sigmas[0]) + log(w_o) + log(p)
                     )
-            alphas[j, 0] = logsumexp(np.array(components, dtype=np.float64))
+            alphas[j, 0] += logsumexp(np.array(components, dtype=np.float64))
         else:
             cur_emission = np.zeros(3)
             for idx, (x, p) in enumerate(zip(geno, geno_freq)):
@@ -749,7 +749,7 @@ def forward_algo_duo(bafs, lrrs, sigmas, pos, haps, freqs, states, karyotypes, b
                 cur_emission[idx] = emission_baf(
                         bafs[0], m_ij, p_ij, pi0=pi0, std_dev=std_dev, k=ks[j],
                     ) + emission_lrr(lrrs[0], k=ks[j], std_dev=sigmas[0]) + log(p)
-            alphas[j, 0] = logsumexp(cur_emission)
+            alphas[j, 0] += logsumexp(cur_emission)
     scaler = np.zeros(n)
     scaler[0] = logsumexp(alphas[:, 0])
     alphas[:, 0] -= scaler[0]
@@ -924,7 +924,7 @@ def backward_algo_duo(bafs, lrrs, sigmas, pos, haps, freqs, states, karyotypes, 
                 betas[j, i] += log(1/m) + cur_emissions_j
         scaler[i] = logsumexp(betas[:, i])
         betas[:, i] -= scaler[i]
-    return betas, scaler, states, None, sum(scaler) + scaler[-1]
+    return betas, scaler, states, None, sum(scaler)
 
 
 # -------- DANGER ZONE ---------- #

@@ -71,6 +71,14 @@ class AneuploidyHMM:
             t.append("0")
         return "".join(t)
 
+    # Per-algorithm tolerance keys recognized by scipy.optimize.minimize.
+    # Nelder-Mead uses xatol/fatol; L-BFGS-B uses ftol/gtol; Powell uses xtol/ftol.
+    _ALGO_DEFAULT_OPTIONS = {
+        "Nelder-Mead": {"xatol": 1e-4, "fatol": 1e-4, "disp": False},
+        "L-BFGS-B": {"ftol": 1e-4, "gtol": 1e-5, "disp": False},
+        "Powell": {"xtol": 1e-4, "ftol": 1e-4, "disp": False},
+    }
+
     def est_sigma_pi0(
         self,
         bafs,
@@ -80,6 +88,8 @@ class AneuploidyHMM:
         algo="L-BFGS-B",
         pi0_bounds=(0.01, 0.99),
         sigma_bounds=(1e-2, 1.0),
+        opt_tol=1e-4,
+        opt_options=None,
         **kwargs,
     ):
         """Estimate sigma and pi0 under the B-Allele Frequency model using optimization of forward algorithm likelihood.
@@ -90,6 +100,9 @@ class AneuploidyHMM:
             - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
             - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
             - algo (`str`): one of Nelder-Mead, L-BFGS-B, or Powell algorithms for optimization
+            - opt_tol (`float`): master tolerance passed to scipy minimize (default 1e-4)
+            - opt_options (`dict` or None): algorithm-specific options passed to scipy minimize;
+              merged over per-algorithm defaults, so only keys you want to override are needed
 
         Returns:
             - pi0_est (`float`): estimate of sparsity parameter (pi0) for B-allele emission model
@@ -105,6 +118,7 @@ class AneuploidyHMM:
         assert sigma_bounds[0] < sigma_bounds[1]
         mid_pi0 = np.mean(pi0_bounds)
         mid_sigma = np.mean(sigma_bounds)
+        options = {**self._ALGO_DEFAULT_OPTIONS[algo], **(opt_options or {})}
         opt_res = minimize(
             lambda x: (
                 -self.forward_algorithm(
@@ -120,8 +134,8 @@ class AneuploidyHMM:
             x0=[mid_pi0, mid_sigma],
             method=algo,
             bounds=[pi0_bounds, sigma_bounds],
-            tol=1e-4,
-            options={"disp": True, "ftol": 1e-4, "xtol": 1e-4},
+            tol=opt_tol,
+            options=options,
         )
         pi0_est = opt_res.x[0]
         sigma_est = opt_res.x[1]
@@ -1766,7 +1780,7 @@ class PocHMM(MetaHMM):
         assert lrrs.ndim == 1
         assert sigmas.ndim == 1
         assert bafs.size == lrrs.size
-        assert sigmas.size == sigmas.size
+        assert sigmas.size == lrrs.size
         assert haps.ndim == 2
         assert (pi0 > 0) & (pi0 < 1.0)
         assert std_dev > 0
@@ -1822,9 +1836,95 @@ class PocHMM(MetaHMM):
             geno_dosage_rev[2, i] = geno_dosage[3, i] - tot
         return geno_dosage_rev
 
-    def infer_missing_af(self, bafs, geno, eps=0.1):
-        """Estimate the opposite parents allele frequency conditional on BAF."""
-        raise NotImplementedError("Method is not currently implemented!")
+    def infer_missing_af(self, bafs, geno, hap_matrix, pos, eps=0.2):
+        """Estimate allele frequencies for the unobserved parent using a haplotype reference panel.
+
+        Identifies sites of opposite homozygosity — where the observed parent is homozygous
+        and BAF indicates the unobserved parent carries the opposite allele — then tags the
+        corresponding haplotypes in the reference panel. Frequencies at non-anchor sites are
+        estimated via distance-weighted interpolation between adjacent anchor sites (Eq. 9 in
+        the PocHMM methods document). Falls back to the reference-panel mean at sites with no
+        nearby anchors.
+
+        Arguments:
+            - bafs (`np.array`): m-length B-allele frequency array
+            - geno (`np.array`): m-length observed-parent genotype dosage array (0, 1, or 2)
+            - hap_matrix (`np.array`): (2N, m) haplotype reference panel matrix (0/1 encoded)
+            - pos (`np.array`): m-length array of genomic positions in basepairs
+            - eps (`float`): BAF threshold for calling opposite homozygosity (default 0.2)
+
+        Returns:
+            - freqs (`np.array`): m-length array of estimated allele frequencies for the
+              unobserved parent
+
+        """
+        assert bafs.ndim == 1
+        assert geno.ndim == 1
+        assert hap_matrix.ndim == 2
+        assert pos.ndim == 1
+        m = bafs.size
+        assert geno.size == m
+        assert hap_matrix.shape[1] == m
+        assert pos.size == m
+        assert 0.0 < eps < 0.5
+        assert np.all(np.isin(geno, [0, 1, 2]))
+        assert np.all((bafs >= 0.0) & (bafs <= 1.0))
+        assert np.all(pos[1:] > pos[:-1])
+
+        # Fallback: global mean alt allele frequency from the reference panel
+        global_freq = hap_matrix.mean(axis=0)
+
+        # Identify anchor sites of opposite homozygosity
+        anchor_mask = ((geno == 0) & (bafs >= eps)) | (
+            (geno == 2) & (bafs <= 1.0 - eps)
+        )
+        anchor_indices = np.where(anchor_mask)[0]
+
+        if len(anchor_indices) == 0:
+            return global_freq
+
+        # Tag reference haplotypes at each anchor by the inferred unobserved-parent allele:
+        #   geno==0 (observed hom-ref) → unobserved carries alt → tag alt haplotypes
+        #   geno==2 (observed hom-alt) → unobserved carries ref → tag ref haplotypes
+        tagged = {}
+        for idx in anchor_indices:
+            allele = 1 if geno[idx] == 0 else 0
+            x = np.where(hap_matrix[:, idx] == allele)[0]
+            if len(x) > 0:
+                tagged[int(idx)] = x
+
+        valid_anchors = sorted(tagged.keys())
+        if len(valid_anchors) == 0:
+            return global_freq
+
+        va = np.array(valid_anchors)
+
+        def _af(anchor_site, query_site):
+            return float(hap_matrix[tagged[anchor_site], query_site].mean())
+
+        freqs = np.empty(m)
+        for k in range(m):
+            ins = int(np.searchsorted(va, k, side="right"))
+            left, right = ins - 1, ins
+
+            if left < 0:
+                # Before the first anchor: use first anchor's tagged haplotypes
+                freqs[k] = _af(int(va[0]), k)
+            elif right >= len(va):
+                # After the last anchor: use last anchor's tagged haplotypes
+                freqs[k] = _af(int(va[-1]), k)
+            elif int(va[left]) == k:
+                # At an anchor site: use direct estimate from tagged haplotypes
+                freqs[k] = _af(k, k)
+            else:
+                # Between two anchors: linear distance-weighted interpolation
+                i, j = int(va[left]), int(va[right])
+                d_ij = float(pos[j] - pos[i])
+                w_i = 1.0 - float(pos[k] - pos[i]) / d_ij
+                w_j = 1.0 - float(pos[j] - pos[k]) / d_ij
+                freqs[k] = w_i * _af(i, k) + w_j * _af(j, k)
+
+        return freqs
 
 
 class MccEst:

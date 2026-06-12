@@ -28,5 +28,4 @@ repos:
   rev: v0.16.6
   hooks:
   - id: cython-lint
-    ignore: [E701]
   - id: double-quote-cython-strings
