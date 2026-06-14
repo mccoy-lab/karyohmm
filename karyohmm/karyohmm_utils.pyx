@@ -314,6 +314,155 @@ cpdef double loglik_mcc(double baf, int mg, int pg, double std_dev=0.1, double c
             return truncnorm_pdf(baf, 0.0, 1.0, mu=1.0, sigma=std_dev)
     return 0.0
 
+
+cpdef double loglik_mcc_phased(double baf, int m_h, int pg, int mg, double std_dev=0.1, double c=0.1):
+    """Phase-conditioned log-likelihood for BAF under MCC.
+
+    At heterozygous maternal sites (mg=1), conditions on the specific transmitted
+    maternal allele m_h in {0, 1} rather than marginalizing 50/50. At homozygous
+    maternal sites (mg=0 or mg=2) phase is irrelevant and the call delegates to
+    loglik_mcc.
+
+    m_h: the transmitted maternal allele (0=A, 1=B); must match mat_haps[h, i]
+    pg:  paternal dosage (0, 1, or 2)
+    mg:  full maternal dosage (0, 1, or 2) — drives the contamination signal
+    """
+    assert std_dev > 0.0
+    assert (c >= 0.0) and (c <= 0.5)
+    if mg == 0 or mg == 2:
+        return loglik_mcc(baf, mg, pg, std_dev, c)
+    # mg == 1: condition on which allele was transmitted
+    if pg == 0:
+        if m_h == 0:
+            return truncnorm_pdf(baf, 0.0, 1.0, mu=0.0, sigma=std_dev)
+        else:
+            return truncnorm_pdf(baf, 0.0, 1.0, mu=0.5 + (c / 2), sigma=std_dev)
+    elif pg == 1:
+        if m_h == 0:
+            return logaddexp(
+                log(0.5) + truncnorm_pdf(baf, 0.0, 1.0, mu=c / 2, sigma=std_dev),
+                log(0.5) + truncnorm_pdf(baf, 0.0, 1.0, mu=0.5 - (c / 2), sigma=std_dev),
+            )
+        else:
+            return truncnorm_pdf(baf, 0.0, 1.0, mu=0.5, sigma=std_dev)
+    elif pg == 2:
+        if m_h == 0:
+            return truncnorm_pdf(baf, 0.0, 1.0, mu=0.5 + (c / 2), sigma=std_dev)
+        else:
+            return truncnorm_pdf(baf, 0.0, 1.0, mu=1.0 - (c / 2), sigma=std_dev)
+    return 0.0
+
+
+def forward_mcc_phased_trio(
+    double[:] bafs,
+    int[:, :] mat_haps,
+    int[:, :] pat_haps,
+    double[:] pos,
+    double c=0.0,
+    double std_dev=0.1,
+    double r=1e-8,
+):
+    """Forward algorithm for the phase-aware 2-state MCC HMM (trio variant).
+
+    Hidden state H_i in {0, 1} tracks which maternal haplotype was transmitted
+    to the POC at position i.  Transitions use the same exponential recombination
+    kernel as MetaHMM/PocHMM: rho = 1 - exp(-r * d).
+
+    Returns the total log-likelihood sum_i log P(b_1..b_n | c, std_dev, r).
+    """
+    cdef int i, n, mg, pg
+    cdef double rho, di, log_rho, log_1mrho
+    cdef double emit0, emit1, alpha0, alpha1, new0, new1, scaler, total_ll
+    n = bafs.shape[0]
+    # Initialise at site 0 with uniform prior over haplotype states
+    mg = mat_haps[0, 0] + mat_haps[1, 0]
+    pg = pat_haps[0, 0] + pat_haps[1, 0]
+    emit0 = loglik_mcc_phased(bafs[0], mat_haps[0, 0], pg, mg, std_dev, c)
+    emit1 = loglik_mcc_phased(bafs[0], mat_haps[1, 0], pg, mg, std_dev, c)
+    alpha0 = log(0.5) + emit0
+    alpha1 = log(0.5) + emit1
+    scaler = logaddexp(alpha0, alpha1)
+    alpha0 -= scaler
+    alpha1 -= scaler
+    total_ll = scaler
+    for i in range(1, n):
+        di = pos[i] - pos[i - 1]
+        rho = 1.0 - exp(-r * di)
+        log_rho = log(rho)
+        log_1mrho = log(1.0 - rho)
+        mg = mat_haps[0, i] + mat_haps[1, i]
+        pg = pat_haps[0, i] + pat_haps[1, i]
+        emit0 = loglik_mcc_phased(bafs[i], mat_haps[0, i], pg, mg, std_dev, c)
+        emit1 = loglik_mcc_phased(bafs[i], mat_haps[1, i], pg, mg, std_dev, c)
+        new0 = emit0 + logaddexp(log_1mrho + alpha0, log_rho + alpha1)
+        new1 = emit1 + logaddexp(log_rho + alpha0, log_1mrho + alpha1)
+        scaler = logaddexp(new0, new1)
+        alpha0 = new0 - scaler
+        alpha1 = new1 - scaler
+        total_ll += scaler
+    return total_ll
+
+
+def forward_mcc_phased_poc(
+    double[:] bafs,
+    int[:, :] mat_haps,
+    double[:] freqs,
+    double[:] pos,
+    double c=0.0,
+    double std_dev=0.1,
+    double r=1e-8,
+):
+    """Forward algorithm for the phase-aware 2-state MCC HMM (POC/duo variant).
+
+    Identical to forward_mcc_phased_trio but marginalises over the unobserved
+    paternal genotype at each site using Hardy-Weinberg weights from freqs.
+    Returns the total log-likelihood.
+    """
+    cdef int i, n, mg
+    cdef double rho, di, log_rho, log_1mrho, freq
+    cdef double emit0, emit1, alpha0, alpha1, new0, new1
+    cdef double ll_p0, ll_p1, ll_p2, scaler, total_ll
+    n = bafs.shape[0]
+    mg = mat_haps[0, 0] + mat_haps[1, 0]
+    freq = freqs[0]
+    ll_p0 = 2 * log(1.0 - freq) + loglik_mcc_phased(bafs[0], mat_haps[0, 0], 0, mg, std_dev, c)
+    ll_p1 = log(2 * freq * (1.0 - freq)) + loglik_mcc_phased(bafs[0], mat_haps[0, 0], 1, mg, std_dev, c)
+    ll_p2 = 2 * log(freq) + loglik_mcc_phased(bafs[0], mat_haps[0, 0], 2, mg, std_dev, c)
+    emit0 = logaddexp(ll_p0, logaddexp(ll_p1, ll_p2))
+    ll_p0 = 2 * log(1.0 - freq) + loglik_mcc_phased(bafs[0], mat_haps[1, 0], 0, mg, std_dev, c)
+    ll_p1 = log(2 * freq * (1.0 - freq)) + loglik_mcc_phased(bafs[0], mat_haps[1, 0], 1, mg, std_dev, c)
+    ll_p2 = 2 * log(freq) + loglik_mcc_phased(bafs[0], mat_haps[1, 0], 2, mg, std_dev, c)
+    emit1 = logaddexp(ll_p0, logaddexp(ll_p1, ll_p2))
+    alpha0 = log(0.5) + emit0
+    alpha1 = log(0.5) + emit1
+    scaler = logaddexp(alpha0, alpha1)
+    alpha0 -= scaler
+    alpha1 -= scaler
+    total_ll = scaler
+    for i in range(1, n):
+        di = pos[i] - pos[i - 1]
+        rho = 1.0 - exp(-r * di)
+        log_rho = log(rho)
+        log_1mrho = log(1.0 - rho)
+        mg = mat_haps[0, i] + mat_haps[1, i]
+        freq = freqs[i]
+        ll_p0 = 2 * log(1.0 - freq) + loglik_mcc_phased(bafs[i], mat_haps[0, i], 0, mg, std_dev, c)
+        ll_p1 = log(2 * freq * (1.0 - freq)) + loglik_mcc_phased(bafs[i], mat_haps[0, i], 1, mg, std_dev, c)
+        ll_p2 = 2 * log(freq) + loglik_mcc_phased(bafs[i], mat_haps[0, i], 2, mg, std_dev, c)
+        emit0 = logaddexp(ll_p0, logaddexp(ll_p1, ll_p2))
+        ll_p0 = 2 * log(1.0 - freq) + loglik_mcc_phased(bafs[i], mat_haps[1, i], 0, mg, std_dev, c)
+        ll_p1 = log(2 * freq * (1.0 - freq)) + loglik_mcc_phased(bafs[i], mat_haps[1, i], 1, mg, std_dev, c)
+        ll_p2 = 2 * log(freq) + loglik_mcc_phased(bafs[i], mat_haps[1, i], 2, mg, std_dev, c)
+        emit1 = logaddexp(ll_p0, logaddexp(ll_p1, ll_p2))
+        new0 = emit0 + logaddexp(log_1mrho + alpha0, log_rho + alpha1)
+        new1 = emit1 + logaddexp(log_rho + alpha0, log_1mrho + alpha1)
+        scaler = logaddexp(new0, new1)
+        alpha0 = new0 - scaler
+        alpha1 = new1 - scaler
+        total_ll += scaler
+    return total_ll
+
+
 cpdef double emission_readcounts(int alt, int ref, double m, double p, int k=2, double eps=1e-6):
     """Emission distribution for read counts at specific SNVs.
 
