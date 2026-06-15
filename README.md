@@ -47,15 +47,17 @@ The states in the `MetaHMM` model correspond to specific karyotypes for chromoso
 * `3m` - extra maternal chromosome (maternal trisomy)
 * `3p` - extra paternal chromosome (paternal trisomy)
 
-## DuoHMM
+## POCHMM
 
-The `DuoHMM` model similarly attempts to quantify the aneuploidy status of an embryo, but with the availability of only a **single**  parent. This is primarily accomplished by marginalizing over the full set of possible genotypes for the unobserved parent (with a prior based on allele frequency).
+The `POCHMM` (Products-of-Conception HMM) model similarly attempts to quantify the aneuploidy status of an embryo, but with the availability of only a **single** parent. This is primarily accomplished by marginalizing over the full set of possible genotypes for the unobserved parent (with a prior based on allele frequency).
 
 ## CLI
 
-The installation of `karyohmm` also includes  `metahmm-infer`, `pochmm-infer`, and `karyohmm-simulate` command-line interfaces.
+The installation of `karyohmm` includes four command-line interfaces: `metahmm-infer`, `pochmm-infer`, `karyohmm-simulate`, and `karyohmm-mosaic`.
 
-The `metahmm-infer` program includes all of the implementation for inferring aneuploidy status that can be run directly from the command line. You can even specify the whether you are in `MetaHMM` or `DuoHMM` mode to indicate parental availability.
+The `metahmm-infer` program runs the `MetaHMM` model for aneuploidy inference when both parental haplotypes are available.
+
+The `pochmm-infer` program handles products-of-conception data. Use `--mode Duo` (default) when only one parent is genotyped, or `--mode Meta` when both parents are available.
 
 To test the CLI (assuming the full repository was cloned), you can run inference on the following simulated datasets:
 ```
@@ -66,9 +68,11 @@ metahmm-infer -i data/test_combined_embryo.tsv -o data/out_combined
 
 To simulate different aneuploidy types, you can use the `karyohmm-simulate` program. Currently the modes that are supported are to simulate whole-chromosome or segmental aneuploidies. You can also use a pre-existing VCF file to sample parental haplotypes from for more realistic haplotype structure (and variant density).
 
+The `karyohmm-mosaic` program estimates the mosaic cell fraction for segmental or whole-chromosome aneuploidies using the `MosaicEst` model.
+
 For full command-line options, use `--help` on any CLI entry point (e.g. `metahmm-infer --help`).
 
-### Use in Real Datasets
+### Reference
 
 For use in large-scale datasets, please refer to the following medRxiv preprint:
 

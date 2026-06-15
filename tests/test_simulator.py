@@ -291,7 +291,13 @@ def test_mosaic_sim_disomy_dominant(props):
     """mixed_ploidy_sim with high disomy proportion produces near-disomy BAF."""
     ploidies = np.array([0, 1, 2, 3])
     data = pgt_sim_mosaic.mixed_ploidy_sim(
-        ploidies=ploidies, props=props, ncells=20, m=1000, length=5e6, std_dev=0.05, seed=1
+        ploidies=ploidies,
+        props=props,
+        ncells=20,
+        m=1000,
+        length=5e6,
+        std_dev=0.05,
+        seed=1,
     )
     assert data["m"] == 1000
     assert "baf" in data
