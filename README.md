@@ -89,6 +89,16 @@ https://github.com/mccoy-lab/natera_recomb
 
 Full API documentation is available at [https://aabiddanda.github.io/karyohmm/](https://aabiddanda.github.io/karyohmm/).
 
+To build the documentation locally, install the docs dependencies and run Sphinx:
+
+```
+pip install ".[docs]"
+cd docs/
+make html
+```
+
+The rendered HTML will be written to `docs/_build/html/`. Open `docs/_build/html/index.html` in a browser to preview.
+
 ## Contact
 
 Please submit an issue or contact @aabiddanda
