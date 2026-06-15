@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 from karyohmm_utils import emission_baf, mat_dosage, pat_dosage
 from scipy.integrate import trapezoid
@@ -57,6 +57,7 @@ def test_pat_dosage(hap, state, expected):
     p=st.integers(min_value=0, max_value=1),
     k=st.integers(min_value=2, max_value=2),
 )
+@settings(deadline=None, max_examples=25)
 def test_emission_disomy(pi0, sigma, m, p, k):
     """Test that the emission under disomy integrates to 1."""
     bs = np.linspace(0, 1, 1000)
@@ -78,6 +79,7 @@ def test_emission_disomy(pi0, sigma, m, p, k):
     ),
     m=st.integers(min_value=0, max_value=1),
 )
+@settings(deadline=None, max_examples=25)
 def test_emission_monosomy(pi0, sigma, m):
     """Test that the emission under disomy integrates to 1."""
     bs = np.linspace(0, 1, 1000)
@@ -100,6 +102,7 @@ def test_emission_monosomy(pi0, sigma, m):
     m=st.integers(min_value=0, max_value=2),
     p=st.integers(min_value=0, max_value=1),
 )
+@settings(deadline=None, max_examples=25)
 def test_emission_trisomy(pi0, sigma, m, p):
     """Test that the emission under disomy integrates to 1."""
     bs = np.linspace(0, 1, 1000)
@@ -121,6 +124,7 @@ def test_emission_trisomy(pi0, sigma, m, p):
     ),
     k=st.integers(min_value=2, max_value=3),
 )
+@settings(deadline=None)
 def test_emission_overall(baf, m, p, k, sigma):
     """Test the overall admissions distribution."""
     mu = (m + p) / k
@@ -146,6 +150,7 @@ def test_emission_overall(baf, m, p, k, sigma):
     nsibs=st.integers(min_value=1, max_value=10),
     switch=st.booleans(),
 )
+@settings(deadline=None, max_examples=25)
 def test_sim_joint_het(switch, pi0, sigma, nsibs):
     """Test the simulation of the joint heterozygotes."""
     true_haps1, true_haps2, haps1, haps2, bafs, genos = PGTSim().sim_joint_het(

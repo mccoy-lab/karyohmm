@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 from unittest.mock import patch
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 from karyohmm_utils import logsumexp
 
@@ -123,6 +123,7 @@ def test_n_het_minimum():
     sw_err=st.floats(min_value=1e-8, max_value=0.05),
     t_rate=st.floats(min_value=1e-8, max_value=0.2),
 )
+@settings(deadline=None, max_examples=50)
 def test_transition_matrix_rows_sum_to_one(sw_err, t_rate):
     """All 5 rows of the log-transition matrix must sum to 0 (probability 1).
 

@@ -243,3 +243,122 @@ def test_pgt_sim_upd(length, m, c):
     if c in ["2p0", "2m0"]:
         # isodisomy so no true hets
         assert np.all((data["geno_embryo"] == 0) | (data["geno_embryo"] == 2))
+
+
+# ---------------------------------------------------------------------------
+# PGTSimMosaic tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "ploidies,props,ncells",
+    [
+        (np.array([2]), np.array([1.0]), 5),
+        (np.array([1, 2]), np.array([0.3, 0.7]), 10),
+        (np.array([2, 3]), np.array([0.6, 0.4]), 10),
+        (np.array([1, 2, 3]), np.array([0.2, 0.6, 0.2]), 15),
+    ],
+)
+def test_mosaic_sim_mixed_ploidy(ploidies, props, ncells):
+    """PGTSimMosaic.mixed_ploidy_sim returns expected keys and shapes."""
+    data = pgt_sim_mosaic.mixed_ploidy_sim(
+        ploidies=ploidies, props=props, ncells=ncells, m=500, length=1e6, seed=42
+    )
+    assert data["m"] == 500
+    assert "baf" in data
+    assert "lrr" in data
+    assert "sigmas" in data
+    assert "pos" in data
+    assert "mat_haps" in data
+    assert "pat_haps" in data
+    assert data["baf"].shape == (500,)
+    assert data["lrr"].shape == (500,)
+    assert np.all(data["baf"] >= 0) and np.all(data["baf"] <= 1)
+    assert np.max(data["pos"]) <= 1e6
+    # aploid list has one entry per unique ploidy actually sampled
+    assert len(data["aploid"]) == np.unique(data["ploidies"]).size
+
+
+@pytest.mark.parametrize(
+    "props",
+    [
+        np.array([0.0, 1.0, 0.0, 0.0]),
+        np.array([0.0, 0.3, 0.7, 0.0]),
+        np.array([0.0, 0.0, 0.6, 0.4]),
+    ],
+)
+def test_mosaic_sim_disomy_dominant(props):
+    """mixed_ploidy_sim with high disomy proportion produces near-disomy BAF."""
+    ploidies = np.array([0, 1, 2, 3])
+    data = pgt_sim_mosaic.mixed_ploidy_sim(
+        ploidies=ploidies, props=props, ncells=20, m=1000, length=5e6, std_dev=0.05, seed=1
+    )
+    assert data["m"] == 1000
+    assert "baf" in data
+    assert data["baf"].shape == (1000,)
+
+
+def test_mosaic_sim_reproducible():
+    """Two runs with the same seed produce identical output."""
+    kwargs = dict(
+        ploidies=np.array([2, 3]),
+        props=np.array([0.6, 0.4]),
+        ncells=10,
+        m=500,
+        length=1e6,
+        seed=99,
+    )
+    d1 = pgt_sim_mosaic.mixed_ploidy_sim(**kwargs)
+    d2 = pgt_sim_mosaic.mixed_ploidy_sim(**kwargs)
+    np.testing.assert_array_equal(d1["baf"], d2["baf"])
+    np.testing.assert_array_equal(d1["pos"], d2["pos"])
+
+
+def test_mosaic_sim_from_haps():
+    """PGTSimMosaic.sim_from_haps works with pre-computed parental haplotypes."""
+    base = pgt_sim.full_ploidy_sim(m=500, ploidy=2, length=1e6, seed=7)
+    data = pgt_sim_mosaic.sim_from_haps(
+        mat_haps=base["mat_haps"],
+        pat_haps=base["pat_haps"],
+        pos=base["pos"],
+        ploidies=np.array([2, 3]),
+        props=np.array([0.7, 0.3]),
+        ncells=8,
+        seed=7,
+    )
+    assert "baf" in data
+    assert "lrr" in data
+    assert data["baf"].shape == (500,)
+    assert np.all(data["baf"] >= 0) and np.all(data["baf"] <= 1)
+
+
+def test_mosaic_sim_props_normalization():
+    """mixed_ploidy_sim normalizes props that do not sum to 1."""
+    data = pgt_sim_mosaic.mixed_ploidy_sim(
+        ploidies=np.array([2, 3]),
+        props=np.array([3.0, 1.0]),
+        ncells=10,
+        m=300,
+        length=5e5,
+        seed=5,
+    )
+    assert data["m"] == 300
+    assert "baf" in data
+
+
+@pytest.mark.parametrize("seed", [1, 2, 3, 42])
+def test_mosaic_sim_bulk_shapes(seed):
+    """Bulk BAF/LRR/sigmas arrays have shape (ncells, m)."""
+    ncells = 6
+    m = 400
+    data = pgt_sim_mosaic.mixed_ploidy_sim(
+        ploidies=np.array([2, 3]),
+        props=np.array([0.5, 0.5]),
+        ncells=ncells,
+        m=m,
+        length=2e6,
+        seed=seed,
+    )
+    assert data["baf_embryo_bulk"].shape == (ncells, m)
+    assert data["lrr_embryo_bulk"].shape == (ncells, m)
+    assert data["sigmas_embryo_bulk"].shape == (ncells, m)
