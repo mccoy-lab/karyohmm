@@ -57,10 +57,10 @@ class DataReader:
             )
         if "af" in data:
             df = df.with_columns(pl.Series(name="af", values=data["af"]))
-        if ("lrr" in data) and ("sigma" in data):
+        if ("lrr" in data) and ("sigmas" in data):
             df = df.with_columns(
                 pl.Series(name="lrr", values=data["lrr"]),
-                pl.Series(name="lrr", values=data["sigmas"]),
+                pl.Series(name="sigmas", values=data["sigmas"]),
             )
         return df
 
@@ -93,7 +93,7 @@ class DataReader:
                 assert "pat_hap0" in df.columns
                 assert "pat_hap1" in df.columns
         if "lrr" in df.columns:
-            assert "sigma" in df.columns
+            assert "sigmas" in df.columns
         return df
 
     def read_data(self, input_fp):

@@ -1010,6 +1010,7 @@ class PGTSimMosaic(PGTSimBase):
         mix_ploidies = np.random.choice(ploidies, p=props, size=ncells)
         bafs = np.zeros(shape=(ncells, m))
         lrrs = np.zeros(shape=(ncells, m))
+        sigmas_bulk = np.zeros(shape=(ncells, m))
         genos = np.zeros(shape=(ncells, m))
         aploids = []
         # NOTE: only simulate unique ploidies once and then take the weighted mean across them?
@@ -1037,18 +1038,21 @@ class PGTSimMosaic(PGTSimBase):
                 mix_prop=mix_prop,
                 seed=i + 1,
             )
-            lrr = self.sim_logR_ratio(
+            lrr, sigmas = self.sim_logR_ratio(
                 mat_hap1, pat_hap1, ploidy=p, alpha=alpha, seed=i + 1
             )
             assert baf.size == m
             assert lrr.size == m
+            assert sigmas.size == m
             for j in np.where(mix_ploidies == p):
                 bafs[j, :] = baf
                 lrrs[j, :] = lrr
+                sigmas_bulk[j, :] = sigmas
             aploids.append(aploid)
-        # Take the mean BAF + LRR estimates across the bulk samples
+        # Take the mean BAF + LRR + sigma estimates across the bulk samples
         baf_embryo = np.mean(bafs, axis=0)
         lrr_embryo = np.mean(lrrs, axis=0)
+        sigmas_embryo = np.mean(sigmas_bulk, axis=0)
         assert baf_embryo.size == m
         res_table = {
             "mat_haps": mat_haps,
@@ -1062,8 +1066,10 @@ class PGTSimMosaic(PGTSimBase):
             "geno_embryo_bulk": genos,
             "baf_embryo_bulk": bafs,
             "lrr_embryo_bulk": lrrs,
+            "sigmas_embryo_bulk": sigmas_bulk,
             "baf": baf_embryo,
             "lrr": lrr_embryo,
+            "sigmas": sigmas_embryo,
             "m": m,
             "af": ps,
             "pos": pos,
@@ -1116,6 +1122,7 @@ class PGTSimMosaic(PGTSimBase):
         mix_ploidies = np.random.choice(ploidies, p=props, size=ncells)
         bafs = np.zeros(shape=(ncells, m))
         lrrs = np.zeros(shape=(ncells, m))
+        sigmas_bulk = np.zeros(shape=(ncells, m))
         genos = np.zeros(shape=(ncells, m))
         aploids = []
         # NOTE: only simulate unique ploidies once and then take the weighted mean across them?
@@ -1143,18 +1150,21 @@ class PGTSimMosaic(PGTSimBase):
                 mix_prop=mix_prop,
                 seed=i + 1,
             )
-            lrr = self.sim_logR_ratio(
+            lrr, sigmas = self.sim_logR_ratio(
                 mat_hap1, pat_hap1, ploidy=p, alpha=alpha, seed=i + 1
             )
             assert baf.size == m
             assert lrr.size == m
+            assert sigmas.size == m
             for j in np.where(mix_ploidies == p):
                 bafs[j, :] = baf
                 lrrs[j, :] = lrr
+                sigmas_bulk[j, :] = sigmas
             aploids.append(aploid)
-        # Take the mean BAF + LRR estimates across the bulk samples
+        # Take the mean BAF + LRR + sigma estimates across the bulk samples
         baf_embryo = np.mean(bafs, axis=0)
         lrr_embryo = np.mean(lrrs, axis=0)
+        sigmas_embryo = np.mean(sigmas_bulk, axis=0)
         assert baf_embryo.size == m
         res_table = {
             "mat_haps": mat_haps,
@@ -1168,8 +1178,10 @@ class PGTSimMosaic(PGTSimBase):
             "geno_embryo_bulk": genos,
             "baf_embryo_bulk": bafs,
             "lrr_embryo_bulk": lrrs,
+            "sigmas_embryo_bulk": sigmas_bulk,
             "baf": baf_embryo,
-            "lrr_embryo": lrr_embryo,
+            "lrr": lrr_embryo,
+            "sigmas": sigmas_embryo,
             "af": np.ones(baf.size) * np.nan if afs is None else afs,
             "pos": pos,
             "aploid": aploids,

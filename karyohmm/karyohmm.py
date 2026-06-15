@@ -3006,383 +3006,379 @@ class MccEst:
 
 
 class MosaicEst:
-    """Estimator of mosaic copy-number cell fraction from BAF imbalance.
+    """Estimator of mosaic copy-number cell fraction using a joint BAF + LRR HMM.
 
-    Models the distribution of BAF at expected heterozygous sites using a
-    3-state HMM following Loh et al.:
+    A 5-state HMM over all m genomic sites estimates the mosaic cell fraction
+    ``cf`` and identifies the parental origin of the event.  The five states
+    and their emission means are:
 
-    - State 0 (loss): signed BAF shift of ``-theta`` (one copy lost)
-    - State 1 (neutral): no shift
-    - State 2 (gain): signed BAF shift of ``+theta``
+    - State 0 (neutral):       LRR = 0,                phased BAF = 0
+    - State 1 (maternal gain): LRR = log₂(1 + cf/2),  phased BAF = +cf/6
+    - State 2 (paternal gain): LRR = log₂(1 + cf/2),  phased BAF = −cf/6
+    - State 3 (maternal loss): LRR = log₂(1 − cf/2),  phased BAF = −cf/2
+    - State 4 (paternal loss): LRR = log₂(1 − cf/2),  phased BAF = +cf/2
 
-    The signed BAF is computed by phasing heterozygotes relative to the
-    transmitted maternal haplotype, so gains and losses produce opposite signs.
-    The mosaic cell fraction ``theta`` is estimated by MLE over the forward
-    algorithm log-likelihood, and is converted to a cell fraction via
-    :meth:`est_cf`.
+    The BAF means follow from the discrete mosaic mixture and the phase
+    convention (sign = +1 when the maternal haplotype carries the alt allele):
+
+    - Maternal gain: extra maternal copy at a mat=alt site gives BAF 2/3, so
+      phased BAF = +cf/6; at mat=ref sites the sign corrects to the same value.
+    - Paternal gain: extra paternal copy reverses the BAF shift — phased BAF
+      = −cf/6 coherently across all het sites.
+    - Maternal loss: losing the maternal copy leaves only paternal alleles,
+      giving phased BAF = −cf/2 (3× larger than gain because BAF moves to 0 or 1).
+    - Paternal loss: symmetrically, phased BAF = +cf/2.
+
+    LRR is evaluated at **every** site; phased BAF is evaluated only at
+    expected-heterozygous sites (one parent hom-ref, the other hom-alt).
+
+    All preprocessing (het-site identification, phase assignment, transition
+    matrix construction) happens in ``__init__``, so ``est_mle_cf`` can be
+    called immediately after construction.
 
     Parameters
     ----------
     mat_haps : np.ndarray
-        2 x m array of 0/1 maternal haplotypes.
+        2 × m array of 0/1 maternal haplotypes.
     pat_haps : np.ndarray
-        2 x m array of 0/1 paternal haplotypes.
+        2 × m array of 0/1 paternal haplotypes.
     bafs : np.ndarray
         m-length array of B-allele frequencies.
     pos : np.ndarray
         m-length array of base-pair positions.
+    lrrs : np.ndarray, optional
+        m-length array of log-R ratio values.  When provided, LRR emission is
+        included at all m sites (strongly recommended).
+    sigmas : np.ndarray, optional
+        m-length array of per-site LRR noise standard deviations.  Required
+        when ``lrrs`` is provided.
+    switch_err : float
+        Within-type origin-switch probability (maternal↔paternal for the same
+        gain or loss direction; default 0.01).
+    t_rate : float
+        Neutral↔aneuploid transition probability (default 1e-4).
     """
 
-    def __init__(self, mat_haps, pat_haps, bafs, pos):
-        """Initialize the MosaicEst object and validate input dimensions."""
+    #: Ordered state labels returned by :meth:`infer_origin`.
+    STATE_NAMES = (
+        "neutral",
+        "maternal-gain",
+        "paternal-gain",
+        "maternal-loss",
+        "paternal-loss",
+    )
+
+    def __init__(
+        self,
+        mat_haps,
+        pat_haps,
+        bafs,
+        pos,
+        lrrs=None,
+        sigmas=None,
+        switch_err=0.01,
+        t_rate=1e-4,
+        **phase_kwargs,
+    ):
+        """Validate inputs, identify and phase het sites, build transition matrix."""
         assert mat_haps.ndim == 2
         assert pat_haps.ndim == 2
         assert bafs.ndim == 1
         assert bafs.size == mat_haps.shape[1]
         assert bafs.size == pat_haps.shape[1]
         assert pos.size == bafs.size
+        if lrrs is not None:
+            assert lrrs.ndim == 1 and lrrs.size == bafs.size
+        if sigmas is not None:
+            assert sigmas.ndim == 1 and sigmas.size == bafs.size
+        if lrrs is None:
+            warnings.warn(
+                "lrrs not provided; LRR emission will be skipped. "
+                "Providing per-site LRR substantially improves detection power.",
+                UserWarning,
+                stacklevel=2,
+            )
+
         self.mat_haps = mat_haps
         self.pat_haps = pat_haps
         self.bafs = bafs
         self.pos = pos
-        self.het_bafs = None
-        self.A = None
-        self.mle_theta = None
+        self.lrrs = lrrs
+        self.sigmas = sigmas
+        self.mle_cf = None
 
-    def baf_hets(self):
-        """Identify expected heterozygous sites and store their BAF values.
+        self._baf_hets()
+        self._phase_hets(**phase_kwargs)
+        self.create_transition_matrix(switch_err=switch_err, t_rate=t_rate)
 
-        A site is expected to be heterozygous in the embryo when one parent is
-        homozygous-ref (genotype 0) and the other is homozygous-alt (genotype 2).
-        Sets ``self.het_bafs``, ``self.het_idx``, and ``self.n_het``; does *not*
-        phase the BAF (``signed_baf`` is set to ``False``).
+    # ------------------------------------------------------------------
+    # Internal preprocessing
+    # ------------------------------------------------------------------
 
-        Raises:
-            ValueError: if fewer than 10 expected heterozygotes are found.
-        """
+    def _baf_hets(self):
+        """Identify expected-heterozygous sites and cache their BAF values."""
         mat_geno = np.sum(self.mat_haps, axis=0)
         pat_geno = np.sum(self.pat_haps, axis=0)
-        exp_het_idx = ((mat_geno == 0) & (pat_geno == 2)) | (
+        exp_het = ((mat_geno == 0) & (pat_geno == 2)) | (
             (mat_geno == 2) & (pat_geno == 0)
         )
-        self.het_bafs = self.bafs[exp_het_idx]
+        if exp_het.sum() < 10:
+            raise ValueError("Fewer than 10 expected heterozygotes found.")
+        self.het_idx = np.flatnonzero(exp_het)
+        self.het_bafs = self.bafs[exp_het]
         self.n_het = self.het_bafs.size
-        self.signed_baf = False
-        if self.n_het < 10:
-            raise ValueError("Fewer than 10 expected heterozygotes!")
-        assert exp_het_idx.ndim == 1
-        self.het_idx = np.flatnonzero(exp_het_idx)
 
-    def viterbi_hets(self, **kwargs):
-        """Identify heterozygous sites via Viterbi decoding and phase their BAF.
+    def _phase_hets(self, **kwargs):
+        """Phase BAF at expected-het sites via disomy MetaHMM Viterbi.
 
-        Runs the disomy :class:`MetaHMM` Viterbi algorithm to call the embryo
-        genotype at each site; sites called as heterozygous (dosage 1) are
-        retained.  The BAF at each retained site is phased relative to the
-        transmitted maternal haplotype and stored as ``self.phased_baf``
-        (``self.signed_baf`` is set to ``True``).
-
-        Arguments:
-            - **kwargs: passed through to :meth:`MetaHMM.viterbi_algorithm`
-              (e.g. ``pi0``, ``std_dev``, ``r``)
-
-        Raises:
-            ValueError: if fewer than 10 Viterbi-called heterozygotes are found.
+        sign = +1 when the maternal haplotype carries the alt allele, −1
+        otherwise.  Using sign × (BAF − 0.5) rather than sign × |BAF − 0.5|
+        makes gains and losses produce coherent directional shifts across all
+        het sites regardless of which parent carries the alt allele.
         """
         meta_hmm = MetaHMM(disomy=True)
-        path, karyo, _, _ = meta_hmm.viterbi_algorithm(
-            pos=self.pos,
-            mat_haps=self.mat_haps,
-            pat_haps=self.pat_haps,
-            bafs=self.bafs,
-            **kwargs,
-        )
-        embryo_geno = np.zeros(path.size, dtype=np.int32)
         m = self.pos.size
-        assert embryo_geno.size == m
-        for i in range(m):
-            embryo_geno[i] = (
-                self.mat_haps[karyo[path[i]][0], i]
-                + self.pat_haps[karyo[path[i]][2], i]
-            )
-        pred_het_idx = embryo_geno == 1
-        self.het_bafs = self.bafs[pred_het_idx]
-        assert pred_het_idx.ndim == 1
-        self.het_idx = np.flatnonzero(pred_het_idx)
-        self.n_het = self.het_bafs.size
-        if self.n_het < 10:
-            raise ValueError("Fewer than 10 expected heterozygotes!")
-        baf_signs = np.zeros(self.het_idx.size)
-        for i, j in enumerate(self.het_idx):
-            # If the alt allele is maternal we give this a positive sign ...
-            if self.mat_haps[karyo[path[j]][0], j] == 1:
-                baf_signs[i] = 1
-            else:
-                baf_signs[i] = -1
-        self.signed_baf = True
-        self.phased_baf = baf_signs * np.abs(self.het_bafs - 0.5)
-
-    def phase_hets(self, **kwargs):
-        """Phase the BAF at existing heterozygous sites using Viterbi copying path.
-
-        Requires :meth:`baf_hets` to have been called first so that ``self.het_idx``
-        is populated.  Runs the disomy :class:`MetaHMM` Viterbi algorithm and uses
-        the resulting copying path to assign a sign (+1 / -1) to each heterozygous
-        site based on which maternal haplotype was transmitted.  Stores the result
-        in ``self.phased_baf`` and sets ``self.signed_baf = True``.
-
-        Arguments:
-            - **kwargs: passed through to :meth:`MetaHMM.viterbi_algorithm`
-        """
-        meta_hmm = MetaHMM(disomy=True)
+        lrrs_ph = self.lrrs if self.lrrs is not None else np.full(m, -9.0)
+        sigmas_ph = self.sigmas if self.sigmas is not None else np.ones(m)
         path, karyo, _, _ = meta_hmm.viterbi_algorithm(
             pos=self.pos,
             mat_haps=self.mat_haps,
             pat_haps=self.pat_haps,
             bafs=self.bafs,
+            lrrs=lrrs_ph,
+            sigmas=sigmas_ph,
             **kwargs,
         )
-        # Conduct the phasing of heterozygotes here
-        baf_signs = np.zeros(self.het_idx.size)
+        baf_signs = np.empty(self.het_idx.size)
         for i, j in enumerate(self.het_idx):
-            # If the alt allele is maternal we give this a positive sign ...
-            if self.mat_haps[karyo[path[j]][0], j] == 1:
-                baf_signs[i] = 1
-            else:
-                baf_signs[i] = -1
-        self.signed_baf = True
-        self.phased_baf = baf_signs * np.abs(self.het_bafs - 0.5)
+            baf_signs[i] = 1.0 if self.mat_haps[karyo[path[j]][0], j] == 1 else -1.0
+        self.phased_baf = baf_signs * (self.het_bafs - 0.5)
+
+    # ------------------------------------------------------------------
+    # Transition matrix (public — allows user tuning after construction)
+    # ------------------------------------------------------------------
 
     def create_transition_matrix(self, switch_err=0.01, t_rate=1e-4):
-        """Create the transition matrix.
+        """Build the 5-state log-transition matrix.
 
-        NOTE: should allow for asymmetry in the t_rates ...
+        States: 0=neutral, 1=mat-gain, 2=pat-gain, 3=mat-loss, 4=pat-loss.
 
-        Arguments:
-            - switch_err (`float`): rate parameter sibling copying model...
-            - t_rate (`float`): the actual transition rate probability
-
-        Returns:
-            - A (`np.array`): state x state matrix of log-transition rates
-
-        """
-        assert (switch_err > 0) and (switch_err <= 0.05)
-        assert (t_rate > 0) and (t_rate < 0.5)
-        A = np.zeros(shape=(3, 3))
-        # Just make this as a kind of switch error rate or something?
-        # 1. Transition rates here are the switch error rate
-        A[0, 2] = switch_err
-        A[2, 0] = switch_err
-        # 2. Transition rates
-        A[0, 1] = t_rate
-        A[2, 1] = t_rate
-        A[1, 0] = t_rate
-        A[1, 2] = t_rate
-        A[0, 0] = 1.0 - np.sum(A[0, :])
-        A[1, 1] = 1.0 - np.sum(A[1, :])
-        A[2, 2] = 1.0 - np.sum(A[2, :])
-        self.A = np.log(A)
-
-    def forward_algo_mix(self, theta=0.0, std_dev=0.1):
-        """Forward algorithm for the 3-state mosaic HMM (Loh et al. model).
-
-        Requires :meth:`create_transition_matrix` and either :meth:`viterbi_hets`
-        or :meth:`phase_hets` to have been called first.
+        Transitions allowed:
+        - neutral → each aneuploid state with probability ``t_rate / 4``
+        - any aneuploid → neutral with probability ``t_rate``
+        - within-gain origin switch (1↔2) with probability ``switch_err``
+        - within-loss origin switch (3↔4) with probability ``switch_err``
+        - cross-type transitions (gain↔loss) are not modelled (log-prob = −∞)
 
         Arguments:
-            - theta (`float`): mean absolute BAF shift parameter (≥ 0); the
-              three states emit from N(-theta, σ²), N(0, σ²), and N(+theta, σ²)
-              on the signed phased BAF
-            - std_dev (`float`): emission noise standard deviation (> 0)
+            - switch_err (`float`): maternal↔paternal origin-switch probability
+              within the same gain or loss direction
+            - t_rate (`float`): neutral↔aneuploid entry/exit probability
+        """
+        assert 0 < switch_err <= 0.05
+        assert 0 < t_rate < 0.5
+        n = 5
+        A = np.zeros((n, n))
+        # Neutral → each aneuploid equally
+        A[0, 1:] = t_rate / 4.0
+        # Each aneuploid → neutral
+        A[1:, 0] = t_rate
+        # Within-gain origin switch
+        A[1, 2] = switch_err
+        A[2, 1] = switch_err
+        # Within-loss origin switch
+        A[3, 4] = switch_err
+        A[4, 3] = switch_err
+        # Diagonal
+        for i in range(n):
+            A[i, i] = 1.0 - A[i, :].sum()
+        # Cross-type transitions (gain↔loss) are 0; log(0) = -inf is intentional
+        with np.errstate(divide="ignore"):
+            self.A = np.log(A)
+
+    # ------------------------------------------------------------------
+    # Likelihood and inference
+    # ------------------------------------------------------------------
+
+    def forward_algo_full(self, cf=0.0, std_dev_baf=0.1):
+        """Forward algorithm over all m sites with joint BAF + LRR emission.
+
+        When ``lrrs`` was provided at construction, LRR emission is added at
+        every site.  Phased BAF emission is always added at expected-het sites.
+
+        State-dependent emission means (see class docstring for derivation):
+
+        - State 0 (neutral):       LRR = 0,                phased BAF = 0
+        - State 1 (maternal gain): LRR = log₂(1 + cf/2),  phased BAF = +cf/6
+        - State 2 (paternal gain): LRR = log₂(1 + cf/2),  phased BAF = −cf/6
+        - State 3 (maternal loss): LRR = log₂(1 − cf/2),  phased BAF = −cf/2
+        - State 4 (paternal loss): LRR = log₂(1 − cf/2),  phased BAF = +cf/2
+
+        Arguments:
+            - cf (`float`): mosaic cell fraction in [0, 1)
+            - std_dev_baf (`float`): BAF noise standard deviation at het sites
 
         Returns:
-            - alphas (`np.array`): 3 x n log-scaled forward variable at each of the n het sites
-            - scaler (`np.array`): n-length array of per-site log normalisation constants
-            - loglik (`float`): total log-likelihood (sum of scalers)
-
+            - alphas (`np.ndarray`): 5 × m log forward variable
+            - scaler (`np.ndarray`): m-length per-site log normalisation constants
+            - loglik (`float`): total log-likelihood
         """
-        assert theta >= 0
-        assert std_dev > 0.0
-        assert self.A is not None
-        assert self.signed_baf
-        n = self.het_bafs.size
-        m = 3
-        alphas = np.zeros(shape=(m, n))
-        alphas[:, 0] = np.log(1.0 / m)
-        zs = [-theta, 0, theta]
-        # NOTE: I wonder if you don't have to use the truncation here and can instead just use the baf - 0.5f
-        for j in range(3):
-            alphas[j, 0] += norm_logl(self.phased_baf[0], zs[j], std_dev)
-        scaler = np.zeros(n)
+        from scipy.stats import norm as _norm
+
+        assert 0.0 <= cf < 1.0
+        assert std_dev_baf > 0.0
+
+        m = self.pos.size
+        use_lrr = self.lrrs is not None and self.sigmas is not None
+        n_states = 5
+
+        lrr_gain = np.log2(1.0 + cf / 2.0)
+        lrr_loss = np.log2(max(1.0 - cf / 2.0, 1e-9))
+        # Per-state LRR means: [neutral, mat-gain, pat-gain, mat-loss, pat-loss]
+        lrr_means = np.array([0.0, lrr_gain, lrr_gain, lrr_loss, lrr_loss])
+        # Per-state phased-BAF means
+        baf_means = np.array([0.0, cf / 6.0, -cf / 6.0, -cf / 2.0, cf / 2.0])
+
+        if use_lrr:
+            lrr_logp = np.stack([
+                _norm.logpdf(self.lrrs, lrr_means[k], self.sigmas)
+                for k in range(n_states)
+            ])
+        baf_logp = np.stack([
+            _norm.logpdf(self.phased_baf, baf_means[k], std_dev_baf)
+            for k in range(n_states)
+        ])
+
+        is_het = np.zeros(m, dtype=bool)
+        is_het[self.het_idx] = True
+        het_to_pbaf = np.full(m, -1, dtype=np.intp)
+        het_to_pbaf[self.het_idx] = np.arange(self.het_idx.size)
+
+        alphas = np.zeros((n_states, m))
+        alphas[:, 0] = np.log(1.0 / n_states)
+        if use_lrr:
+            alphas[:, 0] += lrr_logp[:, 0]
+        if is_het[0]:
+            alphas[:, 0] += baf_logp[:, het_to_pbaf[0]]
+
+        scaler = np.zeros(m)
         scaler[0] = logsumexp(alphas[:, 0])
         alphas[:, 0] -= scaler[0]
-        for i in range(1, n):
-            for j in range(3):
-                alphas[j, i] += norm_logl(self.phased_baf[i], zs[j], std_dev)
-                alphas[j, i] += logsumexp(self.A[:, j] + alphas[:, (i - 1)])
+
+        for i in range(1, m):
+            for k in range(n_states):
+                alphas[k, i] = logsumexp(self.A[:, k] + alphas[:, i - 1])
+            if use_lrr:
+                alphas[:, i] += lrr_logp[:, i]
+            if is_het[i]:
+                alphas[:, i] += baf_logp[:, het_to_pbaf[i]]
             scaler[i] = logsumexp(alphas[:, i])
             alphas[:, i] -= scaler[i]
-        return alphas, scaler, np.sum(scaler)
 
-    def viterbi_algo_mix(self, theta=0.0, std_dev=0.1):
-        """Viterbi decoding for the 3-state mosaic HMM.
+        return alphas, scaler, float(np.sum(scaler))
 
-        Arguments:
-            - theta (`float`): mean absolute BAF shift parameter (≥ 0)
-            - std_dev (`float`): emission noise standard deviation (≥ 0)
+    def est_mle_cf(self, std_dev_baf=0.1):
+        """Estimate the MLE mosaic cell fraction.
 
-        Returns:
-            - path (`np.array`): n-length most-likely state sequence (values in {0, 1, 2})
-            - zs (`list`): emission means [-theta, 0, theta]
-            - deltas (`np.array`): 3 x n Viterbi score array
-            - psi (`np.array`): 3 x n back-pointer array
-
-        """
-        assert theta >= 0
-        assert std_dev >= 0.0
-        assert self.A is not None
-        assert self.signed_baf
-        n = self.het_bafs.size
-        m = 3
-        deltas = np.zeros(shape=(m, n))
-        deltas[:, 0] = np.log(1.0 / m)
-        psi = np.zeros(shape=(m, n), dtype=int)
-        zs = [-theta, 0.0, theta]
-        for i in range(1, n):
-            for j in range(3):
-                deltas[j, i] = np.max(deltas[:, i - 1] + self.A[:, j])
-                deltas[j, i] += norm_logl(self.phased_baf[i], zs[j], std_dev)
-                psi[j, i] = np.argmax(deltas[:, i - 1] + self.A[:, j]).astype(int)
-        path = np.zeros(n, dtype=int)
-        path[-1] = np.argmax(deltas[:, -1]).astype(int)
-        for i in range(n - 2, -1, -1):
-            path[i] = psi[path[i + 1], i]
-        path[0] = psi[path[1], 1]
-        return path, zs, deltas, psi
-
-    def lrt_theta(self, std_dev=0.1):
-        """Likelihood-ratio test statistic for theta > 0 vs theta = 0.
-
-        Computes -2 × (loglik(theta=0) - loglik(theta_MLE)).  Under the null
-        (no mosaicism) this is approximately chi-squared with 1 df.
+        Maximises :meth:`forward_algo_full` log-likelihood over cf ∈ [0, 1)
+        using Powell's method.  Stores the result in ``self.mle_cf``
+        (``nan`` on optimisation failure).
 
         Arguments:
-            - std_dev (`float`): BAF noise standard deviation used in both models
-
-        Returns:
-            - lrt (`float`): LRT statistic, or ``nan`` if :meth:`est_mle_theta` fails
-
-        """
-        assert std_dev > 0.0
-        ll_h0 = self.forward_algo_mix(theta=0.0, std_dev=std_dev)[2]
-        if self.mle_theta is None:
-            self.est_mle_theta(std_dev=std_dev)
-        if ~np.isnan(self.mle_theta):
-            ll_h1 = self.forward_algo_mix(theta=self.mle_theta, std_dev=std_dev)[2]
-            return -2 * (ll_h0 - ll_h1)
-        else:
-            return np.nan
-
-    def est_mle_theta(self, std_dev=0.1):
-        """Estimate the MLE of the BAF shift parameter theta.
-
-        Maximises the forward-algorithm log-likelihood over theta in [0, 0.5]
-        using Powell's method.  Stores the result in ``self.mle_theta`` (set to
-        ``nan`` if optimisation fails).
-
-        Arguments:
-            - std_dev (`float`): BAF noise standard deviation (held fixed during optimisation)
+            - std_dev_baf (`float`): BAF noise standard deviation
         """
         try:
-            f = lambda x: -self.forward_algo_mix(theta=x, std_dev=std_dev)[2]
+            f = lambda x: -self.forward_algo_full(
+                cf=float(x[0]), std_dev_baf=std_dev_baf
+            )[2]
             opt_res = minimize(
-                f, x0=[0.1], method="Powell", tol=1e-4, bounds=[(0.0, 0.5)]
+                f, x0=[0.1], method="Powell", tol=1e-5, bounds=[(0.0, 0.999)]
             )
-            self.mle_theta = opt_res.x[0]
-        except ValueError:
-            self.mle_theta = np.nan
+            self.mle_cf = float(opt_res.x[0])
+        except (ValueError, AssertionError):
+            self.mle_cf = np.nan
 
-    def ci_mle_theta(self, std_dev=0.1, h=1e-6):
-        """95% confidence interval for theta using observed Fisher information.
+    def ci_mle_cf(self, std_dev_baf=0.1, h=1e-4):
+        """95% confidence interval for ``mle_cf`` via observed Fisher information.
 
-        Approximates the Fisher information via a symmetric finite-difference second
-        derivative of the log-likelihood at the MLE, then applies the standard
-        ``±1.96 / sqrt(n × I)`` formula.  Requires :meth:`est_mle_theta` to have
-        been called first.
+        Requires :meth:`est_mle_cf` to have been called first.
 
         Arguments:
-            - std_dev (`float`): BAF noise standard deviation (held fixed)
-            - h (`float`): finite-difference step size; default 1e-6
+            - std_dev_baf (`float`): BAF noise standard deviation
+            - h (`float`): finite-difference step size
 
         Returns:
-            - ci_mle_theta (`list`): ``[lower_95, mle_theta, upper_95]``, clamped to [0, 0.5];
-              entries are ``nan`` if the Fisher information computation fails
-
+            - ci (`list`): ``[lower_95, mle_cf, upper_95]``, clamped to [0, 1]
         """
-        assert (self.mle_theta is not None) and (~np.isnan(self.mle_theta))
-        assert (h >= 0) and (h <= 0.01)
-        ci_mle_theta = [np.nan, np.nan, np.nan]
+        assert self.mle_cf is not None and not np.isnan(self.mle_cf)
+        ci = [np.nan, np.nan, np.nan]
         try:
-            f = lambda x: self.forward_algo_mix(theta=x, std_dev=std_dev)[2]
-            if self.mle_theta < h:
-                logI = (
-                    f(self.mle_theta + h) - 2 * f(self.mle_theta) + f(self.mle_theta)
-                ) / (h**2)
-            elif self.mle_theta > (0.5 - h):
-                logI = (
-                    f(self.mle_theta) - 2 * f(self.mle_theta) + f(self.mle_theta - h)
-                ) / (h**2)
+            f = lambda x: self.forward_algo_full(cf=x, std_dev_baf=std_dev_baf)[2]
+            cf = self.mle_cf
+            if cf < h:
+                logI = (f(cf + h) - 2.0 * f(cf) + f(cf)) / h**2
+            elif cf > (0.999 - h):
+                logI = (f(cf) - 2.0 * f(cf) + f(cf - h)) / h**2
             else:
-                logI = (
-                    f(self.mle_theta + h)
-                    - 2 * f(self.mle_theta)
-                    + f(self.mle_theta - h)
-                ) / (h**2)
-            fisher_I_inv = 1.0 / -logI
-
-            ci_mle_theta[0] = self.mle_theta - 1.96 * np.sqrt(
-                1.0 / self.n_het * fisher_I_inv
-            )
-            ci_mle_theta[1] = self.mle_theta
-            ci_mle_theta[2] = self.mle_theta + 1.96 * np.sqrt(
-                1.0 / self.n_het * fisher_I_inv
-            )
-            ci_mle_theta[0] = max(0.0, ci_mle_theta[0])
-            ci_mle_theta[2] = min(0.5, ci_mle_theta[2])
-        except ValueError:
+                logI = (f(cf + h) - 2.0 * f(cf) + f(cf - h)) / h**2
+            se = np.sqrt(1.0 / (-logI))
+            ci[0] = max(0.0, cf - 1.96 * se)
+            ci[1] = cf
+            ci[2] = min(1.0, cf + 1.96 * se)
+        except (ValueError, ZeroDivisionError):
             pass
-        return ci_mle_theta
+        return ci
 
-    def est_cf(self, theta=0.0, gain=True):
-        """Convert BAF shift theta to a mosaic cell fraction.
+    def lrt_cf(self, std_dev_baf=0.1):
+        """Likelihood-ratio test statistic for cf > 0 vs cf = 0.
 
-        Uses the relationship between BAF shift and copy number to solve for the
-        fraction of cells carrying the mosaic event.  For a gain the copy number
-        is in (2, 3]; for a loss it is in [1, 2).
+        Computes −2 × (ℓ(cf=0) − ℓ(cf_MLE)).  Under the null hypothesis of
+        no mosaicism this is approximately chi-squared with 1 degree of
+        freedom.  Calls :meth:`est_mle_cf` if it has not been run yet.
 
         Arguments:
-            - theta (`float`): estimated BAF shift parameter in [0, 0.5]
-            - gain (`bool`): if ``True`` (default) interpret theta as a gain (copy
-              number > 2); if ``False`` interpret as a loss (copy number < 2)
+            - std_dev_baf (`float`): BAF noise standard deviation
 
         Returns:
-            - cell_fraction (`float`): estimated fraction of cells carrying the mosaic event
-              in [0, 1]; returns 1.0 if theta exceeds the gain boundary
-
+            - lrt (`float`): LRT statistic, or ``nan`` on failure
         """
-        assert (theta >= 0.0) and (theta <= 0.5)
-        cn_est = lambda cn: np.abs(1 / cn - 0.5)
-        cf_est = lambda cn: np.abs(2.0 - cn)
-        if np.isnan(theta):
-            return np.nan
-        else:
-            if gain:
-                try:
-                    return cf_est(brentq(lambda x: cn_est(x) - theta, 2.0, 3.0))
-                except ValueError:
-                    return 1.0
-            else:
-                return cf_est(brentq(lambda x: cn_est(x) - theta, 1.0, 2.0))
+        ll_h0 = self.forward_algo_full(cf=0.0, std_dev_baf=std_dev_baf)[2]
+        if self.mle_cf is None:
+            self.est_mle_cf(std_dev_baf=std_dev_baf)
+        if not np.isnan(self.mle_cf):
+            ll_h1 = self.forward_algo_full(cf=self.mle_cf, std_dev_baf=std_dev_baf)[2]
+            return -2.0 * (ll_h0 - ll_h1)
+        return np.nan
+
+    def infer_origin(self, std_dev_baf=0.1):
+        """Identify the most likely parental origin of the mosaic event.
+
+        Runs the forward algorithm at ``mle_cf`` and computes the
+        chromosome-wide log-evidence for each of the four aneuploid states
+        (marginalised over sites via logsumexp of the forward variable).  The
+        aneuploid state with the highest evidence is returned as the inferred
+        origin.
+
+        Requires :meth:`est_mle_cf` to have been called first.  Returns
+        ``'neutral'`` when ``mle_cf`` is below 0.01.
+
+        Arguments:
+            - std_dev_baf (`float`): BAF noise standard deviation
+
+        Returns:
+            - origin (`str`): one of ``MosaicEst.STATE_NAMES``
+        """
+        assert self.mle_cf is not None and not np.isnan(self.mle_cf)
+        if self.mle_cf < 0.01:
+            return "neutral"
+        alphas, _, _ = self.forward_algo_full(
+            cf=self.mle_cf, std_dev_baf=std_dev_baf
+        )
+        # Chromosome-wide log-evidence per state via logsumexp across sites
+        log_evidence = np.array([logsumexp(alphas[k, :]) for k in range(5)])
+        # Select the aneuploid state (1-4) with highest evidence
+        best = int(np.argmax(log_evidence[1:])) + 1
+        return self.STATE_NAMES[best]
 
 
 class PhaseCorrect:
