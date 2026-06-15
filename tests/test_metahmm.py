@@ -1,4 +1,5 @@
 """Test suite for karyoHMM MetaHMM."""
+
 import numpy as np
 import pytest
 from karyohmm_utils import create_index_arrays, transition_kernel
@@ -103,6 +104,8 @@ def test_forward_algorithm(data):
     hmm = MetaHMM()
     _, _, _, karyotypes, loglik = hmm.forward_algorithm(
         bafs=data["baf"],
+        lrrs=data["lrr"],
+        sigmas=data["sigmas"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
@@ -115,6 +118,8 @@ def test_backward_algorithm(data):
     hmm = MetaHMM()
     _, _, _, karyotypes, loglik = hmm.backward_algorithm(
         bafs=data["baf"],
+        lrrs=data["lrr"],
+        sigmas=data["sigmas"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
@@ -127,18 +132,24 @@ def test_disomy_model(data):
     hmm = MetaHMM(disomy=True)
     _, _, _, karyotypes, loglik = hmm.forward_algorithm(
         bafs=data["baf"],
+        lrrs=data["lrr"],
+        sigmas=data["sigmas"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
     )
     _, _, _, karyotypes, loglik = hmm.backward_algorithm(
         bafs=data["baf"],
+        lrrs=data["lrr"],
+        sigmas=data["sigmas"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
     )
     gammas, _, karyotypes = hmm.forward_backward(
         bafs=data["baf"],
+        lrrs=data["lrr"],
+        sigmas=data["sigmas"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
@@ -153,12 +164,16 @@ def test_forward_vs_backward_loglik(data):
 
     _, _, _, _, fwd_loglik = hmm.forward_algorithm(
         bafs=data["baf"],
+        lrrs=data["lrr"],
+        sigmas=data["sigmas"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
     )
     _, _, _, _, bwd_loglik = hmm.backward_algorithm(
         bafs=data["baf"],
+        lrrs=data["lrr"],
+        sigmas=data["sigmas"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
@@ -172,6 +187,8 @@ def test_fwd_bwd_algorithm(data):
     hmm = MetaHMM()
     gammas, _, karyotypes = hmm.forward_backward(
         bafs=data["baf"],
+        lrrs=data["lrr"],
+        sigmas=data["sigmas"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
@@ -193,6 +210,8 @@ def test_est_pi0_sigma(data):
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
+        lrrs=data["lrr"],
+        sigmas=data["sigmas"],
     )
     assert (pi0_est > 0) and (pi0_est < 1.0)
     assert (sigma_est > 0) and (sigma_est < 1.0)
@@ -216,6 +235,8 @@ def test_est_pi0_sigma_bad_pi0_bounds(data, pi0_bounds):
             pos=data["pos"],
             mat_haps=data["mat_haps"],
             pat_haps=data["pat_haps"],
+            lrrs=data["lrr"],
+            sigmas=data["sigmas"],
             pi0_bounds=pi0_bounds,
         )
 
@@ -233,6 +254,8 @@ def test_est_pi0_sigma_bad_sigma_bounds(data, sigma_bounds):
             pos=data["pos"],
             mat_haps=data["mat_haps"],
             pat_haps=data["pat_haps"],
+            lrrs=data["lrr"],
+            sigmas=data["sigmas"],
             sigma_bounds=sigma_bounds,
         )
 
@@ -249,6 +272,8 @@ def test_est_pi0_sigma_algos(data, algo):
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
+        lrrs=data["lrr"],
+        sigmas=data["sigmas"],
         algo=algo,
     )
     assert (pi0_est > 0) and (pi0_est < 1.0)
@@ -315,6 +340,8 @@ def test_ploidy_correctness(data):
     hmm = MetaHMM()
     gammas, _, karyotypes = hmm.forward_backward(
         bafs=data["baf"],
+        lrrs=data["lrr"],
+        sigmas=data["sigmas"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
@@ -340,10 +367,14 @@ def test_ploidy_correctness_mle(data):
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
+        lrrs=data["lrr"],
+        sigmas=data["sigmas"],
         algo="Powell",
     )
     gammas, _, karyotypes = hmm.forward_backward(
         bafs=data["baf"],
+        lrrs=data["lrr"],
+        sigmas=data["sigmas"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
@@ -369,10 +400,14 @@ def test_embryo_genotype(data):
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
+        lrrs=data["lrr"],
+        sigmas=data["sigmas"],
         algo="Powell",
     )
     dosages = hmm.genotype_embryo(
         bafs=data["baf"],
+        lrrs=data["lrr"],
+        sigmas=data["sigmas"],
         pos=data["pos"],
         mat_haps=data["mat_haps"],
         pat_haps=data["pat_haps"],
@@ -382,3 +417,33 @@ def test_embryo_genotype(data):
     # Check that all dosages sum to 1 ...
     for i in range(dosages.shape[1]):
         assert np.isclose(dosages[:, i].sum(), 1.0)
+
+
+@pytest.mark.parametrize("data", [data_disomy, data_trisomy, data_monosomy])
+def test_flag_parental_genotype_errors(data):
+    """Test that flag_parental_genotype_errors returns valid per-site error scores."""
+    hmm = MetaHMM()
+    gammas, states, _ = hmm.forward_backward(
+        bafs=data["baf"],
+        lrrs=data["lrr"],
+        sigmas=data["sigmas"],
+        pos=data["pos"],
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+    )
+    mat_err, pat_err = hmm.flag_parental_genotype_errors(
+        gammas=gammas,
+        states=states,
+        bafs=data["baf"],
+        mat_haps=data["mat_haps"],
+        pat_haps=data["pat_haps"],
+    )
+    assert mat_err.shape == (data["baf"].size,)
+    assert pat_err.shape == (data["baf"].size,)
+    # Scores must be non-negative: the best alternative is always >= the called genotype
+    assert np.all(mat_err >= 0.0)
+    assert np.all(pat_err >= 0.0)
+    # Homozygous parental sites cannot benefit from flipping the other allele when the
+    # same allele is already the best option, so scores should be finite
+    assert np.all(np.isfinite(mat_err))
+    assert np.all(np.isfinite(pat_err))

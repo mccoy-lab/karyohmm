@@ -1,7 +1,7 @@
 """Test suite to make sure that input I/O is correct."""
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 
 from karyohmm import DataReader
@@ -17,13 +17,15 @@ test_dict = {
     "pat_haps": [[1, 1], [1, 0]],
 }
 
-test_df = pd.DataFrame(
+test_df = pl.DataFrame(
     {
         "chrom": ["chr1", "chr1"],
         "pos": [1, 2],
         "ref": ["R", "R"],
         "alt": ["A", "A"],
         "baf": [0.1, 0.1],
+        "lrrs": [np.nan, np.nan],
+        "sigmas": [np.nan, np.nan],
         "mat_hap0": [0, 0],
         "mat_hap1": [0, 1],
         "pat_hap0": [1, 1],
@@ -58,7 +60,7 @@ def test_bad_mode(mode):
 def test_read_tsv(df, tmp_path):
     """Test reading in a good CSV."""
     p = tmp_path / "x.tsv"
-    df.to_csv(p, sep="\t", index=None)
+    df.write_csv(p, separator="\t")
     data_reader = DataReader()
     data_reader.read_data(input_fp=str(p))
 
@@ -69,4 +71,7 @@ def test_read_npz(d, tmp_path):
     p = tmp_path / "x.npz"
     np.savez_compressed(p, **d)
     data_reader = DataReader()
-    data_reader.read_data(input_fp=str(p))
+    df = data_reader.read_data(input_fp=str(p))
+    for k in test_dict.keys():
+        if k not in ["mat_haps", "pat_haps"]:
+            assert k in df.columns

@@ -1,4 +1,5 @@
 """Test suite for simulation of PGT-A data."""
+
 import numpy as np
 import pytest
 from hypothesis import given, settings
@@ -17,7 +18,7 @@ pgt_sim_segmental = PGTSimSegmental()
     ploidy=st.integers(min_value=0, max_value=3),
 )
 @settings(max_examples=100, deadline=5000)
-def test_pgt_sim(length, m, ploidy):
+def test_pgt_sim_baf(length, m, ploidy):
     """Test for PGT simulations."""
     data = pgt_sim.full_ploidy_sim(m=m, ploidy=ploidy, length=length)
     assert data["m"] == m
@@ -26,6 +27,24 @@ def test_pgt_sim(length, m, ploidy):
     assert "baf" in data.keys()
     if ploidy > 0:
         assert np.any(data["baf"] == 0.0) | np.any(data["baf"] == 1.0)
+
+
+@given(
+    length=st.floats(min_value=1e2, max_value=1e8),
+    m=st.integers(min_value=1000, max_value=5000),
+    ploidy=st.integers(min_value=0, max_value=3),
+)
+@settings(max_examples=100, deadline=5000)
+def test_pgt_sim_reads(length, m, ploidy):
+    """Test for PGT simulations."""
+    data = pgt_sim.full_ploidy_sim(m=m, reads=True, ploidy=ploidy, length=length)
+    assert data["m"] == m
+    assert data["length"] == length
+    assert np.max(data["pos"]) <= length
+    assert "alt_reads" in data.keys()
+    assert "ref_reads" in data.keys()
+    assert np.all(data["alt_reads"] >= 0)
+    assert np.all(data["ref_reads"] >= 0)
 
 
 @pytest.mark.parametrize(
@@ -61,6 +80,24 @@ def test_pgt_siblings(length, m, nsib):
     for i in range(nsib):
         assert f"baf_embryo{i}" in data.keys()
         assert f"geno_embryo{i}" in data.keys()
+
+
+@given(
+    length=st.floats(min_value=1e2, max_value=1e8),
+    m=st.integers(min_value=2, max_value=1000),
+    nsib=st.integers(min_value=2, max_value=5),
+)
+@settings(max_examples=20, deadline=5000)
+def test_pgt_siblings_reads(length, m, nsib):
+    """Test for PGT simulations."""
+    data = pgt_sim.sibling_euploid_sim(nsibs=nsib, reads=True, m=m, length=length)
+    assert data["m"] == m
+    assert data["length"] == length
+    assert data["nsibs"] == nsib
+    assert np.max(data["pos"]) <= length
+    for i in range(nsib):
+        assert f"alt_reads{i}" in data.keys()
+        assert f"ref_reads{i}" in data.keys()
 
 
 @given(
@@ -142,6 +179,10 @@ def test_pgt_sim_from_vcf(valid_vcf_file):
     )
     results = pgt_sim.sim_from_haps(mat_haps=mat_haps, pat_haps=pat_haps, pos=pos)
     assert "baf" in results
+    assert "alt_reads" in results
+    assert "ref_reads" in results
+    assert results["alt_reads"] is None
+    assert results["ref_reads"] is None
 
 
 @given(
@@ -163,3 +204,42 @@ def test_pgt_sim_ref_panel(length, m, k):
     assert ref_panel.ndim == 2
     assert ref_panel.shape[0] == k
     assert ref_panel.shape[1] == m
+
+
+@given(
+    length=st.floats(min_value=1e2, max_value=1e8),
+    m=st.integers(min_value=100, max_value=1000),
+    cc=st.floats(min_value=0.0, max_value=0.5),
+)
+@settings(max_examples=10, deadline=5000)
+def test_sim_mcc(length, m, cc):
+    """Test for PGT simulations."""
+    data = pgt_sim.full_ploidy_sim(m=m, ploidy=2, length=length)
+    assert data["m"] == m
+    assert data["length"] == length
+    assert np.max(data["pos"]) <= length
+    assert "baf" in data.keys()
+    cc_baf = pgt_sim.sim_cell_contamination(
+        baf=data["baf"], haps=data["mat_haps"], fraction=cc, seed=42
+    )
+    baf = data["baf"]
+    idx = (baf != 0) & (baf != 1)
+    if ~np.isclose(cc, 0):
+        assert np.all(cc_baf[idx] != baf[idx])
+
+
+@given(
+    length=st.floats(min_value=1e2, max_value=1e8),
+    m=st.integers(min_value=100, max_value=1000),
+    c=st.sampled_from(["2p0", "2p1", "2m0", "2m1"]),
+)
+def test_pgt_sim_upd(length, m, c):
+    data = pgt_sim.full_ploidy_sim(m=m, length=length, ploidy=2, upd=c)
+    assert data["m"] == m
+    assert data["length"] == length
+    assert np.max(data["pos"]) <= length
+    assert "baf" in data.keys()
+    assert "lrr" in data.keys()
+    if c in ["2p0", "2m0"]:
+        # isodisomy so no true hets
+        assert np.all((data["geno_embryo"] == 0) | (data["geno_embryo"] == 2))

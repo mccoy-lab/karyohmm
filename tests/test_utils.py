@@ -1,9 +1,8 @@
 """Testing module for utility functions."""
 
-
 import numpy as np
 import pytest
-from hypothesis import given, settings
+from hypothesis import given
 from hypothesis import strategies as st
 from karyohmm_utils import emission_baf, mat_dosage, pat_dosage
 from scipy.integrate import trapezoid

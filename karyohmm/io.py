@@ -1,10 +1,10 @@
 """Classes for reading in data for karyoHMM.
 
-Implements methods for both MetaHMM and DuoHMM-based datasets.
+Implements methods for both MetaHMM and PoCHMM-based datasets.
 """
 
 import numpy as np
-import pandas as pd
+import polars as pl
 
 
 class DataReader:
@@ -12,26 +12,13 @@ class DataReader:
 
     def __init__(self, mode="Meta", duo_maternal=None):
         """Initialize the DataReader class for a given mode."""
-        assert mode in ["Meta", "Duo", "Recomb"]
-        karyo_dtypes = {
-            "chrom": str,
-            "pos": float,
-            "ref": str,
-            "alt": str,
-            "baf": float,
-            "af": float,
-            "mat_hap0": int,
-            "mat_hap1": int,
-            "pat_hap0": int,
-            "pat_hap1": int,
-        }
-        self.dtypes = karyo_dtypes
+        assert mode in ["Meta", "Duo"]
         self.mode = mode
         if (mode == "Duo") and (type(duo_maternal) is not bool):
             raise ValueError(
                 "Need to specify whether a mother-child or father-child duo!"
             )
-        if (duo_maternal is not None) and (mode == "Duo"):
+        if (duo_maternal is True) and (mode == "Duo"):
             self.duo_maternal = duo_maternal
 
     def read_data_np(self, input_fp):
@@ -41,67 +28,41 @@ class DataReader:
             input_fp (`str`): path to input NPZ or NPY file.
 
         Output:
-            df (`pd.DataFrame`): pandas dataframe of cleaned options.
+            df (`pl.DataFrame`): polars dataframe of cleaned options.
 
         """
         data = np.load(input_fp, allow_pickle=True)
         for x in ["chrom", "pos", "ref", "alt", "baf"]:
             assert x in data
-        if self.mode != "Duo":
-            assert "mat_haps" in data
-            assert "pat_haps" in data
-            df = pd.DataFrame(
-                {
-                    "chrom": data["chrom"].tolist(),
-                    "pos": data["pos"].tolist(),
-                    "ref": data["ref"].tolist(),
-                    "alt": data["alt"].tolist(),
-                    "baf": data["baf"].tolist(),
-                    "mat_hap0": data["mat_haps"][0, :].tolist(),
-                    "mat_hap1": data["mat_haps"][1, :].tolist(),
-                    "pat_hap0": data["pat_haps"][0, :].tolist(),
-                    "pat_hap1": data["pat_haps"][1, :].tolist(),
-                }
+        df = pl.DataFrame(
+            {
+                "chrom": data["chrom"],
+                "pos": data["pos"],
+                "ref": data["ref"],
+                "alt": data["alt"],
+                "baf": data["baf"],
+            }
+        )
+        if "mat_haps" in data:
+            assert data["mat_haps"].ndim == 2
+            df = df.with_columns(
+                pl.Series(name="mat_hap0", values=data["mat_haps"][0, :]),
+                pl.Series(name="mat_hap1", values=data["mat_haps"][1, :]),
             )
-            if "af" in data:
-                df["af"] = data["af"]
-            df = df.astype(dtype=self.dtypes)
-            return df
-        if self.mode == "Duo":
-            if self.duo_maternal:
-                assert "mat_haps" in data
-                df = pd.DataFrame(
-                    {
-                        "chrom": data["chrom"],
-                        "pos": data["pos"],
-                        "ref": data["ref"],
-                        "alt": data["alt"],
-                        "baf": data["baf"],
-                        "mat_hap0": data["mat_haps"][0, :],
-                        "mat_hap1": data["mat_haps"][1, :],
-                    },
-                )
-                if "af" in data:
-                    df["af"] = data["af"]
-                df = df.astype(dtype=self.dtypes)
-                return df
-            else:
-                assert "pat_haps" in data
-                df = pd.DataFrame(
-                    {
-                        "chrom": data["chrom"],
-                        "pos": data["pos"],
-                        "ref": data["ref"],
-                        "alt": data["alt"],
-                        "baf": data["baf"],
-                        "pat_hap0": data["pat_haps"][0, :],
-                        "pat_hap1": data["pat_haps"][1, :],
-                    },
-                )
-                if "af" in data:
-                    df["af"] = data["af"]
-                df = df.astype(dtype=self.dtypes)
-            return df
+        if "pat_haps" in data:
+            assert data["pat_haps"].ndim == 2
+            df = df.with_columns(
+                pl.Series(name="pat_hap0", values=data["pat_haps"][0, :]),
+                pl.Series(name="pat_hap1", values=data["pat_haps"][1, :]),
+            )
+        if "af" in data:
+            df = df.with_columns(pl.Series(name="af", values=data["af"]))
+        if ("lrr" in data) and ("sigmas" in data):
+            df = df.with_columns(
+                pl.Series(name="lrr", values=data["lrr"]),
+                pl.Series(name="sigmas", values=data["sigmas"]),
+            )
+        return df
 
     def read_data_df(self, input_fp):
         """Read in data from a pre-existing text-based dataset.
@@ -110,7 +71,7 @@ class DataReader:
             input_fp (`str`): path to input TSV/CSV/TXT file.
 
         Output:
-            df (`pd.DataFrame`): pandas dataframe of cleaned options.
+            df (`pl.DataFrame`): polars dataframe of cleaned options.
 
         """
         sep = ","
@@ -118,16 +79,10 @@ class DataReader:
             sep = "\t"
         elif ".txt" in input_fp:
             sep = " "
-        df = pd.read_csv(input_fp, dtype=self.dtypes, sep=sep)
-        for x in [
-            "chrom",
-            "pos",
-            "ref",
-            "alt",
-            "baf",
-        ]:
+        df = pl.read_csv(input_fp, separator=sep)
+        for x in ["chrom", "pos", "ref", "alt", "baf"]:
             assert x in df.columns
-        if self.mode != "Duo":
+        if self.mode == "Meta":
             for x in ["mat_hap0", "mat_hap1", "pat_hap0", "pat_hap1"]:
                 assert x in df.columns
         if self.mode == "Duo":
@@ -137,6 +92,8 @@ class DataReader:
             else:
                 assert "pat_hap0" in df.columns
                 assert "pat_hap1" in df.columns
+        if "lrr" in df.columns:
+            assert "sigmas" in df.columns
         return df
 
     def read_data(self, input_fp):

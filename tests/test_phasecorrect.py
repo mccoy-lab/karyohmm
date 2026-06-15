@@ -2,8 +2,6 @@
 
 import numpy as np
 import pytest
-from hypothesis import given, settings
-from hypothesis import strategies as st
 
 from karyohmm import PGTSim, PhaseCorrect, QuadHMM
 
@@ -23,6 +21,11 @@ data_disomy_sibs_test_2percent = pgt_sim.sibling_euploid_sim(
 data_disomy_sibs_test_3percent = pgt_sim.sibling_euploid_sim(
     m=4000, nsibs=3, std_dev=0.1, mix_prop=0.6, switch_err_rate=3e-2, seed=42
 )
+
+
+def geno2baf(geno):
+    """Simple function to take a genotype and convert to BAF."""
+    return geno / 2.0
 
 
 @pytest.mark.parametrize(
@@ -75,7 +78,7 @@ def test_phase_correct_viterbi(data):
 )
 def test_phase_perfect_viterbi(data):
     """Test a phase correction using the viterbi-copying path under disomy."""
-    geno2baf = lambda geno: (geno / 2.0)
+
     phase_correct = PhaseCorrect(
         mat_haps=data["mat_haps_real"], pat_haps=data["pat_haps_real"], pos=data["pos"]
     )
@@ -103,6 +106,40 @@ def test_phase_perfect_viterbi(data):
     )
     assert switch_err_rate_fixed_mat < 1e-2
     assert switch_err_rate_fixed_pat < 1e-2
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        data_disomy_sibs_null,
+        data_disomy_sibs_test_1percent,
+    ],
+)
+def test_flag_parental_genotype_errors(data):
+    """Test flag_parental_genotype_errors aggregates scores across siblings."""
+    phase_correct = PhaseCorrect(
+        mat_haps=data["mat_haps_real"], pat_haps=data["pat_haps_real"], pos=data["pos"]
+    )
+    phase_correct.add_baf(
+        embryo_bafs=[data[f"baf_embryo{i}"] for i in range(data["nsibs"])]
+    )
+    phase_correct.est_sigma_pi0s()
+    mat_err, pat_err = phase_correct.flag_parental_genotype_errors()
+    assert mat_err.shape == (data["pos"].size,)
+    assert pat_err.shape == (data["pos"].size,)
+    assert np.all(mat_err >= 0)
+    assert np.all(pat_err >= 0)
+    assert np.all(np.isfinite(mat_err))
+    assert np.all(np.isfinite(pat_err))
+    # Scores after phase correction should still be valid
+    phase_correct.viterbi_phase_correct(niter=2)
+    mat_err_fixed, pat_err_fixed = phase_correct.flag_parental_genotype_errors(
+        use_fixed=True
+    )
+    assert mat_err_fixed.shape == (data["pos"].size,)
+    assert pat_err_fixed.shape == (data["pos"].size,)
+    assert np.all(mat_err_fixed >= 0)
+    assert np.all(pat_err_fixed >= 0)
 
 
 @pytest.mark.parametrize(
