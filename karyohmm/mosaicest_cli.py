@@ -171,7 +171,9 @@ def main(
     data_df = data_reader.read_data(input)
     logging.info("Finished reading input.")
 
-    has_lrr = ("lrr" in data_df.columns) and ("sigmas" in data_df.columns) and (not no_lrr)
+    has_lrr = (
+        ("lrr" in data_df.columns) and ("sigmas" in data_df.columns) and (not no_lrr)
+    )
     if not has_lrr:
         logging.warning(
             "LRR/sigmas columns not found (or --no-lrr set). "
@@ -195,7 +197,9 @@ def main(
             jobs.append((r_chrom, r_start, r_end, f"{r_chrom}:{r_start}-{r_end}"))
     else:
         # Whole-chromosome mode
-        target_chroms = list(chrom) if chrom else data_df["chrom"].unique().sort().to_list()
+        target_chroms = (
+            list(chrom) if chrom else data_df["chrom"].unique().sort().to_list()
+        )
         for c in target_chroms:
             jobs.append((c, None, None, c))
 
@@ -227,8 +231,12 @@ def main(
                 f"{len(cur_df)} sites retained between {job_start} and {job_end}."
             )
 
-        mat_haps = np.vstack([cur_df["mat_hap0"].to_numpy(), cur_df["mat_hap1"].to_numpy()])
-        pat_haps = np.vstack([cur_df["pat_hap0"].to_numpy(), cur_df["pat_hap1"].to_numpy()])
+        mat_haps = np.vstack(
+            [cur_df["mat_hap0"].to_numpy(), cur_df["mat_hap1"].to_numpy()]
+        )
+        pat_haps = np.vstack(
+            [cur_df["pat_hap0"].to_numpy(), cur_df["pat_hap1"].to_numpy()]
+        )
         bafs = cur_df["baf"].to_numpy()
         pos = cur_df["pos"].to_numpy()
         lrrs = cur_df["lrr"].to_numpy() if has_lrr else None
@@ -265,21 +273,23 @@ def main(
 
         if np.isnan(m_est.mle_cf):
             logging.warning(f"[{job_label}] MLE optimisation failed — recording NaN.")
-            summary_rows.append({
-                "chrom": job_chrom,
-                "region_start": job_start,
-                "region_end": job_end,
-                "n_sites": pos.size,
-                "n_het": m_est.n_het,
-                "mle_cf": float("nan"),
-                "cf_lower": float("nan"),
-                "cf_upper": float("nan"),
-                "origin": "unknown",
-                "lrt": float("nan"),
-                "lrt_pval": float("nan"),
-                "significant": False,
-                "std_dev_baf": std_dev_baf,
-            })
+            summary_rows.append(
+                {
+                    "chrom": job_chrom,
+                    "region_start": job_start,
+                    "region_end": job_end,
+                    "n_sites": pos.size,
+                    "n_het": m_est.n_het,
+                    "mle_cf": float("nan"),
+                    "cf_lower": float("nan"),
+                    "cf_upper": float("nan"),
+                    "origin": "unknown",
+                    "lrt": float("nan"),
+                    "lrt_pval": float("nan"),
+                    "significant": False,
+                    "std_dev_baf": std_dev_baf,
+                }
+            )
             continue
 
         ci = m_est.ci_mle_cf(std_dev_baf=std_dev_baf)
@@ -296,30 +306,34 @@ def main(
             f"{'*significant*' if significant else 'not significant'}"
         )
 
-        summary_rows.append({
-            "chrom": job_chrom,
-            "region_start": job_start,
-            "region_end": job_end,
-            "n_sites": pos.size,
-            "n_het": m_est.n_het,
-            "mle_cf": m_est.mle_cf,
-            "cf_lower": ci[0],
-            "cf_upper": ci[2],
-            "origin": origin,
-            "lrt": lrt_stat,
-            "lrt_pval": lrt_pval,
-            "significant": significant,
-            "std_dev_baf": std_dev_baf,
-        })
+        summary_rows.append(
+            {
+                "chrom": job_chrom,
+                "region_start": job_start,
+                "region_end": job_end,
+                "n_sites": pos.size,
+                "n_het": m_est.n_het,
+                "mle_cf": m_est.mle_cf,
+                "cf_lower": ci[0],
+                "cf_upper": ci[2],
+                "origin": origin,
+                "lrt": lrt_stat,
+                "lrt_pval": lrt_pval,
+                "significant": significant,
+                "std_dev_baf": std_dev_baf,
+            }
+        )
 
         if gammas:
             alphas_arr, _, _ = m_est.forward_algo_full(
                 cf=m_est.mle_cf, std_dev_baf=std_dev_baf
             )
-            gamma_df = pl.DataFrame({
-                state: alphas_arr[k, :]
-                for k, state in enumerate(MosaicEst.STATE_NAMES)
-            }).with_columns(
+            gamma_df = pl.DataFrame(
+                {
+                    state: alphas_arr[k, :]
+                    for k, state in enumerate(MosaicEst.STATE_NAMES)
+                }
+            ).with_columns(
                 pl.lit(job_chrom).alias("chrom"),
                 pl.lit(job_label).alias("region"),
                 pl.Series("pos", pos),

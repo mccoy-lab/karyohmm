@@ -2654,7 +2654,9 @@ class MccEst:
     # Genome-wide log-likelihoods (sum across chromosomes)
     # ------------------------------------------------------------------
 
-    def loglik_mcc_genome_poc(self, baf_list, mat_haps_list, freqs_list, c=0.0, std_dev=0.1):
+    def loglik_mcc_genome_poc(
+        self, baf_list, mat_haps_list, freqs_list, c=0.0, std_dev=0.1
+    ):
         """Genome-wide log-likelihood of MCC summed across all chromosomes (POC model).
 
         Chromosomes are conditionally independent given ``c`` and ``std_dev``, so
@@ -2685,7 +2687,9 @@ class MccEst:
             std_dev=std_dev,
         )
 
-    def loglik_mcc_genome_trio(self, baf_list, mat_haps_list, pat_haps_list, c=0.0, std_dev=0.1):
+    def loglik_mcc_genome_trio(
+        self, baf_list, mat_haps_list, pat_haps_list, c=0.0, std_dev=0.1
+    ):
         """Genome-wide log-likelihood of MCC summed across all chromosomes (trio model).
 
         Implemented by concatenating all chromosome arrays into a single call to
@@ -2735,7 +2739,14 @@ class MccEst:
         )
 
     def loglik_mcc_genome_phased_trio(
-        self, baf_list, mat_haps_list, pat_haps_list, pos_list, c=0.0, std_dev=0.1, r=1e-8
+        self,
+        baf_list,
+        mat_haps_list,
+        pat_haps_list,
+        pos_list,
+        c=0.0,
+        std_dev=0.1,
+        r=1e-8,
     ):
         """Genome-wide phase-aware log-likelihood of MCC summed across all chromosomes (trio model).
 
@@ -2761,7 +2772,9 @@ class MccEst:
     # Genome-wide MLE (single c estimated across all chromosomes jointly)
     # ------------------------------------------------------------------
 
-    def est_mcc_genome_poc(self, baf_list, mat_haps_list, freqs_list, algo="Nelder-Mead", **kwargs):
+    def est_mcc_genome_poc(
+        self, baf_list, mat_haps_list, freqs_list, algo="Nelder-Mead", **kwargs
+    ):
         """Estimate MCC by MLE using all chromosomes jointly (POC model).
 
         Maximises :meth:`loglik_mcc_genome_poc` to obtain a single estimate of
@@ -2782,8 +2795,10 @@ class MccEst:
 
         """
         opt_res = minimize(
-            lambda x: -self.loglik_mcc_genome_poc(
-                baf_list, mat_haps_list, freqs_list, c=x[0], std_dev=x[1]
+            lambda x: (
+                -self.loglik_mcc_genome_poc(
+                    baf_list, mat_haps_list, freqs_list, c=x[0], std_dev=x[1]
+                )
             ),
             x0=[0.05, 0.1],
             method=algo,
@@ -2813,8 +2828,10 @@ class MccEst:
 
         """
         opt_res = minimize(
-            lambda x: -self.loglik_mcc_genome_trio(
-                baf_list, mat_haps_list, pat_haps_list, c=x[0], std_dev=x[1]
+            lambda x: (
+                -self.loglik_mcc_genome_trio(
+                    baf_list, mat_haps_list, pat_haps_list, c=x[0], std_dev=x[1]
+                )
             ),
             x0=[0.05, 0.1],
             method=algo,
@@ -2824,7 +2841,14 @@ class MccEst:
         return opt_res.x[0], opt_res.x[1]
 
     def est_mcc_genome_phased_poc(
-        self, baf_list, mat_haps_list, freqs_list, pos_list, r=1e-8, algo="Nelder-Mead", **kwargs
+        self,
+        baf_list,
+        mat_haps_list,
+        freqs_list,
+        pos_list,
+        r=1e-8,
+        algo="Nelder-Mead",
+        **kwargs,
     ):
         """Estimate MCC by MLE using all chromosomes jointly (phase-aware POC model).
 
@@ -2845,8 +2869,16 @@ class MccEst:
 
         """
         opt_res = minimize(
-            lambda x: -self.loglik_mcc_genome_phased_poc(
-                baf_list, mat_haps_list, freqs_list, pos_list, c=x[0], std_dev=x[1], r=r
+            lambda x: (
+                -self.loglik_mcc_genome_phased_poc(
+                    baf_list,
+                    mat_haps_list,
+                    freqs_list,
+                    pos_list,
+                    c=x[0],
+                    std_dev=x[1],
+                    r=r,
+                )
             ),
             x0=[0.05, 0.1],
             method=algo,
@@ -2884,8 +2916,16 @@ class MccEst:
 
         """
         opt_res = minimize(
-            lambda x: -self.loglik_mcc_genome_phased_trio(
-                baf_list, mat_haps_list, pat_haps_list, pos_list, c=x[0], std_dev=x[1], r=r
+            lambda x: (
+                -self.loglik_mcc_genome_phased_trio(
+                    baf_list,
+                    mat_haps_list,
+                    pat_haps_list,
+                    pos_list,
+                    c=x[0],
+                    std_dev=x[1],
+                    r=r,
+                )
             ),
             x0=[0.05, 0.1],
             method=algo,
@@ -2948,7 +2988,14 @@ class MccEst:
         ]
 
     def est_mcc_per_chrom_phased_poc(
-        self, baf_list, mat_haps_list, freqs_list, pos_list, r=1e-8, algo="Nelder-Mead", **kwargs
+        self,
+        baf_list,
+        mat_haps_list,
+        freqs_list,
+        pos_list,
+        r=1e-8,
+        algo="Nelder-Mead",
+        **kwargs,
     ):
         """Estimate MCC independently per chromosome (phase-aware POC model).
 
@@ -3240,14 +3287,18 @@ class MosaicEst:
         baf_means = np.array([0.0, cf / 6.0, -cf / 6.0, -cf / 2.0, cf / 2.0])
 
         if use_lrr:
-            lrr_logp = np.stack([
-                _norm.logpdf(self.lrrs, lrr_means[k], self.sigmas)
+            lrr_logp = np.stack(
+                [
+                    _norm.logpdf(self.lrrs, lrr_means[k], self.sigmas)
+                    for k in range(n_states)
+                ]
+            )
+        baf_logp = np.stack(
+            [
+                _norm.logpdf(self.phased_baf, baf_means[k], std_dev_baf)
                 for k in range(n_states)
-            ])
-        baf_logp = np.stack([
-            _norm.logpdf(self.phased_baf, baf_means[k], std_dev_baf)
-            for k in range(n_states)
-        ])
+            ]
+        )
 
         is_het = np.zeros(m, dtype=bool)
         is_het[self.het_idx] = True
@@ -3288,9 +3339,9 @@ class MosaicEst:
             - std_dev_baf (`float`): BAF noise standard deviation
         """
         try:
-            f = lambda x: -self.forward_algo_full(
-                cf=float(x[0]), std_dev_baf=std_dev_baf
-            )[2]
+            f = lambda x: (
+                -self.forward_algo_full(cf=float(x[0]), std_dev_baf=std_dev_baf)[2]
+            )
             opt_res = minimize(
                 f, x0=[0.1], method="Powell", tol=1e-5, bounds=[(0.0, 0.999)]
             )
@@ -3371,9 +3422,7 @@ class MosaicEst:
         assert self.mle_cf is not None and not np.isnan(self.mle_cf)
         if self.mle_cf < 0.01:
             return "neutral"
-        alphas, _, _ = self.forward_algo_full(
-            cf=self.mle_cf, std_dev_baf=std_dev_baf
-        )
+        alphas, _, _ = self.forward_algo_full(cf=self.mle_cf, std_dev_baf=std_dev_baf)
         # Chromosome-wide log-evidence per state via logsumexp across sites
         log_evidence = np.array([logsumexp(alphas[k, :]) for k in range(5)])
         # Select the aneuploid state (1-4) with highest evidence
