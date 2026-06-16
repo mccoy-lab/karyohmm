@@ -1,7 +1,6 @@
 [![Tests](https://github.com/aabiddanda/karyohmm/actions/workflows/tests.yml/badge.svg)](https://github.com/aabiddanda/karyohmm/actions/workflows/tests.yml)
 [![Coverage](https://codecov.io/gh/aabiddanda/karyohmm/graph/badge.svg)](https://codecov.io/gh/aabiddanda/karyohmm)
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://aabiddanda.github.io/karyohmm/)
-[![medRxiv](https://img.shields.io/badge/medRxiv-2025.04.02.25325097-green)](https://doi.org/10.1101/2025.04.02.25325097)
 [![Nature](https://img.shields.io/badge/Nature_(2026)-10.1038%2Fs41586--025--09964--2-red)](https://doi.org/10.1038/s41586-025-09964-2)
 
 # `karyohmm`
