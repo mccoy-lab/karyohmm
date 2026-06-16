@@ -1,13 +1,18 @@
+[![Tests](https://github.com/aabiddanda/karyohmm/actions/workflows/tests.yml/badge.svg)](https://github.com/aabiddanda/karyohmm/actions/workflows/tests.yml)
+[![Coverage](https://codecov.io/gh/aabiddanda/karyohmm/graph/badge.svg)](https://codecov.io/gh/aabiddanda/karyohmm)
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://aabiddanda.github.io/karyohmm/)
+[![Nature](https://img.shields.io/badge/Nature_(2026)-10.1038%2Fs41586--025--09964--2-red)](https://doi.org/10.1038/s41586-025-09964-2)
+
 # `karyohmm`
 
 Karyohmm is a method to estimate copy number of chromosomes from large-scale genotyping intensity data (specifically for PGT data) when conditioning on parental haplotypes. Specifically, we estimate the posterior probability of a specific karyotypic state (e.g. disomy vs maternal trisomy) in the `MetaHMM` framework.
 
 ## Installation
 
-`karyohmm` is installable via a local `pip` install. Simply execute the following:
+`karyohmm` is installable via a local `pip` install from the repository (this is the current, most up-to-date version):
 
 ```
-git clone git@github.com:mccoy-lab/karyohmm.git
+git clone git@github.com:aabiddanda/karyohmm.git
 cd karyohmm/
 pip install .
 ```
@@ -15,20 +20,12 @@ pip install .
 To install the package without cloning the entire repository, you can run (though this will exclude some of the test data):
 
 ```
-pip install git+https://github.com/mccoy-lab/karyohmm
+pip install git+https://github.com/aabiddanda/karyohmm
 ```
 
 which should handle all of the key dependencies. Installation should be completed within two minutes.
 
-While the majority of the interface uses `python`, many of the internal helper functions built using `Cython` (see the `karyohmm_utils.pyx` file)
-
-The software was tested on Mac OSX and Linux with the following dependencies and versions (using `python 3.10`):
-```
-cyvcf2                               0.31.1
-numpy                                2.1.3
-pandas                               2.2.2
-scipy                                1.15.0
-```
+While the majority of the interface uses `python`, many of the internal helper functions are built using `Cython` (see the `karyohmm_utils.pyx` file).
 
 ## `MetaHMM`
 
@@ -49,95 +46,32 @@ The states in the `MetaHMM` model correspond to specific karyotypes for chromoso
 * `3m` - extra maternal chromosome (maternal trisomy)
 * `3p` - extra paternal chromosome (paternal trisomy)
 
-## DuoHMM
+## POCHMM
 
-The `DuoHMM` model similarly attempts to quantify the aneuploidy status of an embryo, but with the availability of only a **single**  parent. This is primarily accomplished by marginalizing over the full set of possible genotypes for the unobserved parent (with a prior based on allele frequency).
+The `POCHMM` (Products-of-Conception HMM) model similarly attempts to quantify the aneuploidy status of an embryo, but with the availability of only a **single** parent. This is primarily accomplished by marginalizing over the full set of possible genotypes for the unobserved parent (with a prior based on allele frequency).
 
 ## CLI
 
-The installation of `karyohmm` also includes  `karyohmm-infer` and `karyohmm-simulate` command-line interfaces.
+The installation of `karyohmm` includes four command-line interfaces: `metahmm-infer`, `pochmm-infer`, `karyohmm-simulate`, and `karyohmm-mosaic`.
 
-The `karyohmm-infer` program includes all of implementation for inferring aneuploidy status that can be run directly from the command line. You can even specify the whether you are in `MetaHMM` or `DuoHMM` mode to indicate parental availability.
+The `metahmm-infer` program runs the `MetaHMM` model for aneuploidy inference when both parental haplotypes are available.
+
+The `pochmm-infer` program handles products-of-conception data. Use `--mode Duo` (default) when only one parent is genotyped, or `--mode Meta` when both parents are available.
 
 To test the CLI (assuming the full repository was cloned), you can run inference on the following simulated datasets:
 ```
-karyohmm-infer -i data/test_disomy_embryo.tsv -o data/out_disomy
-karyohmm-infer -i data/test_mat_trisomy_embryo.tsv -o data/out_mat_trisomy
-karyohmm-infer -i data/test_combined_embryo.tsv -o data/out_combined
+metahmm-infer -i data/test_disomy_embryo.tsv -o data/out_disomy
+metahmm-infer -i data/test_mat_trisomy_embryo.tsv -o data/out_mat_trisomy
+metahmm-infer -i data/test_combined_embryo.tsv -o data/out_combined
 ```
 
-For a full command-line set of options, run `karyohmm-infer --help`:
+To simulate different aneuploidy types, you can use the `karyohmm-simulate` program. Currently the modes that are supported are to simulate whole-chromosome or segmental aneuploidies. You can also use a pre-existing VCF file to sample parental haplotypes from for more realistic haplotype structure (and variant density).
 
-```
-Usage: karyohmm-infer [OPTIONS]
+The `karyohmm-mosaic` program estimates the mosaic cell fraction for segmental or whole-chromosome aneuploidies using the `MosaicEst` model.
 
-  Karyohmm-Inference CLI.
+For full command-line options, use `--help` on any CLI entry point (e.g. `metahmm-infer --help`).
 
-Options:
-  -i, --input PATH                Input data file for PGT-A array intensity
-                                  data.  [required]
-  --viterbi                       Viterbi algorithm for tracing ploidy states.
-  --mode [Meta|Duo]               [default: Meta; required]
-  --algo [Nelder-Mead|L-BFGS-B|Powell]
-                                  Optimization method for parameter inference.
-                                  [default: Powell]
-  --thin INTEGER                  SNP thinning to improve optimization speed
-                                  for parameter inference.  [default: 1]
-  -r, --recomb_rate FLOAT         Recombination rate between SNPs.  [default:
-                                  1e-08]
-  -a, --aneuploidy_rate FLOAT     Probability of shifting between aneuploidy
-                                  states between SNPs.  [default: 0.01]
-  -dm, --duo_maternal BOOLEAN     Indicator of duo being mother-child duo.
-  -g, --gzip                      Gzip output files.
-  -o, --out TEXT                  Output file prefix.  [required]
-  --help                          Show this message and exit.
-```
-
-
-To simulate different aneuploidy types, you can use the `karyohmm-simulate` program. Currently the modes that are supported are to simulate whole-chromosome or segmental aneuploidies. You can also use a pre-existing VCF file to sample parental haplotypes from for more realistic haplotype structure (and variant density). Currently, the simulation model only supports simulation of log-R ratio and B-allele frequency data to mimic Illumina arrays (we anticipate supporting read-based approaches like exome-capture quite soon).
-
-For a full set of command-line options for simulation, run `karyohmm-simulate --help`:
-
-```
-  Karyohmm-Simulator CLI.
-
-Options:
-  --mode [Whole-Chromosome|Segmental|Mosaic]
-                                  [default: Whole-Chromosome; required]
-  -c, --chrom TEXT                Chromosome indicator.  [default: chr1]
-  -a, --afs PATH                  Allele frequency file for variants (to mimic
-                                  ascertainment-bias).
-  -r, --recomb_rate FLOAT         Recombination rate between SNPs.  [default:
-                                  1e-08]
-  -v, --vcf PATH                  VCF as input for parental haplotype data.
-  --maternal_id TEXT              IID of maternal individual in VCF
-  --paternal_id TEXT              IID of paternal individual in VCF.
-  -l, --length FLOAT              Length of segment to simulate.  [default:
-                                  50000000.0]
-  -p, --ploidy [0|1|2|3]          Degree of aneuploidy to be simulated.
-                                  [default: 2; required]
-  -m, --m INTEGER                 Number of variants to simulate on
-                                  chromosome.  [default: 5000]
-  --std_dev FLOAT                 Standard deviation of BAF-distribution.
-                                  [default: 0.2; required]
-  --pi0 FLOAT                     Point-mass for emission distribution of BAF.
-                                  [default: 0.5; required]
-  --mat_skew FLOAT                Probability of being a maternal-origin
-                                  aneuploidy.  [default: 0.5; required]
-  --mean_size INTEGER             Mean size of a segmental aneuploidy on the
-                                  chromosome.  [default: 100]
-  -se, --switch_err_rate FLOAT    Switch error rate in parental haplotypes.
-                                  [default: 0.01]
-  --seed INTEGER                  Random seed for simulation.  [default: 42;
-                                  required]
-  --threads INTEGER               VCF reading threads.  [default: 1]
-  -g, --gzip                      Gzip output files.
-  -o, --out TEXT                  Output file prefix.  [required]
-  -fmt, --format [tsv|npz]        Output file format.  [required]
-  --help                          Show this message and exit.
-```
-
-### Use in Real Datasets
+### Reference
 
 For use in large-scale datasets, please refer to the following medRxiv preprint:
 
@@ -147,12 +81,26 @@ Sara A. Carioscia, Arjun Biddanda, Margaret R. Starostik, Xiaona Tang, Eva R. Ho
 medRxiv 2025.04.02.25325097; doi: https://doi.org/10.1101/2025.04.02.25325097
 ```
 
-There is  also a set of two accompanying repositories that use `karyohmm` as an importable package in larger pipelines for aneuploidy discovery and recombination inference for the above preprint:
+There is also a set of two accompanying repositories that use `karyohmm` as an importable package in larger pipelines for aneuploidy discovery and recombination inference for the above preprint:
 
 ```
 https://github.com/mccoy-lab/natera_aneuploidy
 https://github.com/mccoy-lab/natera_recomb
 ```
+
+## Documentation
+
+Full API documentation is available at [https://aabiddanda.github.io/karyohmm/](https://aabiddanda.github.io/karyohmm/).
+
+To build the documentation locally, install the docs dependencies and run Sphinx:
+
+```
+pip install ".[docs]"
+cd docs/
+make html
+```
+
+The rendered HTML will be written to `docs/_build/html/`. Open `docs/_build/html/index.html` in a browser to preview.
 
 ## Contact
 

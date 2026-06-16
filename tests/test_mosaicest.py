@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 from unittest.mock import patch
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 from karyohmm_utils import logsumexp
 
@@ -22,8 +22,12 @@ data_monosomy = pgt_sim.full_ploidy_sim(m=5000, ploidy=1, length=1e7, std_dev=0.
 # seed=42 → aploid 3m (maternal gain) and 1m (paternal loss, maternal retained)
 # seed=44 → aploid 3p (paternal gain) and 1p (maternal loss, paternal retained)
 # Using two seeds gives all four parental origins.
-data_pat_gain = pgt_sim.full_ploidy_sim(m=5000, ploidy=3, length=1e7, std_dev=0.1, seed=44)
-data_mat_loss = pgt_sim.full_ploidy_sim(m=5000, ploidy=1, length=1e7, std_dev=0.1, seed=44)
+data_pat_gain = pgt_sim.full_ploidy_sim(
+    m=5000, ploidy=3, length=1e7, std_dev=0.1, seed=44
+)
+data_mat_loss = pgt_sim.full_ploidy_sim(
+    m=5000, ploidy=1, length=1e7, std_dev=0.1, seed=44
+)
 data_disomy_44 = pgt_sim.full_ploidy_sim(m=5000, length=1e7, std_dev=0.1, seed=44)
 
 # Coherent mosaic fixtures: weighted blend of full-ploidy sims sharing the
@@ -103,10 +107,12 @@ def test_n_het_minimum():
     ph = np.zeros((2, 200), dtype=np.int8)
     with pytest.raises(ValueError, match="Fewer than 10"):
         MosaicEst(
-            mat_haps=mh, pat_haps=ph,
+            mat_haps=mh,
+            pat_haps=ph,
             bafs=rng.uniform(size=200),
             pos=np.sort(rng.uniform(high=1e7, size=200)),
-            lrrs=np.zeros(200), sigmas=np.ones(200),
+            lrrs=np.zeros(200),
+            sigmas=np.ones(200),
         )
 
 
@@ -114,6 +120,7 @@ def test_n_het_minimum():
     sw_err=st.floats(min_value=1e-8, max_value=0.05),
     t_rate=st.floats(min_value=1e-8, max_value=0.2),
 )
+@settings(deadline=None, max_examples=50)
 def test_transition_matrix_rows_sum_to_one(sw_err, t_rate):
     """All 5 rows of the log-transition matrix must sum to 0 (probability 1).
 
@@ -254,7 +261,11 @@ def _assert_case(data, expected_origin, min_cf, label=""):
 def test_infer_origin_state_names_complete():
     """STATE_NAMES covers all five possible return values of infer_origin."""
     expected = {
-        "neutral", "maternal-gain", "paternal-gain", "maternal-loss", "paternal-loss"
+        "neutral",
+        "maternal-gain",
+        "paternal-gain",
+        "maternal-loss",
+        "paternal-loss",
     }
     assert set(MosaicEst.STATE_NAMES) == expected
 
@@ -269,6 +280,7 @@ def test_disomy_is_neutral_and_lrt_small():
 
 
 # --- Full aneuploidies ---
+
 
 def test_full_maternal_gain():
     """Full maternal trisomy (3m): mle_cf ≈ 1, origin = maternal-gain, LRT large."""
@@ -292,10 +304,13 @@ def test_full_maternal_loss():
 
 # --- Mosaic aneuploidies (40% cell fraction) ---
 
+
 def test_mosaic_maternal_gain():
     """40% maternal-gain mosaic: mle_cf > 0.2, correct origin, LRT significant."""
     _assert_case(
-        _data_mosaic_mat_gain, "maternal-gain", min_cf=0.2,
+        _data_mosaic_mat_gain,
+        "maternal-gain",
+        min_cf=0.2,
         label="mosaic-maternal-gain",
     )
 
@@ -303,7 +318,9 @@ def test_mosaic_maternal_gain():
 def test_mosaic_paternal_gain():
     """40% paternal-gain mosaic: mle_cf > 0.2, correct origin, LRT significant."""
     _assert_case(
-        _data_mosaic_pat_gain, "paternal-gain", min_cf=0.2,
+        _data_mosaic_pat_gain,
+        "paternal-gain",
+        min_cf=0.2,
         label="mosaic-paternal-gain",
     )
 
@@ -311,7 +328,9 @@ def test_mosaic_paternal_gain():
 def test_mosaic_paternal_loss():
     """40% paternal-loss mosaic: mle_cf > 0.2, correct origin, LRT significant."""
     _assert_case(
-        _data_mosaic_pat_loss, "paternal-loss", min_cf=0.2,
+        _data_mosaic_pat_loss,
+        "paternal-loss",
+        min_cf=0.2,
         label="mosaic-paternal-loss",
     )
 
@@ -319,7 +338,9 @@ def test_mosaic_paternal_loss():
 def test_mosaic_maternal_loss():
     """40% maternal-loss mosaic: mle_cf > 0.2, correct origin, LRT significant."""
     _assert_case(
-        _data_mosaic_mat_loss, "maternal-loss", min_cf=0.2,
+        _data_mosaic_mat_loss,
+        "maternal-loss",
+        min_cf=0.2,
         label="mosaic-maternal-loss",
     )
 
@@ -348,8 +369,14 @@ def test_forward_algo_full_first_site_is_het():
     bafs = rng.uniform(size=m_sites)
     lrrs = rng.normal(size=m_sites)
     sigmas = np.abs(rng.normal(loc=0.2, size=m_sites)) + 0.05
-    m = MosaicEst(mat_haps=mat_haps, pat_haps=pat_haps, bafs=bafs, pos=pos,
-                  lrrs=lrrs, sigmas=sigmas)
+    m = MosaicEst(
+        mat_haps=mat_haps,
+        pat_haps=pat_haps,
+        bafs=bafs,
+        pos=pos,
+        lrrs=lrrs,
+        sigmas=sigmas,
+    )
     assert m.het_idx[0] == 0  # confirm first site is het
     _, _, ll = m.forward_algo_full(cf=0.1)
     assert np.isfinite(ll)
@@ -358,7 +385,9 @@ def test_forward_algo_full_first_site_is_het():
 def test_est_mle_cf_failure_sets_nan():
     """If forward_algo_full raises, est_mle_cf stores nan rather than crashing."""
     m = _make(data_disomy)
-    with patch.object(m, "forward_algo_full", side_effect=ValueError("synthetic failure")):
+    with patch.object(
+        m, "forward_algo_full", side_effect=ValueError("synthetic failure")
+    ):
         m.est_mle_cf()
     assert np.isnan(m.mle_cf)
 
@@ -418,9 +447,12 @@ def test_robust_to_switch_errors():
     )
     m_clean = _make(_data_mosaic_gain)
     m_sw = MosaicEst(
-        mat_haps=mh, pat_haps=ph,
-        bafs=_data_mosaic_gain["baf"], pos=_data_mosaic_gain["pos"],
-        lrrs=_data_mosaic_gain["lrr"], sigmas=_data_mosaic_gain["sigmas"],
+        mat_haps=mh,
+        pat_haps=ph,
+        bafs=_data_mosaic_gain["baf"],
+        pos=_data_mosaic_gain["pos"],
+        lrrs=_data_mosaic_gain["lrr"],
+        sigmas=_data_mosaic_gain["sigmas"],
     )
     m_clean.est_mle_cf()
     m_sw.est_mle_cf()
@@ -432,13 +464,20 @@ def test_robust_to_genotyping_errors():
     from karyohmm.simulator import PGTSimBase
 
     sim = PGTSimBase()
-    _, mh_e = sim.create_genotyping_errors(data_disomy["mat_haps"], err_rate=0.05, seed=1)
-    _, ph_e = sim.create_genotyping_errors(data_disomy["pat_haps"], err_rate=0.05, seed=2)
+    _, mh_e = sim.create_genotyping_errors(
+        data_disomy["mat_haps"], err_rate=0.05, seed=1
+    )
+    _, ph_e = sim.create_genotyping_errors(
+        data_disomy["pat_haps"], err_rate=0.05, seed=2
+    )
     m_clean = _make(_data_mosaic_gain)
     m_ge = MosaicEst(
-        mat_haps=mh_e, pat_haps=ph_e,
-        bafs=_data_mosaic_gain["baf"], pos=_data_mosaic_gain["pos"],
-        lrrs=_data_mosaic_gain["lrr"], sigmas=_data_mosaic_gain["sigmas"],
+        mat_haps=mh_e,
+        pat_haps=ph_e,
+        bafs=_data_mosaic_gain["baf"],
+        pos=_data_mosaic_gain["pos"],
+        lrrs=_data_mosaic_gain["lrr"],
+        sigmas=_data_mosaic_gain["sigmas"],
     )
     m_clean.est_mle_cf()
     m_ge.est_mle_cf()

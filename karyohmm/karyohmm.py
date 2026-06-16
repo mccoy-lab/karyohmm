@@ -66,10 +66,13 @@ class AneuploidyHMM:
     :class:`PocHMM`) implement the state space and emission model appropriate for
     their data type.
 
-    Attributes:
-        ploidy (int): Expected ploidy of the embryo (0 = meta/unknown, 2 = disomy).
-        aploid (str or None): String tag identifying the active model variant
-            (e.g. ``"meta"``, ``"disomy"``, ``"meta+upd"``).
+    Attributes
+    ----------
+    ploidy : int
+        Expected ploidy of the embryo (0 = meta/unknown, 2 = disomy).
+    aploid : str or None
+        String tag identifying the active model variant
+        (e.g. ``"meta"``, ``"disomy"``, ``"meta+upd"``).
     """
 
     def __init__(self):
@@ -80,11 +83,15 @@ class AneuploidyHMM:
     def get_state_str(self, state):
         """Obtain a string representation of the HMM state.
 
-        Arguments:
-            - state: A tuple (typically length 4)
+        Parameters
+        ----------
+        state : tuple
+            A tuple of integers (typically length 4) encoding haplotype indices.
 
-        Returns:
-            - state_str (`str`): string that represents the state
+        Returns
+        -------
+        state_str : str
+            String representation of the state.
 
         """
         t = []
@@ -121,19 +128,30 @@ class AneuploidyHMM:
     ):
         """Estimate sigma and pi0 under the B-Allele Frequency model using optimization of forward algorithm likelihood.
 
-        Arguments:
-            - bafs (`np.array`): B-allele frequencies across the all m sites
-            - pos (`np.array`): basepair positions of the SNPs
-            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
-            - algo (`str`): one of Nelder-Mead, L-BFGS-B, or Powell algorithms for optimization
-            - opt_tol (`float`): master tolerance passed to scipy minimize (default 1e-4)
-            - opt_options (`dict` or None): algorithm-specific options passed to scipy minimize;
-              merged over per-algorithm defaults, so only keys you want to override are needed
+        Parameters
+        ----------
+        bafs : np.ndarray
+            B-allele frequencies across all m sites.
+        pos : np.ndarray
+            Basepair positions of the SNPs.
+        mat_haps : np.ndarray
+            A 2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            A 2 x m array of 0/1 paternal haplotypes.
+        algo : str
+            One of Nelder-Mead, L-BFGS-B, or Powell algorithms for optimization.
+        opt_tol : float
+            Master tolerance passed to scipy minimize (default 1e-4).
+        opt_options : dict or None
+            Algorithm-specific options passed to scipy minimize; merged over
+            per-algorithm defaults, so only keys you want to override are needed.
 
-        Returns:
-            - pi0_est (`float`): estimate of sparsity parameter (pi0) for B-allele emission model
-            - sigma_est (`float`): estimate of noise parameter (sigma) for B-allele emission model
+        Returns
+        -------
+        pi0_est : float
+            Estimate of sparsity parameter (pi0) for B-allele emission model.
+        sigma_est : float
+            Estimate of noise parameter (sigma) for B-allele emission model.
 
         """
         assert algo in ["Nelder-Mead", "L-BFGS-B", "Powell"]
@@ -178,16 +196,24 @@ class AneuploidyHMM:
         pi0_bounds=(0.01, 0.99),
         sigma_bounds=(1e-2, 1.0),
     ):
-        """
+        """Full parameter inference under the B-allele frequency model using naive optimization of the forward algorithm.
 
-        Full parameter inference under the B-allele frequency model using naive optimization of the forward algorithm.
+        Parameters
+        ----------
+        bafs : np.ndarray
+            B-allele frequencies across all m sites.
+        pos : np.ndarray
+            Basepair positions of the SNPs.
+        mat_haps : np.ndarray
+            A 2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            A 2 x m array of 0/1 paternal haplotypes.
+        algo : str
+            One of Nelder-Mead, L-BFGS-B, or Powell algorithms for optimization.
 
-        Arguments:
-            - bafs (`np.array`): B-allele frequencies across the all m sites
-            - pos (`np.array`): basepair positions of the SNPs
-            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
-            - algo (`str`): one of Nelder-Mead, L-BFGS-B, or Powell algorithms for optimization
+        Notes
+        -----
+        Not implemented yet.
 
         """
         raise NotImplementedError(
@@ -233,10 +259,12 @@ class MetaHMM(AneuploidyHMM):
     def __init__(self, disomy=False, upd=False):
         """Initialize the MetaHMM class for determining chromosomal aneuploidy.
 
-        Arguments:
-            - disomy (`bool`): assume disomy to limit the model statespace
-
-        Returns: MetaHMM object
+        Parameters
+        ----------
+        disomy : bool
+            Assume disomy to limit the model state space.
+        upd : bool
+            Add uniparental disomy states to the full state space.
 
         """
         super().__init__()
@@ -397,25 +425,47 @@ class MetaHMM(AneuploidyHMM):
     ):
         """Forward HMM algorithm under a multi-ploidy model.
 
-        Arguments:
-            - bafs (`np.array`): B-allele frequencies across the all m sites
-            - pos (`np.array`): m-length vector of basepair positions for sites
-            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
-            - pi0 (`float`): sparsity parameter for B-allele emission model
-            - std_dev (`float`): standard deviation for B-allele emission model
-            - r (`float`): intra-karyotype transition rate (recombination)
-            - a (`float`): inter-karyotype transition rate
-            - unphased (`bool`): run the model in unphased mode
-            - mat_err (`float`): per-site maternal genotyping error rate
-            - pat_err (`float`): per-site paternal genotyping error rate
+        Parameters
+        ----------
+        bafs : np.ndarray
+            B-allele frequencies across all m sites.
+        lrrs : np.ndarray
+            m-length array of log-R ratio values.
+        sigmas : np.ndarray
+            m-length array of per-site LRR noise standard deviations.
+        pos : np.ndarray
+            m-length vector of basepair positions for sites.
+        mat_haps : np.ndarray
+            A 2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            A 2 x m array of 0/1 paternal haplotypes.
+        pi0 : float
+            Sparsity parameter for B-allele emission model.
+        std_dev : float
+            Standard deviation for B-allele emission model.
+        r : float
+            Intra-karyotype transition rate (recombination).
+        a : float
+            Inter-karyotype transition rate.
+        unphased : bool
+            Run the model in unphased mode.
+        mat_err : float
+            Per-site maternal genotyping error rate.
+        pat_err : float
+            Per-site paternal genotyping error rate.
 
-        Returns:
-            - alphas (`np.array`): forward variable from hmm across k states
-            - scaler (`np.array`): m-length array of scale parameters
-            - states (`list`): tuple representation of states
-            - karyotypes (`np.array`):  array of karyotypes in the MetaHMM model
-            - loglik (`float`): total log-likelihood of B-allele frequency
+        Returns
+        -------
+        alphas : np.ndarray
+            Forward variable from HMM across k states.
+        scaler : np.ndarray
+            m-length array of scale parameters.
+        states : list
+            Tuple representation of states.
+        karyotypes : np.ndarray
+            Array of karyotypes in the MetaHMM model.
+        loglik : float
+            Total log-likelihood of B-allele frequency.
 
         """
         assert bafs.ndim == 1
@@ -472,25 +522,47 @@ class MetaHMM(AneuploidyHMM):
     ):
         """Backward HMM algorithm under a given statespace model.
 
-        Arguments:
-            - bafs (`np.array`): B-allele frequencies across the all m sites
-            - pos (`np.array`): m-length vector of basepair positions for sites
-            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
-            - pi0 (`float`): sparsity parameter for B-allele emission model
-            - std_dev (`float`): standard deviation for B-allele emission model
-            - r (`float`): intra-karyotype transition rate (recombination)
-            - a (`float`): inter-karyotype transition rate
-            - unphased (`bool`): run the model in unphased mode
-            - mat_err (`float`): per-site maternal genotyping error rate
-            - pat_err (`float`): per-site paternal genotyping error rate
+        Parameters
+        ----------
+        bafs : np.ndarray
+            B-allele frequencies across all m sites.
+        lrrs : np.ndarray
+            m-length array of log-R ratio values.
+        sigmas : np.ndarray
+            m-length array of per-site LRR noise standard deviations.
+        pos : np.ndarray
+            m-length vector of basepair positions for sites.
+        mat_haps : np.ndarray
+            A 2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            A 2 x m array of 0/1 paternal haplotypes.
+        pi0 : float
+            Sparsity parameter for B-allele emission model.
+        std_dev : float
+            Standard deviation for B-allele emission model.
+        r : float
+            Intra-karyotype transition rate (recombination).
+        a : float
+            Inter-karyotype transition rate.
+        unphased : bool
+            Run the model in unphased mode.
+        mat_err : float
+            Per-site maternal genotyping error rate.
+        pat_err : float
+            Per-site paternal genotyping error rate.
 
-        Returns:
-            - betas (`np.array`): backward variables from hmm across the k states
-            - scaler (`np.array`): m-length array of scale parameters
-            - states (`list`): tuple representation of states
-            - karyotypes (`np.array`):  array of karyotypes in the MetaHMM model
-            - loglik (`float`): total log-likelihood of B-allele frequency
+        Returns
+        -------
+        betas : np.ndarray
+            Backward variables from HMM across the k states.
+        scaler : np.ndarray
+            m-length array of scale parameters.
+        states : list
+            Tuple representation of states.
+        karyotypes : np.ndarray
+            Array of karyotypes in the MetaHMM model.
+        loglik : float
+            Total log-likelihood of B-allele frequency.
 
         """
         assert bafs.ndim == 1
@@ -547,23 +619,43 @@ class MetaHMM(AneuploidyHMM):
     ):
         """Run the forward-backward algorithm across all states.
 
-        Arguments:
-            - bafs (`np.array`): B-allele frequencies across the all m sites
-            - pos (`np.array`): m-length vector of basepair positions for sites
-            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
-            - pi0 (`float`): sparsity parameter for B-allele emission model
-            - std_dev (`float`): standard deviation for B-allele emission model
-            - r (`float`): intra-karyotype transition rate (recombination)
-            - a (`float`): inter-karyotype transition rate
-            - unphased (`bool`): run the model in unphased mode
-            - mat_err (`float`): per-site maternal genotyping error rate
-            - pat_err (`float`): per-site paternal genotyping error rate
+        Parameters
+        ----------
+        bafs : np.ndarray
+            B-allele frequencies across all m sites.
+        lrrs : np.ndarray
+            m-length array of log-R ratio values.
+        sigmas : np.ndarray
+            m-length array of per-site LRR noise standard deviations.
+        pos : np.ndarray
+            m-length vector of basepair positions for sites.
+        mat_haps : np.ndarray
+            A 2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            A 2 x m array of 0/1 paternal haplotypes.
+        pi0 : float
+            Sparsity parameter for B-allele emission model.
+        std_dev : float
+            Standard deviation for B-allele emission model.
+        r : float
+            Intra-karyotype transition rate (recombination).
+        a : float
+            Inter-karyotype transition rate.
+        unphased : bool
+            Run the model in unphased mode.
+        mat_err : float
+            Per-site maternal genotyping error rate.
+        pat_err : float
+            Per-site paternal genotyping error rate.
 
-        Returns:
-            - gammas (`np.array`): log posterior density of being in each of k hidden states
-            - states (`list`): tuple representation of states
-            - karyotypes (`np.array`):  array of karyotypes in the model
+        Returns
+        -------
+        gammas : np.ndarray
+            Log posterior density of being in each of k hidden states.
+        states : list
+            Tuple representation of states.
+        karyotypes : np.ndarray
+            Array of karyotypes in the model.
 
         """
         self._warn_missing_lrr(lrrs)
@@ -616,26 +708,47 @@ class MetaHMM(AneuploidyHMM):
         mat_err=0.0,
         pat_err=0.0,
     ):
-        """Implement the viterbi traceback through karyotypic states.
+        """Implement the Viterbi traceback through karyotypic states.
 
-        Arguments:
-            - bafs (`np.array`): B-allele frequencies across the all m sites
-            - pos (`np.array`): m-length vector of basepair positions for sites
-            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
-            - pi0 (`float`): sparsity parameter for B-allele emission model
-            - std_dev (`float`): standard deviation for B-allele emission model
-            - r (`float`): intra-karyotype transition rate
-            - a (`float`): inter-karyotype transition rate
-            - unphased (`bool`): run the model in unphased mode
-            - mat_err (`float`): per-site maternal genotyping error rate
-            - pat_err (`float`): per-site paternal genotyping error rate
+        Parameters
+        ----------
+        bafs : np.ndarray
+            B-allele frequencies across all m sites.
+        lrrs : np.ndarray
+            m-length array of log-R ratio values.
+        sigmas : np.ndarray
+            m-length array of per-site LRR noise standard deviations.
+        pos : np.ndarray
+            m-length vector of basepair positions for sites.
+        mat_haps : np.ndarray
+            A 2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            A 2 x m array of 0/1 paternal haplotypes.
+        pi0 : float
+            Sparsity parameter for B-allele emission model.
+        std_dev : float
+            Standard deviation for B-allele emission model.
+        r : float
+            Intra-karyotype transition rate.
+        a : float
+            Inter-karyotype transition rate.
+        unphased : bool
+            Run the model in unphased mode.
+        mat_err : float
+            Per-site maternal genotyping error rate.
+        pat_err : float
+            Per-site paternal genotyping error rate.
 
-        Returns:
-            - path (`np.array`): most likely copying path through k states in the model
-            - states (`list`): tuple representation of states
-            - deltas (`np.array`): delta variable (maximum path probability at step m)
-            - psi (`np.array`): storage vector for psi variable
+        Returns
+        -------
+        path : np.ndarray
+            Most likely copying path through k states in the model.
+        states : list
+            Tuple representation of states.
+        deltas : np.ndarray
+            Delta variable (maximum path probability at step m).
+        psi : np.ndarray
+            Storage vector for psi variable.
 
         """
         self._warn_missing_lrr(lrrs)
@@ -676,12 +789,19 @@ class MetaHMM(AneuploidyHMM):
     def marginal_posterior_karyotypes(self, gammas, karyotypes):
         """Obtain the marginal posterior (not logged) probability over karyotypic states.
 
-        Arguments:
-            - gammas (`np.array`): a k x m array of log-posterior density across sites
-            - karyotypes (`np.array`): karyotype labels for all k states
+        Parameters
+        ----------
+        gammas : np.ndarray
+            A k x m array of log-posterior density across sites.
+        karyotypes : np.ndarray
+            Karyotype labels for all k states.
 
-        Returns:
-            - gamma_karyo: (`np.array`): collapsed posteriors
+        Returns
+        -------
+        gamma_karyo : np.ndarray
+            Collapsed posteriors summed per unique karyotype.
+        uniq_karyo : np.ndarray
+            Unique karyotype labels in the order they appear.
 
         """
         assert gammas.ndim == 2
@@ -699,14 +819,19 @@ class MetaHMM(AneuploidyHMM):
     def posterior_karyotypes(self, gammas, karyotypes):
         """Obtain full posterior on karyotypes chromosome-wide.
 
-        NOTE: this is the weighted proportion of time spent in each karyotypic state-space.
+        This is the weighted proportion of time spent in each karyotypic state.
 
-        Arguments:
-            - gammas (`np.array`): a k x m array of log-posterior density across sites
-            - karyotypes (`np.array`): karyotype labels for all k states
+        Parameters
+        ----------
+        gammas : np.ndarray
+            A k x m array of log-posterior density across sites.
+        karyotypes : np.ndarray
+            Karyotype labels for all k states.
 
-        Returns:
-            - kar_prob (`dict`): dictionary of posterior probability per-snp
+        Returns
+        -------
+        kar_prob : dict
+            Dictionary mapping karyotype label to chromosome-wide posterior probability.
 
         """
         assert gammas.ndim == 2
@@ -734,20 +859,37 @@ class MetaHMM(AneuploidyHMM):
     ):
         """Obtain genotype dosages for a putative disomic embryo.
 
-        Arguments:
-            - bafs (`np.array`): B-allele frequencies across the all m sites
-            - pos (`np.array`): m-length vector of basepair positions for sites
-            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
-            - pi0 (`float`): sparsity parameter for B-allele emission model
-            - std_dev (`float`): standard deviation for B-allele emission model
-            - r (`float`): intra-karyotype transition rate
-            - a (`float`): inter-karyotype transition rate
-            - unphased (`bool`): run the model in unphased mode
-            - viterbi (`bool`): estimate the embryo genotypes using the viterbi algorithm
+        Parameters
+        ----------
+        bafs : np.ndarray
+            B-allele frequencies across all m sites.
+        lrrs : np.ndarray
+            m-length array of log-R ratio values.
+        sigmas : np.ndarray
+            m-length array of per-site LRR noise standard deviations.
+        pos : np.ndarray
+            m-length vector of basepair positions for sites.
+        mat_haps : np.ndarray
+            A 2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            A 2 x m array of 0/1 paternal haplotypes.
+        pi0 : float
+            Sparsity parameter for B-allele emission model.
+        std_dev : float
+            Standard deviation for B-allele emission model.
+        r : float
+            Intra-karyotype transition rate.
+        a : float
+            Inter-karyotype transition rate.
+        unphased : bool
+            Run the model in unphased mode.
+        viterbi : bool
+            Estimate the embryo genotypes using the Viterbi algorithm.
 
-        Returns:
-            - dosages (`np.array`): a 3 x M array of genotype probabilities (RR, RA, AA)
+        Returns
+        -------
+        dosages : np.ndarray
+            A 3 x m array of genotype probabilities (RR, RA, AA).
 
         """
         if self.aploid != "disomy":
@@ -821,18 +963,29 @@ class MetaHMM(AneuploidyHMM):
         A positive score means the data, given the inferred copying state, prefers a
         different parental genotype at that site.
 
-        Arguments:
-            - gammas (`np.array`): k x m log-posterior array from forward_backward
-            - states (`list`): list of state tuples (output of forward_backward)
-            - bafs (`np.array`): m-length array of B-allele frequencies
-            - mat_haps (`np.array`): 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): 2 x m array of 0/1 paternal haplotypes
-            - pi0 (`float`): sparsity parameter for BAF emission
-            - std_dev (`float`): noise parameter for BAF emission
+        Parameters
+        ----------
+        gammas : np.ndarray
+            k x m log-posterior array from forward_backward.
+        states : list
+            List of state tuples (output of forward_backward).
+        bafs : np.ndarray
+            m-length array of B-allele frequencies.
+        mat_haps : np.ndarray
+            2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            2 x m array of 0/1 paternal haplotypes.
+        pi0 : float
+            Sparsity parameter for BAF emission.
+        std_dev : float
+            Noise parameter for BAF emission.
 
-        Returns:
-            - mat_err_score (`np.array`): m-length array; positive values flag likely maternal genotype errors
-            - pat_err_score (`np.array`): m-length array; positive values flag likely paternal genotype errors
+        Returns
+        -------
+        mat_err_score : np.ndarray
+            m-length array; positive values flag likely maternal genotype errors.
+        pat_err_score : np.ndarray
+            m-length array; positive values flag likely paternal genotype errors.
 
         """
         assert gammas.ndim == 2
@@ -947,23 +1100,39 @@ class QuadHMM(AneuploidyHMM):
     ):
         """Implement the forward algorithm for QuadHMM model.
 
-        Arguments:
-            - bafs (`list`): list of two arrays of B-allele frequencies across m sites for two siblings
-            - pos (`np.array`): m-length vector of basepair positions for sites
-            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
-            - pi0 (`tuple - float`): sparsity parameter for B-allele emission model
-            - std_dev (`tuple - float`): standard deviation for B-allele emission model
-            - r (`float`): inter-state transition rate
-            - mat_err (`float`): per-site maternal genotyping error rate
-            - pat_err (`float`): per-site paternal genotyping error rate
+        Parameters
+        ----------
+        bafs : list
+            List of two np.ndarray arrays of B-allele frequencies across m sites for two siblings.
+        pos : np.ndarray
+            m-length vector of basepair positions for sites.
+        mat_haps : np.ndarray
+            A 2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            A 2 x m array of 0/1 paternal haplotypes.
+        pi0 : tuple of float
+            Sparsity parameters for B-allele emission model, one per sibling.
+        std_dev : tuple of float
+            Standard deviation parameters for B-allele emission model, one per sibling.
+        r : float
+            Inter-state transition rate.
+        mat_err : float
+            Per-site maternal genotyping error rate.
+        pat_err : float
+            Per-site paternal genotyping error rate.
 
-        Returns:
-            - alphas (`np.array`): forward variable from hmm across 4 sibling states
-            - scaler (`np.array`): m-length array of scale parameters
-            - states (`list`): tuple representation of the 4 states
-            - karyotypes (`np.array`):  array of karyotypes (default: None)
-            - loglik (`float`): total log-likelihood of joint sibling B-allele frequencies
+        Returns
+        -------
+        alphas : np.ndarray
+            Forward variable from HMM across the joint sibling states.
+        scaler : np.ndarray
+            m-length array of scale parameters.
+        states : list
+            Tuple representation of the 16 joint states.
+        karyotypes : np.ndarray
+            Array of karyotypes (all entries ``"2"``).
+        loglik : float
+            Total log-likelihood of joint sibling B-allele frequencies.
 
         """
         assert len(bafs) == 2
@@ -1002,23 +1171,39 @@ class QuadHMM(AneuploidyHMM):
     ):
         """Implement the backward algorithm for QuadHMM model.
 
-        Arguments:
-            - bafs (`list`): list of two arrays of B-allele frequencies across m sites for two siblings
-            - pos (`np.array`): m-length vector of basepair positions for sites
-            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
-            - pi0 (`tuple - float`): sparsity parameter for B-allele emission model
-            - std_dev (`tuple - float`): standard deviation for B-allele emission model
-            - r (`float`): inter-state transition rate
-            - mat_err (`float`): per-site maternal genotyping error rate
-            - pat_err (`float`): per-site paternal genotyping error rate
+        Parameters
+        ----------
+        bafs : list
+            List of two np.ndarray arrays of B-allele frequencies across m sites for two siblings.
+        pos : np.ndarray
+            m-length vector of basepair positions for sites.
+        mat_haps : np.ndarray
+            A 2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            A 2 x m array of 0/1 paternal haplotypes.
+        pi0 : tuple of float
+            Sparsity parameters for B-allele emission model, one per sibling.
+        std_dev : tuple of float
+            Standard deviation parameters for B-allele emission model, one per sibling.
+        r : float
+            Inter-state transition rate.
+        mat_err : float
+            Per-site maternal genotyping error rate.
+        pat_err : float
+            Per-site paternal genotyping error rate.
 
-        Returns:
-            - betas (`np.array`): backward variable from hmm across 4 sibling states
-            - scaler (`np.array`): m-length array of scale parameters
-            - states (`list`): tuple representation of the 4 states
-            - karyotypes (`np.array`):  array of karyotypes (default: None)
-            - loglik (`float`): total log-likelihood of joint sibling B-allele frequencies
+        Returns
+        -------
+        betas : np.ndarray
+            Backward variable from HMM across the joint sibling states.
+        scaler : np.ndarray
+            m-length array of scale parameters.
+        states : list
+            Tuple representation of the 16 joint states.
+        karyotypes : np.ndarray
+            Array of karyotypes (all entries ``"2"``).
+        loglik : float
+            Total log-likelihood of joint sibling B-allele frequencies.
 
         """
         assert len(bafs) == 2
@@ -1058,21 +1243,37 @@ class QuadHMM(AneuploidyHMM):
     ):
         """Implement the forward-backward algorithm for the QuadHMM model.
 
-        Arguments:
-            - bafs (`list`): list of two arrays of B-allele frequencies across m sites for two siblings
-            - pos (`np.array`): m-length vector of basepair positions for sites
-            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
-            - pi0 (`tuple - float`): sparsity parameter for B-allele emission model
-            - std_dev (`tuple - float`): standard deviation for B-allele emission model
-            - r (`float`): inter-state transition rate
-            - mat_err (`float`): per-site maternal genotyping error rate
-            - pat_err (`float`): per-site paternal genotyping error rate
+        Parameters
+        ----------
+        bafs : list
+            List of two np.ndarray arrays of B-allele frequencies across m sites for two siblings.
+        pos : np.ndarray
+            m-length vector of basepair positions for sites.
+        mat_haps : np.ndarray
+            A 2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            A 2 x m array of 0/1 paternal haplotypes.
+        pi0 : tuple of float
+            Sparsity parameters for B-allele emission model, one per sibling.
+        std_dev : tuple of float
+            Standard deviation parameters for B-allele emission model, one per sibling.
+        r : float
+            Inter-state transition rate.
+        a : float
+            Unused; retained for API compatibility.
+        mat_err : float
+            Per-site maternal genotyping error rate.
+        pat_err : float
+            Per-site paternal genotyping error rate.
 
-        Returns:
-            - gammas (`np.array`): log posterior density of being in each of 4 hidden states
-            - states (`list`): tuple representation of the states
-            - karyotypes (`np.array`): None
+        Returns
+        -------
+        gammas : np.ndarray
+            Log posterior density of being in each of the joint sibling states.
+        states : list
+            Tuple representation of the 16 joint states.
+        karyotypes : None
+            Always returns None for QuadHMM.
 
         """
         alphas, _, states, _, _ = forward_algo_sibs(
@@ -1116,24 +1317,39 @@ class QuadHMM(AneuploidyHMM):
         mat_err=0.0,
         pat_err=0.0,
     ):
-        """Viterbi algorithm definition in a QuadHMM-context.
+        """Viterbi algorithm for the QuadHMM model.
 
-        Arguments:
-            - bafs (`list`): list of two arrays of B-allele frequencies across m sites for two siblings
-            - pos (`np.array`): m-length vector of basepair positions for sites
-            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
-            - pi0 (`tuple - float`): sparsity parameter for B-allele emission model
-            - std_dev (`tuple - float`): standard deviation for B-allele emission model
-            - r (`float`): inter-state transition rate
-            - mat_err (`float`): per-site maternal genotyping error rate
-            - pat_err (`float`): per-site paternal genotyping error rate
+        Parameters
+        ----------
+        bafs : list
+            List of two np.ndarray arrays of B-allele frequencies across m sites for two siblings.
+        pos : np.ndarray
+            m-length vector of basepair positions for sites.
+        mat_haps : np.ndarray
+            A 2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            A 2 x m array of 0/1 paternal haplotypes.
+        pi0 : tuple of float
+            Sparsity parameters for B-allele emission model, one per sibling.
+        std_dev : tuple of float
+            Standard deviation parameters for B-allele emission model, one per sibling.
+        r : float
+            Inter-state transition rate.
+        mat_err : float
+            Per-site maternal genotyping error rate.
+        pat_err : float
+            Per-site paternal genotyping error rate.
 
-        Returns:
-            - path (`np.array`): most likely copying path through k states in the model
-            - states (`list`): tuple representation of states
-            - deltas (`np.array`): delta variable (maximum path probability at step m)
-            - psi (`np.array`): storage vector for psi variable
+        Returns
+        -------
+        path : np.ndarray
+            Most likely copying path through the joint sibling states.
+        states : list
+            Tuple representation of the 16 joint states.
+        deltas : np.ndarray
+            Delta variable (maximum path probability at each site).
+        psi : np.ndarray
+            Storage vector for psi variable.
 
         """
         path, states, deltas, psi = viterbi_algo_sibs(
@@ -1155,16 +1371,21 @@ class QuadHMM(AneuploidyHMM):
         """Break down states into the same categories as Roach et al for determining recombinations.
 
         The state definitions used for tracing sibling haplotypes are:
-            - (0) maternal-haploidentical
-            - (1) paternal-haploidentical
-            - (2) identical
-            - (3) non-identical
 
-        Arguments:
-            - path (`np.array`): a sequence of states output from the viterbi algorithm (16 possible states)
+        - 0: maternal-haploidentical
+        - 1: paternal-haploidentical
+        - 2: identical
+        - 3: non-identical
 
-        Returns:
-            - refined_path (`np.array`): a sequence of m states in 0,1,2,3 indicating states from Roach et al.
+        Parameters
+        ----------
+        path : np.ndarray
+            A sequence of states output from the Viterbi algorithm (16 possible states).
+
+        Returns
+        -------
+        refined_path : np.ndarray
+            A sequence of m states in 0, 1, 2, 3 indicating states from Roach et al.
 
         """
         maternal_haploidentical = []
@@ -1198,11 +1419,16 @@ class QuadHMM(AneuploidyHMM):
     def restrict_states(self):
         """Break down states into the same categories as Roach et al for determining recombinations.
 
-        Returns:
-            - maternal_haploidentical (`list`): indexes of maternally haploidentical states
-            - paternal_haploidentical (`list`): indexes of paternally haploidentical states
-            - identical (`list`): indexes of identical states (siblings share same haplotypes)
-            - non-identical (`list`): indexes of non-identical states
+        Returns
+        -------
+        maternal_haploidentical : list
+            Indexes of maternally haploidentical states.
+        paternal_haploidentical : list
+            Indexes of paternally haploidentical states.
+        identical : list
+            Indexes of identical states (siblings share same haplotypes).
+        non_identical : list
+            Indexes of non-identical states.
 
         """
         maternal_haploidentical = []
@@ -1237,17 +1463,27 @@ class QuadHMM(AneuploidyHMM):
     ):
         """Obtain the restricted Viterbi path for traceback.
 
-        Arguments:
-            - bafs (`list`): list of two arrays of B-allele frequencies across m sites for two siblings
-            - pos (`np.arary`): m-length vector of basepair positions for sites
-            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
-            - pi0 (`float`): sparsity parameter for B-allele emission model
-            - std_dev (`float`): standard deviation for B-allele emission model
-            - r (`float`): inter-state transition rate
+        Parameters
+        ----------
+        bafs : list
+            List of two np.ndarray arrays of B-allele frequencies across m sites for two siblings.
+        pos : np.ndarray
+            m-length vector of basepair positions for sites.
+        mat_haps : np.ndarray
+            A 2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            A 2 x m array of 0/1 paternal haplotypes.
+        pi0 : tuple of float
+            Sparsity parameters for B-allele emission model, one per sibling.
+        std_dev : tuple of float
+            Standard deviation parameters for B-allele emission model, one per sibling.
+        r : float
+            Inter-state transition rate.
 
-        Returns:
-            - res_path (`np.array`): most likely copying path through 4 states in from Roach et al.
+        Returns
+        -------
+        res_path : np.ndarray
+            Most likely copying path restricted to 4 states from Roach et al.
 
         """
         path, _, _, _ = self.viterbi_algorithm(
@@ -1268,17 +1504,27 @@ class QuadHMM(AneuploidyHMM):
     ):
         """Obtain the Maximum A-Posteriori Path across restricted states.
 
-        Arguments:
-            - bafs (`list`): list of two arrays of B-allele frequencies across m sites for two siblings
-            - pos (`np.array`): m-length vector of basepair positions for sites
-            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
-            - pi0 (`tuple float`): sparsity parameter for B-allele emission model
-            - std_dev (`tuple float`): standard deviation for B-allele emission model
-            - r (`float`): inter-state transition rate
+        Parameters
+        ----------
+        bafs : list
+            List of two np.ndarray arrays of B-allele frequencies across m sites for two siblings.
+        pos : np.ndarray
+            m-length vector of basepair positions for sites.
+        mat_haps : np.ndarray
+            A 2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            A 2 x m array of 0/1 paternal haplotypes.
+        pi0 : tuple of float
+            Sparsity parameters for B-allele emission model, one per sibling.
+        std_dev : tuple of float
+            Standard deviation parameters for B-allele emission model, one per sibling.
+        r : float
+            Inter-state transition rate.
 
-        Returns:
-            - map_path (`np.array`): max-a-posteriori copying path through 4 sibling copying states
+        Returns
+        -------
+        map_path : np.ndarray
+            Max-a-posteriori copying path through 4 sibling copying states.
 
         """
         gammas, _, _ = self.forward_backward(
@@ -1318,18 +1564,29 @@ class QuadHMM(AneuploidyHMM):
         data, given the inferred copying state, prefers a different parental genotype
         at that site.
 
-        Arguments:
-            - gammas (`np.array`): k x m log-posterior array from forward_backward
-            - states (`list`): list of paired state tuples (output of forward_backward)
-            - bafs (`list`): list of two m-length BAF arrays for the two siblings
-            - mat_haps (`np.array`): 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): 2 x m array of 0/1 paternal haplotypes
-            - pi0 (`tuple`): (pi0_sib0, pi0_sib1) sparsity parameters for BAF emission
-            - std_dev (`tuple`): (std_sib0, std_sib1) noise parameters for BAF emission
+        Parameters
+        ----------
+        gammas : np.ndarray
+            k x m log-posterior array from forward_backward.
+        states : list
+            List of paired state tuples (output of forward_backward).
+        bafs : list
+            List of two m-length np.ndarray BAF arrays for the two siblings.
+        mat_haps : np.ndarray
+            2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            2 x m array of 0/1 paternal haplotypes.
+        pi0 : tuple
+            (pi0_sib0, pi0_sib1) sparsity parameters for BAF emission.
+        std_dev : tuple
+            (std_sib0, std_sib1) noise parameters for BAF emission.
 
-        Returns:
-            - mat_err_score (`np.array`): m-length array; positive values flag likely maternal genotype errors
-            - pat_err_score (`np.array`): m-length array; positive values flag likely paternal genotype errors
+        Returns
+        -------
+        mat_err_score : np.ndarray
+            m-length array; positive values flag likely maternal genotype errors.
+        pat_err_score : np.ndarray
+            m-length array; positive values flag likely paternal genotype errors.
 
         """
         assert gammas.ndim == 2
@@ -1408,12 +1665,17 @@ class QuadHMM(AneuploidyHMM):
     def det_recomb_sex(self, i, j):
         """Determine the parental origin of the recombination event.
 
-        Arguments:
-            - i (`int`): state index for previous state
-            - j (`int`): state index for current state
+        Parameters
+        ----------
+        i : int
+            State index for the previous state.
+        j : int
+            State index for the current state.
 
-        Returns:
-            - m (`int`): sex of haplotype on which transition occurred (0: maternal, 1: paternal)
+        Returns
+        -------
+        m : int
+            Sex of haplotype on which the transition occurred (0: maternal, 1: paternal).
 
         """
         assert i != j
@@ -1447,16 +1709,25 @@ class QuadHMM(AneuploidyHMM):
     def isolate_recomb(self, path_xy, path_xzs, window=20):
         """Isolate key recombination events from a pair of refined paths.
 
-        Arguments:
-            - path_xy (`np.array`): numpy array of path for focal pair of siblings
-            - path_xzs (`list`): list of sibling paths
-            - window: number of SNPs that the closest transition must be in (e.g. minimum resolution)
+        Parameters
+        ----------
+        path_xy : np.ndarray
+            Array of path indices for the focal pair of siblings.
+        path_xzs : list
+            List of sibling paths (each a np.ndarray).
+        window : int
+            Number of SNPs within which the closest transition must fall (minimum resolution).
 
-        Returns:
-            - mat_recomb_lst (`list`): list of maternal recombination snp indexes
-            - pat_recomb_lst (`list`): list of paternal recombination snp indexes
-            - mat_recomb (`dict`): dictionary of snp-index x sibling counts for maternal recombinations
-            - pat_recomb (`dict`): dictionary of snp-index x sibling counts for paternal recombinations
+        Returns
+        -------
+        mat_recomb_lst : list
+            List of maternal recombination SNP indexes.
+        pat_recomb_lst : list
+            List of paternal recombination SNP indexes.
+        mat_recomb : dict
+            Dictionary of SNP-index to sibling-count for maternal recombinations.
+        pat_recomb : dict
+            Dictionary of SNP-index to sibling-count for paternal recombinations.
 
         """
         mat_recomb = {}
@@ -1504,20 +1775,33 @@ class QuadHMM(AneuploidyHMM):
     ):
         """Estimate the proportion of the chromosome that is shared identically across siblings.
 
-        Arguments:
-            - bafs (`list`): list of two arrays of B-allele frequencies across m sites for two siblings
-            - pos (`np.array`): m-length vector of basepair positions for sites
-            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
-            - pi0 (`tuple float`): sparsity parameter for B-allele emission model
-            - std_dev (`tuple float`): standard deviation for B-allele emission model
-            - r (`float`): inter-state transition rate
+        Parameters
+        ----------
+        bafs : list
+            List of two np.ndarray arrays of B-allele frequencies across m sites for two siblings.
+        pos : np.ndarray
+            m-length vector of basepair positions for sites.
+        mat_haps : np.ndarray
+            A 2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            A 2 x m array of 0/1 paternal haplotypes.
+        pi0 : tuple of float
+            Sparsity parameters for B-allele emission model, one per sibling.
+        std_dev : tuple of float
+            Standard deviation parameters for B-allele emission model, one per sibling.
+        r : float
+            Inter-state transition rate.
 
-        Returns:
-            -  mat_haplo_len (`float`): the total length maternal haplo-identity
-            -  pat_haplo_len (`float`): the total length paternal haplo-identity
-            -  both_haplo_len (`float`): the total length identical between siblings
-            -  tot_len (`float`): the total length of the variants typed on the chromosome
+        Returns
+        -------
+        mat_haplo_len : float
+            Total base-pair length of maternally haploidentical regions.
+        pat_haplo_len : float
+            Total base-pair length of paternally haploidentical regions.
+        both_haplo_len : float
+            Total base-pair length of fully identical (both-haplo) regions.
+        tot_len : float
+            Total base-pair length of the typed region on the chromosome.
 
         """
         # 1. Estimate the simplified viterbi path through these states
@@ -1594,18 +1878,35 @@ class PocHMM(MetaHMM):
     ):
         """Estimate sigma and pi0 under the B-Allele Frequency model using optimization of forward algorithm likelihood.
 
-        Arguments:
-            - bafs (`np.array`): B-allele frequencies across the all m sites
-            - pos (`np.array`): basepair positions of the SNPs
-            - haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
-            - freqs (`np.array`): an m array of allele frequencies as priors
-            - algo (`str`): one of Nelder-Mead, L-BFGS-B, or Powell algorithms for optimization
-            - pi0_bounds (`tuple`): bounds for acceptable values of pi0 parameter
-            - sigma_bounds (`tuple`): bounds for acceptable values for sigma
+        Parameters
+        ----------
+        bafs : np.ndarray
+            B-allele frequencies across all m sites.
+        lrrs : np.ndarray
+            m-length array of log-R ratio values.
+        sigmas : np.ndarray
+            m-length array of per-site LRR noise standard deviations.
+        pos : np.ndarray
+            Basepair positions of the SNPs.
+        haps : np.ndarray
+            A 2 x m array of 0/1 parental haplotypes.
+        freqs : np.ndarray or None
+            An m-length array of allele frequencies as priors.
+        maternal : bool
+            If True, haps are maternal haplotypes; otherwise paternal.
+        algo : str
+            One of Nelder-Mead, L-BFGS-B, or Powell algorithms for optimization.
+        pi0_bounds : tuple
+            Bounds for acceptable values of pi0 parameter.
+        sigma_bounds : tuple
+            Bounds for acceptable values for sigma.
 
-        Returns:
-            - pi0_est (`float`): estimate of sparsity parameter (pi0) for B-allele emission model
-            - sigma_est (`float`): estimate of noise parameter (sigma) for B-allele emission model
+        Returns
+        -------
+        pi0_est : float
+            Estimate of sparsity parameter (pi0) for B-allele emission model.
+        sigma_est : float
+            Estimate of noise parameter (sigma) for B-allele emission model.
 
         """
         assert algo in ["Nelder-Mead", "L-BFGS-B", "Powell"]
@@ -1660,24 +1961,47 @@ class PocHMM(MetaHMM):
     ):
         """Forward algorithm for duos.
 
-        Arguments:
-            - bafs (`np.array`): B-allele frequencies across the all m sites
-            - pos (`np.array`): m-length vector of basepair positions for sites
-            - haps (`np.array`): a 2 x m array of 0/1 parental haplotypes
-            - freqs (`np.array`): an m-length array of freqs
-            - pi0 (`float`): sparsity parameter for B-allele emission model
-            - std_dev (`float`): standard deviation for B-allele emission model
-            - r (`float`): intra-karyotype transition rate (recombination)
-            - a (`float`): inter-karyotype transition rate
-            - unphased (`bool`): run the model in unphased mode
-            - obs_err (`float`): per-site genotyping error rate for the observed parent
+        Parameters
+        ----------
+        bafs : np.ndarray
+            B-allele frequencies across all m sites.
+        lrrs : np.ndarray
+            m-length array of log-R ratio values.
+        sigmas : np.ndarray
+            m-length array of per-site LRR noise standard deviations.
+        pos : np.ndarray
+            m-length vector of basepair positions for sites.
+        haps : np.ndarray
+            A 2 x m array of 0/1 parental haplotypes.
+        freqs : np.ndarray or None
+            An m-length array of population allele frequencies.
+        maternal : bool
+            If True, haps are maternal haplotypes; otherwise paternal.
+        pi0 : float
+            Sparsity parameter for B-allele emission model.
+        std_dev : float
+            Standard deviation for B-allele emission model.
+        r : float
+            Intra-karyotype transition rate (recombination).
+        a : float
+            Inter-karyotype transition rate.
+        unphased : bool
+            Run the model in unphased mode.
+        obs_err : float
+            Per-site genotyping error rate for the observed parent.
 
-        Returns:
-            - alphas (`np.array`): forward variable from hmm across k states
-            - scaler (`np.array`): m-length array of scale parameters
-            - states (`list`): tuple representation of states
-            - karyotypes (`np.array`):  array of karyotypes in the MetaHMM model
-            - loglik (`float`): total log-likelihood of B-allele frequency
+        Returns
+        -------
+        alphas : np.ndarray
+            Forward variable from HMM across k states.
+        scaler : np.ndarray
+            m-length array of scale parameters.
+        states : list
+            Tuple representation of states.
+        karyotypes : np.ndarray
+            Array of karyotypes in the MetaHMM model.
+        loglik : float
+            Total log-likelihood of B-allele frequency.
 
         """
         assert bafs.ndim == 1
@@ -1735,24 +2059,47 @@ class PocHMM(MetaHMM):
     ):
         """Backward algorithm for duos.
 
-        Arguments:
-            - bafs (`np.array`): B-allele frequencies across the all m sites
-            - pos (`np.array`): m-length vector of basepair positions for sites
-            - haps (`np.array`): a 2 x m array of 0/1 parental haplotypes
-            - freqs (`np.array`): an m-length array of freqs
-            - pi0 (`float`): sparsity parameter for B-allele emission model
-            - std_dev (`float`): standard deviation for B-allele emission model
-            - r (`float`): intra-karyotype transition rate (recombination)
-            - a (`float`): inter-karyotype transition rate
-            - unphased (`bool`): run the model in unphased mode
-            - obs_err (`float`): per-site genotyping error rate for the observed parent
+        Parameters
+        ----------
+        bafs : np.ndarray
+            B-allele frequencies across all m sites.
+        lrrs : np.ndarray
+            m-length array of log-R ratio values.
+        sigmas : np.ndarray
+            m-length array of per-site LRR noise standard deviations.
+        pos : np.ndarray
+            m-length vector of basepair positions for sites.
+        haps : np.ndarray
+            A 2 x m array of 0/1 parental haplotypes.
+        freqs : np.ndarray or None
+            An m-length array of population allele frequencies.
+        maternal : bool
+            If True, haps are maternal haplotypes; otherwise paternal.
+        pi0 : float
+            Sparsity parameter for B-allele emission model.
+        std_dev : float
+            Standard deviation for B-allele emission model.
+        r : float
+            Intra-karyotype transition rate (recombination).
+        a : float
+            Inter-karyotype transition rate.
+        unphased : bool
+            Run the model in unphased mode.
+        obs_err : float
+            Per-site genotyping error rate for the observed parent.
 
-        Returns:
-            - betas (`np.array`): backward variable from hmm across k states
-            - scaler (`np.array`): m-length array of scale parameters
-            - states (`list`): tuple representation of states
-            - karyotypes (`np.array`):  array of karyotypes in the MetaHMM model
-            - loglik (`float`): total log-likelihood of B-allele frequency
+        Returns
+        -------
+        betas : np.ndarray
+            Backward variable from HMM across k states.
+        scaler : np.ndarray
+            m-length array of scale parameters.
+        states : list
+            Tuple representation of states.
+        karyotypes : np.ndarray
+            Array of karyotypes in the MetaHMM model.
+        loglik : float
+            Total log-likelihood of B-allele frequency.
 
         """
         assert bafs.ndim == 1
@@ -1810,22 +2157,43 @@ class PocHMM(MetaHMM):
     ):
         """Forward-backward algorithm for duos.
 
-        Arguments:
-            - bafs (`np.array`): B-allele frequencies across the all m sites
-            - pos (`np.array`): m-length vector of basepair positions for sites
-            - haps (`np.array`): a 2 x m array of 0/1 parental haplotypes
-            - freqs (`np.array`): an m-length array of freqs
-            - pi0 (`float`): sparsity parameter for B-allele emission model
-            - std_dev (`float`): standard deviation for B-allele emission model
-            - r (`float`): intra-karyotype transition rate (recombination)
-            - a (`float`): inter-karyotype transition rate
-            - unphased (`bool`): run the model in unphased mode
-            - obs_err (`float`): per-site genotyping error rate for the observed parent
+        Parameters
+        ----------
+        bafs : np.ndarray
+            B-allele frequencies across all m sites.
+        lrrs : np.ndarray
+            m-length array of log-R ratio values.
+        sigmas : np.ndarray
+            m-length array of per-site LRR noise standard deviations.
+        pos : np.ndarray
+            m-length vector of basepair positions for sites.
+        haps : np.ndarray
+            A 2 x m array of 0/1 parental haplotypes.
+        freqs : np.ndarray or None
+            An m-length array of population allele frequencies.
+        maternal : bool
+            If True, haps are maternal haplotypes; otherwise paternal.
+        pi0 : float
+            Sparsity parameter for B-allele emission model.
+        std_dev : float
+            Standard deviation for B-allele emission model.
+        r : float
+            Intra-karyotype transition rate (recombination).
+        a : float
+            Inter-karyotype transition rate.
+        unphased : bool
+            Run the model in unphased mode.
+        obs_err : float
+            Per-site genotyping error rate for the observed parent.
 
-        Returns:
-            - gammas (`np.array`): log posterior density of being in each of k hidden states
-            - states (`list`): tuple representation of states
-            - karyotypes (`np.array`):  array of karyotypes in the MetaHMM model
+        Returns
+        -------
+        gammas : np.ndarray
+            Log posterior density of being in each of k hidden states.
+        states : list
+            Tuple representation of states.
+        karyotypes : np.ndarray
+            Array of karyotypes in the MetaHMM model.
 
         """
         alphas, _, states, karyotypes, _ = self.forward_algorithm(
@@ -1876,26 +2244,37 @@ class PocHMM(MetaHMM):
         """Compute posterior genotype dosages for the unobserved parent.
 
         For each site integrates the BAF and LRR likelihood over all four possible
-        unobserved-parent genotypes (AA, AB, BA, BB), weighted by Hardy–Weinberg
+        unobserved-parent genotypes (AA, AB, BA, BB), weighted by Hardy-Weinberg
         priors from ``freqs`` and the HMM posterior ``gammas``.
 
-        Arguments:
-            - bafs (`np.array`): m-length array of B-allele frequencies
-            - lrrs (`np.array`): m-length array of log-R ratios
-            - sigmas (`np.array`): m-length array of per-site LRR noise estimates
-            - haps (`np.array`): 2 x m array of 0/1 haplotypes for the *observed* parent
-            - gammas (`np.array`): k x m log-posterior array from :meth:`forward_backward`
-            - freqs (`np.array`, optional): m-length array of population allele frequencies;
-              defaults to 0.5 at every site
-            - maternal (`bool`): if ``True`` (default), ``haps`` are the maternal haplotypes
-              and the paternal genotype is imputed; set ``False`` for the reverse
-            - pi0 (`float`): sparsity parameter for the BAF emission model
-            - std_dev (`float`): noise parameter for the BAF emission model
+        Parameters
+        ----------
+        bafs : np.ndarray
+            m-length array of B-allele frequencies.
+        lrrs : np.ndarray
+            m-length array of log-R ratios.
+        sigmas : np.ndarray
+            m-length array of per-site LRR noise estimates.
+        haps : np.ndarray
+            2 x m array of 0/1 haplotypes for the observed parent.
+        gammas : np.ndarray
+            k x m log-posterior array from :meth:`forward_backward`.
+        freqs : np.ndarray, optional
+            m-length array of population allele frequencies; defaults to 0.5 at every site.
+        maternal : bool
+            If True (default), haps are the maternal haplotypes and the paternal genotype
+            is imputed; set False for the reverse.
+        pi0 : float
+            Sparsity parameter for the BAF emission model.
+        std_dev : float
+            Noise parameter for the BAF emission model.
 
-        Returns:
-            - geno_dosage_rev (`np.array`): 3 x m array of posterior genotype probabilities
-              (log scale) for the unobserved parent; rows correspond to homozygous-ref (0),
-              heterozygous (1), and homozygous-alt (2)
+        Returns
+        -------
+        geno_dosage_rev : np.ndarray
+            3 x m array of posterior genotype probabilities (log scale) for the unobserved
+            parent; rows correspond to homozygous-ref (0), heterozygous (1), and
+            homozygous-alt (2).
 
         """
         assert bafs.ndim == 1
@@ -1968,16 +2347,23 @@ class PocHMM(MetaHMM):
         the PocHMM methods document). Falls back to the reference-panel mean at sites with no
         nearby anchors.
 
-        Arguments:
-            - bafs (`np.array`): m-length B-allele frequency array
-            - geno (`np.array`): m-length observed-parent genotype dosage array (0, 1, or 2)
-            - hap_matrix (`np.array`): (2N, m) haplotype reference panel matrix (0/1 encoded)
-            - pos (`np.array`): m-length array of genomic positions in basepairs
-            - eps (`float`): BAF threshold for calling opposite homozygosity (default 0.2)
+        Parameters
+        ----------
+        bafs : np.ndarray
+            m-length B-allele frequency array.
+        geno : np.ndarray
+            m-length observed-parent genotype dosage array (0, 1, or 2).
+        hap_matrix : np.ndarray
+            (2N, m) haplotype reference panel matrix (0/1 encoded).
+        pos : np.ndarray
+            m-length array of genomic positions in basepairs.
+        eps : float
+            BAF threshold for calling opposite homozygosity (default 0.2).
 
-        Returns:
-            - freqs (`np.array`): m-length array of estimated allele frequencies for the
-              unobserved parent
+        Returns
+        -------
+        freqs : np.ndarray
+            m-length array of estimated allele frequencies for the unobserved parent.
 
         """
         assert bafs.ndim == 1
@@ -2081,21 +2467,29 @@ class MccEst:
         pass
 
     def loglik_mcc_poc(self, bafs, mat_haps, freqs, c=0.0, std_dev=0.1):
-        """Log-likelihood of MCC for a single chromosome in a mother–child duo (POC).
+        """Log-likelihood of MCC for a single chromosome in a mother-child duo (POC).
 
         At each site the paternal genotype is unknown and is marginalised over
-        Hardy–Weinberg frequencies derived from ``freqs``.  The contamination
+        Hardy-Weinberg frequencies derived from ``freqs``.  The contamination
         fraction ``c`` shifts the expected BAF mean towards the maternal genotype.
 
-        Arguments:
-            - bafs (`np.array`): m-length array of B-allele frequencies in [0, 1]
-            - mat_haps (`np.array`): 2 x m array of 0/1 maternal haplotypes
-            - freqs (`np.array`): m-length array of population allele frequencies in [0, 1]
-            - c (`float`): maternal contamination fraction in [0, 0.5]
-            - std_dev (`float`): BAF noise standard deviation (> 0)
+        Parameters
+        ----------
+        bafs : np.ndarray
+            m-length array of B-allele frequencies in [0, 1].
+        mat_haps : np.ndarray
+            2 x m array of 0/1 maternal haplotypes.
+        freqs : np.ndarray
+            m-length array of population allele frequencies in [0, 1].
+        c : float
+            Maternal contamination fraction in [0, 0.5].
+        std_dev : float
+            BAF noise standard deviation (> 0).
 
-        Returns:
-            - logll (`float`): total log-likelihood summed across all m sites
+        Returns
+        -------
+        logll : float
+            Total log-likelihood summed across all m sites.
 
         """
         assert bafs.ndim == 1
@@ -2129,15 +2523,23 @@ class MccEst:
         With both parents phased the paternal genotype at every site is known,
         giving a simpler per-site likelihood with no HWE marginalisation.
 
-        Arguments:
-            - bafs (`np.array`): m-length array of B-allele frequencies in [0, 1]
-            - mat_haps (`np.array`): 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): 2 x m array of 0/1 paternal haplotypes
-            - c (`float`): maternal contamination fraction in [0, 0.5]
-            - std_dev (`float`): BAF noise standard deviation (> 0)
+        Parameters
+        ----------
+        bafs : np.ndarray
+            m-length array of B-allele frequencies in [0, 1].
+        mat_haps : np.ndarray
+            2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            2 x m array of 0/1 paternal haplotypes.
+        c : float
+            Maternal contamination fraction in [0, 0.5].
+        std_dev : float
+            BAF noise standard deviation (> 0).
 
-        Returns:
-            - logll (`float`): total log-likelihood summed across all m sites
+        Returns
+        -------
+        logll : float
+            Total log-likelihood summed across all m sites.
 
         """
         assert bafs.ndim == 1
@@ -2164,21 +2566,30 @@ class MccEst:
         return logll
 
     def est_mcc_poc(self, bafs, mat_haps, freqs, algo="Nelder-Mead", **kwargs):
-        """Estimate MCC by MLE for a single chromosome in a mother–child duo.
+        """Estimate MCC by MLE for a single chromosome in a mother-child duo.
 
         Jointly optimises contamination fraction ``c`` and noise ``std_dev`` by
         maximising :meth:`loglik_mcc_poc`.
 
-        Arguments:
-            - bafs (`np.array`): m-length array of B-allele frequencies
-            - mat_haps (`np.array`): 2 x m array of 0/1 maternal haplotypes
-            - freqs (`np.array`): m-length array of population allele frequencies
-            - algo (`str`): scipy minimisation algorithm; default ``"Nelder-Mead"``
-            - **kwargs: additional keyword arguments forwarded to ``scipy.optimize.minimize``
+        Parameters
+        ----------
+        bafs : np.ndarray
+            m-length array of B-allele frequencies.
+        mat_haps : np.ndarray
+            2 x m array of 0/1 maternal haplotypes.
+        freqs : np.ndarray
+            m-length array of population allele frequencies.
+        algo : str
+            Scipy minimisation algorithm; default ``"Nelder-Mead"``.
+        **kwargs
+            Additional keyword arguments forwarded to ``scipy.optimize.minimize``.
 
-        Returns:
-            - c_est (`float`): MLE of the contamination fraction
-            - sigma_est (`float`): MLE of the BAF noise standard deviation
+        Returns
+        -------
+        c_est : float
+            MLE of the contamination fraction.
+        sigma_est : float
+            MLE of the BAF noise standard deviation.
 
         """
         opt_res = minimize(
@@ -2206,16 +2617,25 @@ class MccEst:
         Jointly optimises contamination fraction ``c`` and noise ``std_dev`` by
         maximising :meth:`loglik_mcc_trio`.
 
-        Arguments:
-            - bafs (`np.array`): m-length array of B-allele frequencies
-            - mat_haps (`np.array`): 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): 2 x m array of 0/1 paternal haplotypes
-            - algo (`str`): scipy minimisation algorithm; default ``"Nelder-Mead"``
-            - **kwargs: additional keyword arguments forwarded to ``scipy.optimize.minimize``
+        Parameters
+        ----------
+        bafs : np.ndarray
+            m-length array of B-allele frequencies.
+        mat_haps : np.ndarray
+            2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            2 x m array of 0/1 paternal haplotypes.
+        algo : str
+            Scipy minimisation algorithm; default ``"Nelder-Mead"``.
+        **kwargs
+            Additional keyword arguments forwarded to ``scipy.optimize.minimize``.
 
-        Returns:
-            - c_est (`float`): MLE of the contamination fraction
-            - sigma_est (`float`): MLE of the BAF noise standard deviation
+        Returns
+        -------
+        c_est : float
+            MLE of the contamination fraction.
+        sigma_est : float
+            MLE of the BAF noise standard deviation.
 
         """
         opt_res = minimize(
@@ -2246,19 +2666,31 @@ class MccEst:
         twice the log-likelihood drop from the MLE equals the ``alpha`` quantile
         of a chi-squared distribution with ``df`` degrees of freedom.
 
-        Arguments:
-            - bafs (`np.array`): m-length array of B-allele frequencies
-            - mat_haps (`np.array`): 2 x m array of 0/1 maternal haplotypes
-            - freqs (`np.array`): m-length array of population allele frequencies
-            - c_hat (`float`): MLE contamination fraction (the point estimate)
-            - std_dev (`float`): MLE BAF noise standard deviation (held fixed during profile)
-            - alpha (`float`): confidence level in (0, 1); default 0.95
-            - df (`int`): degrees of freedom for chi-squared quantile; default 1
+        Parameters
+        ----------
+        bafs : np.ndarray
+            m-length array of B-allele frequencies.
+        mat_haps : np.ndarray
+            2 x m array of 0/1 maternal haplotypes.
+        freqs : np.ndarray
+            m-length array of population allele frequencies.
+        c_hat : float
+            MLE contamination fraction (the point estimate).
+        std_dev : float
+            MLE BAF noise standard deviation (held fixed during profile).
+        alpha : float
+            Confidence level in (0, 1); default 0.95.
+        df : int
+            Degrees of freedom for chi-squared quantile; default 1.
 
-        Returns:
-            - lower_CI (`float`): lower confidence bound (falls back to 0 if optimiser fails)
-            - c_hat (`float`): the supplied point estimate
-            - upper_CI (`float`): upper confidence bound (falls back to 0.5 if optimiser fails)
+        Returns
+        -------
+        lower_CI : float
+            Lower confidence bound (falls back to 0 if optimiser fails).
+        c_hat : float
+            The supplied point estimate.
+        upper_CI : float
+            Upper confidence bound (falls back to 0.5 if optimiser fails).
 
         """
         assert (c_hat >= 0) and (c_hat <= 0.5)
@@ -2295,20 +2727,33 @@ class MccEst:
         twice the log-likelihood drop from the MLE equals the ``alpha`` quantile
         of a chi-squared distribution with ``df`` degrees of freedom.
 
-        Arguments:
-            - bafs (`np.array`): m-length array of B-allele frequencies
-            - mat_haps (`np.array`): 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): 2 x m array of 0/1 paternal haplotypes
-            - c_hat (`float`): MLE contamination fraction (the point estimate)
-            - std_dev (`float`): MLE BAF noise standard deviation (held fixed during profile)
-            - h (`float`): finite-difference step (unused; retained for API compatibility)
-            - alpha (`float`): confidence level in (0, 1); default 0.95
-            - df (`int`): degrees of freedom for chi-squared quantile; default 1
+        Parameters
+        ----------
+        bafs : np.ndarray
+            m-length array of B-allele frequencies.
+        mat_haps : np.ndarray
+            2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            2 x m array of 0/1 paternal haplotypes.
+        c_hat : float
+            MLE contamination fraction (the point estimate).
+        std_dev : float
+            MLE BAF noise standard deviation (held fixed during profile).
+        h : float
+            Finite-difference step (unused; retained for API compatibility).
+        alpha : float
+            Confidence level in (0, 1); default 0.95.
+        df : int
+            Degrees of freedom for chi-squared quantile; default 1.
 
-        Returns:
-            - lower_CI (`float`): lower confidence bound (falls back to 0 if optimiser fails)
-            - c_hat (`float`): the supplied point estimate
-            - upper_CI (`float`): upper confidence bound (falls back to 0.5 if optimiser fails)
+        Returns
+        -------
+        lower_CI : float
+            Lower confidence bound (falls back to 0 if optimiser fails).
+        c_hat : float
+            The supplied point estimate.
+        upper_CI : float
+            Upper confidence bound (falls back to 0.5 if optimiser fails).
 
         """
         assert (c_hat >= 0) and (c_hat <= 0.5)
@@ -2356,17 +2801,27 @@ class MccEst:
         Transitions follow an exponential recombination kernel:
         ``rho = 1 - exp(-r * d)`` where ``d`` is the inter-site distance in base pairs.
 
-        Arguments:
-            - bafs (`np.array`): m-length array of B-allele frequencies in [0, 1]
-            - mat_haps (`np.array`): 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): 2 x m array of 0/1 paternal haplotypes
-            - pos (`np.array`): m-length strictly increasing array of base-pair positions
-            - c (`float`): maternal contamination fraction in [0, 0.5]
-            - std_dev (`float`): BAF noise standard deviation (> 0)
-            - r (`float`): per-base-pair recombination rate (> 0); default 1e-8
+        Parameters
+        ----------
+        bafs : np.ndarray
+            m-length array of B-allele frequencies in [0, 1].
+        mat_haps : np.ndarray
+            2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            2 x m array of 0/1 paternal haplotypes.
+        pos : np.ndarray
+            m-length strictly increasing array of base-pair positions.
+        c : float
+            Maternal contamination fraction in [0, 0.5].
+        std_dev : float
+            BAF noise standard deviation (> 0).
+        r : float
+            Per-base-pair recombination rate (> 0); default 1e-8.
 
-        Returns:
-            - loglik (`float`): total forward-algorithm log-likelihood across m sites
+        Returns
+        -------
+        loglik : float
+            Total forward-algorithm log-likelihood across m sites.
 
         """
         assert bafs.ndim == 1
@@ -2394,20 +2849,30 @@ class MccEst:
         """Phase-aware log-likelihood of MCC for a single chromosome in a duo (POC).
 
         Identical to :meth:`loglik_mcc_phased_trio` but marginalises over the
-        unobserved paternal genotype at each site using Hardy–Weinberg weights
+        unobserved paternal genotype at each site using Hardy-Weinberg weights
         derived from ``freqs``.
 
-        Arguments:
-            - bafs (`np.array`): m-length array of B-allele frequencies in [0, 1]
-            - mat_haps (`np.array`): 2 x m array of 0/1 maternal haplotypes
-            - freqs (`np.array`): m-length array of population allele frequencies in [0, 1]
-            - pos (`np.array`): m-length strictly increasing array of base-pair positions
-            - c (`float`): maternal contamination fraction in [0, 0.5]
-            - std_dev (`float`): BAF noise standard deviation (> 0)
-            - r (`float`): per-base-pair recombination rate (> 0); default 1e-8
+        Parameters
+        ----------
+        bafs : np.ndarray
+            m-length array of B-allele frequencies in [0, 1].
+        mat_haps : np.ndarray
+            2 x m array of 0/1 maternal haplotypes.
+        freqs : np.ndarray
+            m-length array of population allele frequencies in [0, 1].
+        pos : np.ndarray
+            m-length strictly increasing array of base-pair positions.
+        c : float
+            Maternal contamination fraction in [0, 0.5].
+        std_dev : float
+            BAF noise standard deviation (> 0).
+        r : float
+            Per-base-pair recombination rate (> 0); default 1e-8.
 
-        Returns:
-            - loglik (`float`): total forward-algorithm log-likelihood across m sites
+        Returns
+        -------
+        loglik : float
+            Total forward-algorithm log-likelihood across m sites.
 
         """
         assert bafs.ndim == 1
@@ -2438,18 +2903,29 @@ class MccEst:
         Jointly optimises ``c`` and ``std_dev`` by maximising
         :meth:`loglik_mcc_phased_trio`.
 
-        Arguments:
-            - bafs (`np.array`): m-length array of B-allele frequencies
-            - mat_haps (`np.array`): 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): 2 x m array of 0/1 paternal haplotypes
-            - pos (`np.array`): m-length strictly increasing array of base-pair positions
-            - r (`float`): per-base-pair recombination rate; default 1e-8
-            - algo (`str`): scipy minimisation algorithm; default ``"Nelder-Mead"``
-            - **kwargs: additional keyword arguments forwarded to ``scipy.optimize.minimize``
+        Parameters
+        ----------
+        bafs : np.ndarray
+            m-length array of B-allele frequencies.
+        mat_haps : np.ndarray
+            2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            2 x m array of 0/1 paternal haplotypes.
+        pos : np.ndarray
+            m-length strictly increasing array of base-pair positions.
+        r : float
+            Per-base-pair recombination rate; default 1e-8.
+        algo : str
+            Scipy minimisation algorithm; default ``"Nelder-Mead"``.
+        **kwargs
+            Additional keyword arguments forwarded to ``scipy.optimize.minimize``.
 
-        Returns:
-            - c_est (`float`): MLE of the contamination fraction
-            - sigma_est (`float`): MLE of the BAF noise standard deviation
+        Returns
+        -------
+        c_est : float
+            MLE of the contamination fraction.
+        sigma_est : float
+            MLE of the BAF noise standard deviation.
 
         """
         opt_res = minimize(
@@ -2479,18 +2955,29 @@ class MccEst:
         Jointly optimises ``c`` and ``std_dev`` by maximising
         :meth:`loglik_mcc_phased_poc`.
 
-        Arguments:
-            - bafs (`np.array`): m-length array of B-allele frequencies
-            - mat_haps (`np.array`): 2 x m array of 0/1 maternal haplotypes
-            - freqs (`np.array`): m-length array of population allele frequencies
-            - pos (`np.array`): m-length strictly increasing array of base-pair positions
-            - r (`float`): per-base-pair recombination rate; default 1e-8
-            - algo (`str`): scipy minimisation algorithm; default ``"Nelder-Mead"``
-            - **kwargs: additional keyword arguments forwarded to ``scipy.optimize.minimize``
+        Parameters
+        ----------
+        bafs : np.ndarray
+            m-length array of B-allele frequencies.
+        mat_haps : np.ndarray
+            2 x m array of 0/1 maternal haplotypes.
+        freqs : np.ndarray
+            m-length array of population allele frequencies.
+        pos : np.ndarray
+            m-length strictly increasing array of base-pair positions.
+        r : float
+            Per-base-pair recombination rate; default 1e-8.
+        algo : str
+            Scipy minimisation algorithm; default ``"Nelder-Mead"``.
+        **kwargs
+            Additional keyword arguments forwarded to ``scipy.optimize.minimize``.
 
-        Returns:
-            - c_est (`float`): MLE of the contamination fraction
-            - sigma_est (`float`): MLE of the BAF noise standard deviation
+        Returns
+        -------
+        c_est : float
+            MLE of the contamination fraction.
+        sigma_est : float
+            MLE of the BAF noise standard deviation.
 
         """
         opt_res = minimize(
@@ -2526,21 +3013,35 @@ class MccEst:
     ):
         """Profile-likelihood CI for MCC using the phase-aware trio HMM.
 
-        Arguments:
-            - bafs (`np.array`): m-length array of B-allele frequencies
-            - mat_haps (`np.array`): 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): 2 x m array of 0/1 paternal haplotypes
-            - pos (`np.array`): m-length strictly increasing array of base-pair positions
-            - c_hat (`float`): MLE contamination fraction (the point estimate)
-            - std_dev (`float`): MLE BAF noise standard deviation (held fixed during profile)
-            - r (`float`): per-base-pair recombination rate; default 1e-8
-            - alpha (`float`): confidence level in (0, 1); default 0.95
-            - df (`int`): degrees of freedom for chi-squared quantile; default 1
+        Parameters
+        ----------
+        bafs : np.ndarray
+            m-length array of B-allele frequencies.
+        mat_haps : np.ndarray
+            2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            2 x m array of 0/1 paternal haplotypes.
+        pos : np.ndarray
+            m-length strictly increasing array of base-pair positions.
+        c_hat : float
+            MLE contamination fraction (the point estimate).
+        std_dev : float
+            MLE BAF noise standard deviation (held fixed during profile).
+        r : float
+            Per-base-pair recombination rate; default 1e-8.
+        alpha : float
+            Confidence level in (0, 1); default 0.95.
+        df : int
+            Degrees of freedom for chi-squared quantile; default 1.
 
-        Returns:
-            - lower_CI (`float`): lower confidence bound (falls back to 0 if optimiser fails)
-            - c_hat (`float`): the supplied point estimate
-            - upper_CI (`float`): upper confidence bound (falls back to 0.5 if optimiser fails)
+        Returns
+        -------
+        lower_CI : float
+            Lower confidence bound (falls back to 0 if optimiser fails).
+        c_hat : float
+            The supplied point estimate.
+        upper_CI : float
+            Upper confidence bound (falls back to 0.5 if optimiser fails).
 
         """
         assert (c_hat >= 0) and (c_hat <= 0.5)
@@ -2595,21 +3096,35 @@ class MccEst:
     ):
         """Profile-likelihood CI for MCC using the phase-aware POC (duo) HMM.
 
-        Arguments:
-            - bafs (`np.array`): m-length array of B-allele frequencies
-            - mat_haps (`np.array`): 2 x m array of 0/1 maternal haplotypes
-            - freqs (`np.array`): m-length array of population allele frequencies
-            - pos (`np.array`): m-length strictly increasing array of base-pair positions
-            - c_hat (`float`): MLE contamination fraction (the point estimate)
-            - std_dev (`float`): MLE BAF noise standard deviation (held fixed during profile)
-            - r (`float`): per-base-pair recombination rate; default 1e-8
-            - alpha (`float`): confidence level in (0, 1); default 0.95
-            - df (`int`): degrees of freedom for chi-squared quantile; default 1
+        Parameters
+        ----------
+        bafs : np.ndarray
+            m-length array of B-allele frequencies.
+        mat_haps : np.ndarray
+            2 x m array of 0/1 maternal haplotypes.
+        freqs : np.ndarray
+            m-length array of population allele frequencies.
+        pos : np.ndarray
+            m-length strictly increasing array of base-pair positions.
+        c_hat : float
+            MLE contamination fraction (the point estimate).
+        std_dev : float
+            MLE BAF noise standard deviation (held fixed during profile).
+        r : float
+            Per-base-pair recombination rate; default 1e-8.
+        alpha : float
+            Confidence level in (0, 1); default 0.95.
+        df : int
+            Degrees of freedom for chi-squared quantile; default 1.
 
-        Returns:
-            - lower_CI (`float`): lower confidence bound (falls back to 0 if optimiser fails)
-            - c_hat (`float`): the supplied point estimate
-            - upper_CI (`float`): upper confidence bound (falls back to 0.5 if optimiser fails)
+        Returns
+        -------
+        lower_CI : float
+            Lower confidence bound (falls back to 0 if optimiser fails).
+        c_hat : float
+            The supplied point estimate.
+        upper_CI : float
+            Upper confidence bound (falls back to 0.5 if optimiser fails).
 
         """
         assert (c_hat >= 0) and (c_hat <= 0.5)
@@ -2654,7 +3169,9 @@ class MccEst:
     # Genome-wide log-likelihoods (sum across chromosomes)
     # ------------------------------------------------------------------
 
-    def loglik_mcc_genome_poc(self, baf_list, mat_haps_list, freqs_list, c=0.0, std_dev=0.1):
+    def loglik_mcc_genome_poc(
+        self, baf_list, mat_haps_list, freqs_list, c=0.0, std_dev=0.1
+    ):
         """Genome-wide log-likelihood of MCC summed across all chromosomes (POC model).
 
         Chromosomes are conditionally independent given ``c`` and ``std_dev``, so
@@ -2666,15 +3183,23 @@ class MccEst:
         per-chromosome log-likelihoods but avoids repeated Python function-call
         overhead and assertion checks during optimisation.
 
-        Arguments:
-            - baf_list (`list` of `np.array`): per-chromosome BAF arrays
-            - mat_haps_list (`list` of `np.array`): per-chromosome 2 x m maternal haplotype arrays
-            - freqs_list (`list` of `np.array`): per-chromosome population allele frequency arrays
-            - c (`float`): maternal contamination fraction in [0, 0.5]
-            - std_dev (`float`): BAF noise standard deviation (> 0)
+        Parameters
+        ----------
+        baf_list : list of np.ndarray
+            Per-chromosome BAF arrays.
+        mat_haps_list : list of np.ndarray
+            Per-chromosome 2 x m maternal haplotype arrays.
+        freqs_list : list of np.ndarray
+            Per-chromosome population allele frequency arrays.
+        c : float
+            Maternal contamination fraction in [0, 0.5].
+        std_dev : float
+            BAF noise standard deviation (> 0).
 
-        Returns:
-            - loglik (`float`): total log-likelihood summed across all chromosomes
+        Returns
+        -------
+        loglik : float
+            Total log-likelihood summed across all chromosomes.
 
         """
         return self.loglik_mcc_poc(
@@ -2685,22 +3210,32 @@ class MccEst:
             std_dev=std_dev,
         )
 
-    def loglik_mcc_genome_trio(self, baf_list, mat_haps_list, pat_haps_list, c=0.0, std_dev=0.1):
+    def loglik_mcc_genome_trio(
+        self, baf_list, mat_haps_list, pat_haps_list, c=0.0, std_dev=0.1
+    ):
         """Genome-wide log-likelihood of MCC summed across all chromosomes (trio model).
 
         Implemented by concatenating all chromosome arrays into a single call to
         :meth:`loglik_mcc_trio` (valid because sites are independent across
         chromosomes in the unphased model).
 
-        Arguments:
-            - baf_list (`list` of `np.array`): per-chromosome BAF arrays
-            - mat_haps_list (`list` of `np.array`): per-chromosome 2 x m maternal haplotype arrays
-            - pat_haps_list (`list` of `np.array`): per-chromosome 2 x m paternal haplotype arrays
-            - c (`float`): maternal contamination fraction in [0, 0.5]
-            - std_dev (`float`): BAF noise standard deviation (> 0)
+        Parameters
+        ----------
+        baf_list : list of np.ndarray
+            Per-chromosome BAF arrays.
+        mat_haps_list : list of np.ndarray
+            Per-chromosome 2 x m maternal haplotype arrays.
+        pat_haps_list : list of np.ndarray
+            Per-chromosome 2 x m paternal haplotype arrays.
+        c : float
+            Maternal contamination fraction in [0, 0.5].
+        std_dev : float
+            BAF noise standard deviation (> 0).
 
-        Returns:
-            - loglik (`float`): total log-likelihood summed across all chromosomes
+        Returns
+        -------
+        loglik : float
+            Total log-likelihood summed across all chromosomes.
 
         """
         return self.loglik_mcc_trio(
@@ -2716,17 +3251,27 @@ class MccEst:
     ):
         """Genome-wide phase-aware log-likelihood of MCC summed across all chromosomes (POC model).
 
-        Arguments:
-            - baf_list (`list` of `np.array`): per-chromosome BAF arrays
-            - mat_haps_list (`list` of `np.array`): per-chromosome 2 x m maternal haplotype arrays
-            - freqs_list (`list` of `np.array`): per-chromosome population allele frequency arrays
-            - pos_list (`list` of `np.array`): per-chromosome strictly increasing position arrays
-            - c (`float`): maternal contamination fraction in [0, 0.5]
-            - std_dev (`float`): BAF noise standard deviation (> 0)
-            - r (`float`): per-base-pair recombination rate; default 1e-8
+        Parameters
+        ----------
+        baf_list : list of np.ndarray
+            Per-chromosome BAF arrays.
+        mat_haps_list : list of np.ndarray
+            Per-chromosome 2 x m maternal haplotype arrays.
+        freqs_list : list of np.ndarray
+            Per-chromosome population allele frequency arrays.
+        pos_list : list of np.ndarray
+            Per-chromosome strictly increasing position arrays.
+        c : float
+            Maternal contamination fraction in [0, 0.5].
+        std_dev : float
+            BAF noise standard deviation (> 0).
+        r : float
+            Per-base-pair recombination rate; default 1e-8.
 
-        Returns:
-            - loglik (`float`): total forward-algorithm log-likelihood summed across all chromosomes
+        Returns
+        -------
+        loglik : float
+            Total forward-algorithm log-likelihood summed across all chromosomes.
 
         """
         return sum(
@@ -2735,21 +3280,38 @@ class MccEst:
         )
 
     def loglik_mcc_genome_phased_trio(
-        self, baf_list, mat_haps_list, pat_haps_list, pos_list, c=0.0, std_dev=0.1, r=1e-8
+        self,
+        baf_list,
+        mat_haps_list,
+        pat_haps_list,
+        pos_list,
+        c=0.0,
+        std_dev=0.1,
+        r=1e-8,
     ):
         """Genome-wide phase-aware log-likelihood of MCC summed across all chromosomes (trio model).
 
-        Arguments:
-            - baf_list (`list` of `np.array`): per-chromosome BAF arrays
-            - mat_haps_list (`list` of `np.array`): per-chromosome 2 x m maternal haplotype arrays
-            - pat_haps_list (`list` of `np.array`): per-chromosome 2 x m paternal haplotype arrays
-            - pos_list (`list` of `np.array`): per-chromosome strictly increasing position arrays
-            - c (`float`): maternal contamination fraction in [0, 0.5]
-            - std_dev (`float`): BAF noise standard deviation (> 0)
-            - r (`float`): per-base-pair recombination rate; default 1e-8
+        Parameters
+        ----------
+        baf_list : list of np.ndarray
+            Per-chromosome BAF arrays.
+        mat_haps_list : list of np.ndarray
+            Per-chromosome 2 x m maternal haplotype arrays.
+        pat_haps_list : list of np.ndarray
+            Per-chromosome 2 x m paternal haplotype arrays.
+        pos_list : list of np.ndarray
+            Per-chromosome strictly increasing position arrays.
+        c : float
+            Maternal contamination fraction in [0, 0.5].
+        std_dev : float
+            BAF noise standard deviation (> 0).
+        r : float
+            Per-base-pair recombination rate; default 1e-8.
 
-        Returns:
-            - loglik (`float`): total forward-algorithm log-likelihood summed across all chromosomes
+        Returns
+        -------
+        loglik : float
+            Total forward-algorithm log-likelihood summed across all chromosomes.
 
         """
         return sum(
@@ -2761,7 +3323,9 @@ class MccEst:
     # Genome-wide MLE (single c estimated across all chromosomes jointly)
     # ------------------------------------------------------------------
 
-    def est_mcc_genome_poc(self, baf_list, mat_haps_list, freqs_list, algo="Nelder-Mead", **kwargs):
+    def est_mcc_genome_poc(
+        self, baf_list, mat_haps_list, freqs_list, algo="Nelder-Mead", **kwargs
+    ):
         """Estimate MCC by MLE using all chromosomes jointly (POC model).
 
         Maximises :meth:`loglik_mcc_genome_poc` to obtain a single estimate of
@@ -2769,21 +3333,32 @@ class MccEst:
         chromosomes should be excluded from ``baf_list`` before calling; use
         :meth:`est_mcc_per_chrom_poc` to identify outliers first.
 
-        Arguments:
-            - baf_list (`list` of `np.array`): per-chromosome BAF arrays
-            - mat_haps_list (`list` of `np.array`): per-chromosome 2 x m maternal haplotype arrays
-            - freqs_list (`list` of `np.array`): per-chromosome population allele frequency arrays
-            - algo (`str`): scipy minimisation algorithm; default ``"Nelder-Mead"``
-            - **kwargs: additional keyword arguments forwarded to ``scipy.optimize.minimize``
+        Parameters
+        ----------
+        baf_list : list of np.ndarray
+            Per-chromosome BAF arrays.
+        mat_haps_list : list of np.ndarray
+            Per-chromosome 2 x m maternal haplotype arrays.
+        freqs_list : list of np.ndarray
+            Per-chromosome population allele frequency arrays.
+        algo : str
+            Scipy minimisation algorithm; default ``"Nelder-Mead"``.
+        **kwargs
+            Additional keyword arguments forwarded to ``scipy.optimize.minimize``.
 
-        Returns:
-            - c_est (`float`): MLE of the contamination fraction
-            - sigma_est (`float`): MLE of the BAF noise standard deviation
+        Returns
+        -------
+        c_est : float
+            MLE of the contamination fraction.
+        sigma_est : float
+            MLE of the BAF noise standard deviation.
 
         """
         opt_res = minimize(
-            lambda x: -self.loglik_mcc_genome_poc(
-                baf_list, mat_haps_list, freqs_list, c=x[0], std_dev=x[1]
+            lambda x: (
+                -self.loglik_mcc_genome_poc(
+                    baf_list, mat_haps_list, freqs_list, c=x[0], std_dev=x[1]
+                )
             ),
             x0=[0.05, 0.1],
             method=algo,
@@ -2800,21 +3375,32 @@ class MccEst:
         Maximises :meth:`loglik_mcc_genome_trio` to obtain a single estimate of
         ``c`` and ``std_dev`` shared across all supplied chromosomes.
 
-        Arguments:
-            - baf_list (`list` of `np.array`): per-chromosome BAF arrays
-            - mat_haps_list (`list` of `np.array`): per-chromosome 2 x m maternal haplotype arrays
-            - pat_haps_list (`list` of `np.array`): per-chromosome 2 x m paternal haplotype arrays
-            - algo (`str`): scipy minimisation algorithm; default ``"Nelder-Mead"``
-            - **kwargs: additional keyword arguments forwarded to ``scipy.optimize.minimize``
+        Parameters
+        ----------
+        baf_list : list of np.ndarray
+            Per-chromosome BAF arrays.
+        mat_haps_list : list of np.ndarray
+            Per-chromosome 2 x m maternal haplotype arrays.
+        pat_haps_list : list of np.ndarray
+            Per-chromosome 2 x m paternal haplotype arrays.
+        algo : str
+            Scipy minimisation algorithm; default ``"Nelder-Mead"``.
+        **kwargs
+            Additional keyword arguments forwarded to ``scipy.optimize.minimize``.
 
-        Returns:
-            - c_est (`float`): MLE of the contamination fraction
-            - sigma_est (`float`): MLE of the BAF noise standard deviation
+        Returns
+        -------
+        c_est : float
+            MLE of the contamination fraction.
+        sigma_est : float
+            MLE of the BAF noise standard deviation.
 
         """
         opt_res = minimize(
-            lambda x: -self.loglik_mcc_genome_trio(
-                baf_list, mat_haps_list, pat_haps_list, c=x[0], std_dev=x[1]
+            lambda x: (
+                -self.loglik_mcc_genome_trio(
+                    baf_list, mat_haps_list, pat_haps_list, c=x[0], std_dev=x[1]
+                )
             ),
             x0=[0.05, 0.1],
             method=algo,
@@ -2824,29 +3410,55 @@ class MccEst:
         return opt_res.x[0], opt_res.x[1]
 
     def est_mcc_genome_phased_poc(
-        self, baf_list, mat_haps_list, freqs_list, pos_list, r=1e-8, algo="Nelder-Mead", **kwargs
+        self,
+        baf_list,
+        mat_haps_list,
+        freqs_list,
+        pos_list,
+        r=1e-8,
+        algo="Nelder-Mead",
+        **kwargs,
     ):
         """Estimate MCC by MLE using all chromosomes jointly (phase-aware POC model).
 
         Maximises :meth:`loglik_mcc_genome_phased_poc`.
 
-        Arguments:
-            - baf_list (`list` of `np.array`): per-chromosome BAF arrays
-            - mat_haps_list (`list` of `np.array`): per-chromosome 2 x m maternal haplotype arrays
-            - freqs_list (`list` of `np.array`): per-chromosome population allele frequency arrays
-            - pos_list (`list` of `np.array`): per-chromosome strictly increasing position arrays
-            - r (`float`): per-base-pair recombination rate; default 1e-8
-            - algo (`str`): scipy minimisation algorithm; default ``"Nelder-Mead"``
-            - **kwargs: additional keyword arguments forwarded to ``scipy.optimize.minimize``
+        Parameters
+        ----------
+        baf_list : list of np.ndarray
+            Per-chromosome BAF arrays.
+        mat_haps_list : list of np.ndarray
+            Per-chromosome 2 x m maternal haplotype arrays.
+        freqs_list : list of np.ndarray
+            Per-chromosome population allele frequency arrays.
+        pos_list : list of np.ndarray
+            Per-chromosome strictly increasing position arrays.
+        r : float
+            Per-base-pair recombination rate; default 1e-8.
+        algo : str
+            Scipy minimisation algorithm; default ``"Nelder-Mead"``.
+        **kwargs
+            Additional keyword arguments forwarded to ``scipy.optimize.minimize``.
 
-        Returns:
-            - c_est (`float`): MLE of the contamination fraction
-            - sigma_est (`float`): MLE of the BAF noise standard deviation
+        Returns
+        -------
+        c_est : float
+            MLE of the contamination fraction.
+        sigma_est : float
+            MLE of the BAF noise standard deviation.
 
         """
         opt_res = minimize(
-            lambda x: -self.loglik_mcc_genome_phased_poc(
-                baf_list, mat_haps_list, freqs_list, pos_list, c=x[0], std_dev=x[1], r=r
+            lambda x: (
+                -self.loglik_mcc_genome_phased_poc(
+                    baf_list,
+                    mat_haps_list,
+                    freqs_list,
+                    pos_list,
+                    c=x[0],
+                    std_dev=x[1],
+                    r=r,
+                )
             ),
             x0=[0.05, 0.1],
             method=algo,
@@ -2869,23 +3481,42 @@ class MccEst:
 
         Maximises :meth:`loglik_mcc_genome_phased_trio`.
 
-        Arguments:
-            - baf_list (`list` of `np.array`): per-chromosome BAF arrays
-            - mat_haps_list (`list` of `np.array`): per-chromosome 2 x m maternal haplotype arrays
-            - pat_haps_list (`list` of `np.array`): per-chromosome 2 x m paternal haplotype arrays
-            - pos_list (`list` of `np.array`): per-chromosome strictly increasing position arrays
-            - r (`float`): per-base-pair recombination rate; default 1e-8
-            - algo (`str`): scipy minimisation algorithm; default ``"Nelder-Mead"``
-            - **kwargs: additional keyword arguments forwarded to ``scipy.optimize.minimize``
+        Parameters
+        ----------
+        baf_list : list of np.ndarray
+            Per-chromosome BAF arrays.
+        mat_haps_list : list of np.ndarray
+            Per-chromosome 2 x m maternal haplotype arrays.
+        pat_haps_list : list of np.ndarray
+            Per-chromosome 2 x m paternal haplotype arrays.
+        pos_list : list of np.ndarray
+            Per-chromosome strictly increasing position arrays.
+        r : float
+            Per-base-pair recombination rate; default 1e-8.
+        algo : str
+            Scipy minimisation algorithm; default ``"Nelder-Mead"``.
+        **kwargs
+            Additional keyword arguments forwarded to ``scipy.optimize.minimize``.
 
-        Returns:
-            - c_est (`float`): MLE of the contamination fraction
-            - sigma_est (`float`): MLE of the BAF noise standard deviation
+        Returns
+        -------
+        c_est : float
+            MLE of the contamination fraction.
+        sigma_est : float
+            MLE of the BAF noise standard deviation.
 
         """
         opt_res = minimize(
-            lambda x: -self.loglik_mcc_genome_phased_trio(
-                baf_list, mat_haps_list, pat_haps_list, pos_list, c=x[0], std_dev=x[1], r=r
+            lambda x: (
+                -self.loglik_mcc_genome_phased_trio(
+                    baf_list,
+                    mat_haps_list,
+                    pat_haps_list,
+                    pos_list,
+                    c=x[0],
+                    std_dev=x[1],
+                    r=r,
+                )
             ),
             x0=[0.05, 0.1],
             method=algo,
@@ -2908,15 +3539,23 @@ class MccEst:
         relative to the genome-wide median are candidates for aneuploidy and should
         be excluded before a joint genome-wide fit with :meth:`est_mcc_genome_poc`.
 
-        Arguments:
-            - baf_list (`list` of `np.array`): per-chromosome BAF arrays
-            - mat_haps_list (`list` of `np.array`): per-chromosome 2 x m maternal haplotype arrays
-            - freqs_list (`list` of `np.array`): per-chromosome population allele frequency arrays
-            - algo (`str`): scipy minimisation algorithm; default ``"Nelder-Mead"``
-            - **kwargs: additional keyword arguments forwarded to ``scipy.optimize.minimize``
+        Parameters
+        ----------
+        baf_list : list of np.ndarray
+            Per-chromosome BAF arrays.
+        mat_haps_list : list of np.ndarray
+            Per-chromosome 2 x m maternal haplotype arrays.
+        freqs_list : list of np.ndarray
+            Per-chromosome population allele frequency arrays.
+        algo : str
+            Scipy minimisation algorithm; default ``"Nelder-Mead"``.
+        **kwargs
+            Additional keyword arguments forwarded to ``scipy.optimize.minimize``.
 
-        Returns:
-            - results (`list` of `tuple`): list of ``(c_hat, std_dev_hat)`` tuples, one per chromosome
+        Returns
+        -------
+        results : list of tuple
+            List of ``(c_hat, std_dev_hat)`` tuples, one per chromosome.
 
         """
         return [
@@ -2931,15 +3570,23 @@ class MccEst:
 
         Runs :meth:`est_mcc_trio` separately on each chromosome.
 
-        Arguments:
-            - baf_list (`list` of `np.array`): per-chromosome BAF arrays
-            - mat_haps_list (`list` of `np.array`): per-chromosome 2 x m maternal haplotype arrays
-            - pat_haps_list (`list` of `np.array`): per-chromosome 2 x m paternal haplotype arrays
-            - algo (`str`): scipy minimisation algorithm; default ``"Nelder-Mead"``
-            - **kwargs: additional keyword arguments forwarded to ``scipy.optimize.minimize``
+        Parameters
+        ----------
+        baf_list : list of np.ndarray
+            Per-chromosome BAF arrays.
+        mat_haps_list : list of np.ndarray
+            Per-chromosome 2 x m maternal haplotype arrays.
+        pat_haps_list : list of np.ndarray
+            Per-chromosome 2 x m paternal haplotype arrays.
+        algo : str
+            Scipy minimisation algorithm; default ``"Nelder-Mead"``.
+        **kwargs
+            Additional keyword arguments forwarded to ``scipy.optimize.minimize``.
 
-        Returns:
-            - results (`list` of `tuple`): list of ``(c_hat, std_dev_hat)`` tuples, one per chromosome
+        Returns
+        -------
+        results : list of tuple
+            List of ``(c_hat, std_dev_hat)`` tuples, one per chromosome.
 
         """
         return [
@@ -2948,23 +3595,40 @@ class MccEst:
         ]
 
     def est_mcc_per_chrom_phased_poc(
-        self, baf_list, mat_haps_list, freqs_list, pos_list, r=1e-8, algo="Nelder-Mead", **kwargs
+        self,
+        baf_list,
+        mat_haps_list,
+        freqs_list,
+        pos_list,
+        r=1e-8,
+        algo="Nelder-Mead",
+        **kwargs,
     ):
         """Estimate MCC independently per chromosome (phase-aware POC model).
 
         Runs :meth:`est_mcc_phased_poc` separately on each chromosome.
 
-        Arguments:
-            - baf_list (`list` of `np.array`): per-chromosome BAF arrays
-            - mat_haps_list (`list` of `np.array`): per-chromosome 2 x m maternal haplotype arrays
-            - freqs_list (`list` of `np.array`): per-chromosome population allele frequency arrays
-            - pos_list (`list` of `np.array`): per-chromosome strictly increasing position arrays
-            - r (`float`): per-base-pair recombination rate; default 1e-8
-            - algo (`str`): scipy minimisation algorithm; default ``"Nelder-Mead"``
-            - **kwargs: additional keyword arguments forwarded to ``scipy.optimize.minimize``
+        Parameters
+        ----------
+        baf_list : list of np.ndarray
+            Per-chromosome BAF arrays.
+        mat_haps_list : list of np.ndarray
+            Per-chromosome 2 x m maternal haplotype arrays.
+        freqs_list : list of np.ndarray
+            Per-chromosome population allele frequency arrays.
+        pos_list : list of np.ndarray
+            Per-chromosome strictly increasing position arrays.
+        r : float
+            Per-base-pair recombination rate; default 1e-8.
+        algo : str
+            Scipy minimisation algorithm; default ``"Nelder-Mead"``.
+        **kwargs
+            Additional keyword arguments forwarded to ``scipy.optimize.minimize``.
 
-        Returns:
-            - results (`list` of `tuple`): list of ``(c_hat, std_dev_hat)`` tuples, one per chromosome
+        Returns
+        -------
+        results : list of tuple
+            List of ``(c_hat, std_dev_hat)`` tuples, one per chromosome.
 
         """
         return [
@@ -2986,17 +3650,27 @@ class MccEst:
 
         Runs :meth:`est_mcc_phased_trio` separately on each chromosome.
 
-        Arguments:
-            - baf_list (`list` of `np.array`): per-chromosome BAF arrays
-            - mat_haps_list (`list` of `np.array`): per-chromosome 2 x m maternal haplotype arrays
-            - pat_haps_list (`list` of `np.array`): per-chromosome 2 x m paternal haplotype arrays
-            - pos_list (`list` of `np.array`): per-chromosome strictly increasing position arrays
-            - r (`float`): per-base-pair recombination rate; default 1e-8
-            - algo (`str`): scipy minimisation algorithm; default ``"Nelder-Mead"``
-            - **kwargs: additional keyword arguments forwarded to ``scipy.optimize.minimize``
+        Parameters
+        ----------
+        baf_list : list of np.ndarray
+            Per-chromosome BAF arrays.
+        mat_haps_list : list of np.ndarray
+            Per-chromosome 2 x m maternal haplotype arrays.
+        pat_haps_list : list of np.ndarray
+            Per-chromosome 2 x m paternal haplotype arrays.
+        pos_list : list of np.ndarray
+            Per-chromosome strictly increasing position arrays.
+        r : float
+            Per-base-pair recombination rate; default 1e-8.
+        algo : str
+            Scipy minimisation algorithm; default ``"Nelder-Mead"``.
+        **kwargs
+            Additional keyword arguments forwarded to ``scipy.optimize.minimize``.
 
-        Returns:
-            - results (`list` of `tuple`): list of ``(c_hat, std_dev_hat)`` tuples, one per chromosome
+        Returns
+        -------
+        results : list of tuple
+            List of ``(c_hat, std_dev_hat)`` tuples, one per chromosome.
 
         """
         return [
@@ -3170,10 +3844,12 @@ class MosaicEst:
         - within-loss origin switch (3↔4) with probability ``switch_err``
         - cross-type transitions (gain↔loss) are not modelled (log-prob = −∞)
 
-        Arguments:
-            - switch_err (`float`): maternal↔paternal origin-switch probability
-              within the same gain or loss direction
-            - t_rate (`float`): neutral↔aneuploid entry/exit probability
+        Parameters
+        ----------
+        switch_err : float
+            Maternal-paternal origin-switch probability within the same gain or loss direction.
+        t_rate : float
+            Neutral-aneuploid entry/exit probability.
         """
         assert 0 < switch_err <= 0.05
         assert 0 < t_rate < 0.5
@@ -3214,14 +3890,21 @@ class MosaicEst:
         - State 3 (maternal loss): LRR = log₂(1 − cf/2),  phased BAF = −cf/2
         - State 4 (paternal loss): LRR = log₂(1 − cf/2),  phased BAF = +cf/2
 
-        Arguments:
-            - cf (`float`): mosaic cell fraction in [0, 1)
-            - std_dev_baf (`float`): BAF noise standard deviation at het sites
+        Parameters
+        ----------
+        cf : float
+            Mosaic cell fraction in [0, 1).
+        std_dev_baf : float
+            BAF noise standard deviation at het sites.
 
-        Returns:
-            - alphas (`np.ndarray`): 5 × m log forward variable
-            - scaler (`np.ndarray`): m-length per-site log normalisation constants
-            - loglik (`float`): total log-likelihood
+        Returns
+        -------
+        alphas : np.ndarray
+            5 x m log forward variable.
+        scaler : np.ndarray
+            m-length per-site log normalisation constants.
+        loglik : float
+            Total log-likelihood.
         """
         from scipy.stats import norm as _norm
 
@@ -3240,14 +3923,18 @@ class MosaicEst:
         baf_means = np.array([0.0, cf / 6.0, -cf / 6.0, -cf / 2.0, cf / 2.0])
 
         if use_lrr:
-            lrr_logp = np.stack([
-                _norm.logpdf(self.lrrs, lrr_means[k], self.sigmas)
+            lrr_logp = np.stack(
+                [
+                    _norm.logpdf(self.lrrs, lrr_means[k], self.sigmas)
+                    for k in range(n_states)
+                ]
+            )
+        baf_logp = np.stack(
+            [
+                _norm.logpdf(self.phased_baf, baf_means[k], std_dev_baf)
                 for k in range(n_states)
-            ])
-        baf_logp = np.stack([
-            _norm.logpdf(self.phased_baf, baf_means[k], std_dev_baf)
-            for k in range(n_states)
-        ])
+            ]
+        )
 
         is_het = np.zeros(m, dtype=bool)
         is_het[self.het_idx] = True
@@ -3280,17 +3967,19 @@ class MosaicEst:
     def est_mle_cf(self, std_dev_baf=0.1):
         """Estimate the MLE mosaic cell fraction.
 
-        Maximises :meth:`forward_algo_full` log-likelihood over cf ∈ [0, 1)
+        Maximises :meth:`forward_algo_full` log-likelihood over cf in [0, 1)
         using Powell's method.  Stores the result in ``self.mle_cf``
         (``nan`` on optimisation failure).
 
-        Arguments:
-            - std_dev_baf (`float`): BAF noise standard deviation
+        Parameters
+        ----------
+        std_dev_baf : float
+            BAF noise standard deviation.
         """
         try:
-            f = lambda x: -self.forward_algo_full(
-                cf=float(x[0]), std_dev_baf=std_dev_baf
-            )[2]
+            f = lambda x: (
+                -self.forward_algo_full(cf=float(x[0]), std_dev_baf=std_dev_baf)[2]
+            )
             opt_res = minimize(
                 f, x0=[0.1], method="Powell", tol=1e-5, bounds=[(0.0, 0.999)]
             )
@@ -3303,12 +3992,17 @@ class MosaicEst:
 
         Requires :meth:`est_mle_cf` to have been called first.
 
-        Arguments:
-            - std_dev_baf (`float`): BAF noise standard deviation
-            - h (`float`): finite-difference step size
+        Parameters
+        ----------
+        std_dev_baf : float
+            BAF noise standard deviation.
+        h : float
+            Finite-difference step size.
 
-        Returns:
-            - ci (`list`): ``[lower_95, mle_cf, upper_95]``, clamped to [0, 1]
+        Returns
+        -------
+        ci : list
+            ``[lower_95, mle_cf, upper_95]``, clamped to [0, 1].
         """
         assert self.mle_cf is not None and not np.isnan(self.mle_cf)
         ci = [np.nan, np.nan, np.nan]
@@ -3332,15 +4026,19 @@ class MosaicEst:
     def lrt_cf(self, std_dev_baf=0.1):
         """Likelihood-ratio test statistic for cf > 0 vs cf = 0.
 
-        Computes −2 × (ℓ(cf=0) − ℓ(cf_MLE)).  Under the null hypothesis of
+        Computes -2 x (l(cf=0) - l(cf_MLE)).  Under the null hypothesis of
         no mosaicism this is approximately chi-squared with 1 degree of
         freedom.  Calls :meth:`est_mle_cf` if it has not been run yet.
 
-        Arguments:
-            - std_dev_baf (`float`): BAF noise standard deviation
+        Parameters
+        ----------
+        std_dev_baf : float
+            BAF noise standard deviation.
 
-        Returns:
-            - lrt (`float`): LRT statistic, or ``nan`` on failure
+        Returns
+        -------
+        lrt : float
+            LRT statistic, or ``nan`` on failure.
         """
         ll_h0 = self.forward_algo_full(cf=0.0, std_dev_baf=std_dev_baf)[2]
         if self.mle_cf is None:
@@ -3362,18 +4060,20 @@ class MosaicEst:
         Requires :meth:`est_mle_cf` to have been called first.  Returns
         ``'neutral'`` when ``mle_cf`` is below 0.01.
 
-        Arguments:
-            - std_dev_baf (`float`): BAF noise standard deviation
+        Parameters
+        ----------
+        std_dev_baf : float
+            BAF noise standard deviation.
 
-        Returns:
-            - origin (`str`): one of ``MosaicEst.STATE_NAMES``
+        Returns
+        -------
+        origin : str
+            One of ``MosaicEst.STATE_NAMES``.
         """
         assert self.mle_cf is not None and not np.isnan(self.mle_cf)
         if self.mle_cf < 0.01:
             return "neutral"
-        alphas, _, _ = self.forward_algo_full(
-            cf=self.mle_cf, std_dev_baf=std_dev_baf
-        )
+        alphas, _, _ = self.forward_algo_full(cf=self.mle_cf, std_dev_baf=std_dev_baf)
         # Chromosome-wide log-evidence per state via logsumexp across sites
         log_evidence = np.array([logsumexp(alphas[k, :]) for k in range(5)])
         # Select the aneuploid state (1-4) with highest evidence
@@ -3389,15 +4089,16 @@ class PhaseCorrect:
     """
 
     def __init__(self, mat_haps, pat_haps, pos):
-        """Intialize the class for phase correction.
+        """Initialize the class for phase correction.
 
-        Arguments:
-            - mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
-            - pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
-            - pos (`np.array`): a m-length array of bp-position
-
-        Returns:
-            - PhaseCorrect Object
+        Parameters
+        ----------
+        mat_haps : np.ndarray
+            A 2 x m array of 0/1 maternal haplotypes.
+        pat_haps : np.ndarray
+            A 2 x m array of 0/1 paternal haplotypes.
+        pos : np.ndarray
+            An m-length array of base-pair positions.
 
         """
         assert mat_haps.shape[0] == pat_haps.shape[0]
@@ -3420,9 +4121,12 @@ class PhaseCorrect:
     def add_true_haps(self, true_mat_haps, true_pat_haps):
         """Add in true haplotypes if available from a simulation.
 
-        Arguments:
-            - true_mat_haps (`np.array`): a 2 x m array of 0/1 maternal haplotypes
-            - true_pat_haps (`np.array`): a 2 x m array of 0/1 paternal haplotypes
+        Parameters
+        ----------
+        true_mat_haps : np.ndarray
+            A 2 x m array of 0/1 maternal haplotypes.
+        true_pat_haps : np.ndarray
+            A 2 x m array of 0/1 paternal haplotypes.
 
         """
         assert true_mat_haps.ndim == 2
@@ -3437,8 +4141,10 @@ class PhaseCorrect:
     def add_baf(self, embryo_bafs=[]):
         """Add in BAF estimates for each embryo.
 
-        Arguments:
-            - embryo_bafs (`list`): a list of embryo BAF from the same parental individuals
+        Parameters
+        ----------
+        embryo_bafs : list
+            A list of per-embryo BAF arrays from the same parental individuals.
 
         """
         assert len(embryo_bafs) > 0
@@ -3456,9 +4162,11 @@ class PhaseCorrect:
         ``self.embryo_sigmas``.  Must be called before :meth:`viterbi_phase_correct`
         or :meth:`flag_parental_genotype_errors`.
 
-        Arguments:
-            - **kwargs: forwarded to :meth:`MetaHMM.est_sigma_pi0`
-              (e.g. ``pi0_bounds``, ``sigma_bounds``, ``algo``)
+        Parameters
+        ----------
+        **kwargs
+            Forwarded to :meth:`MetaHMM.est_sigma_pi0`
+            (e.g. ``pi0_bounds``, ``sigma_bounds``, ``algo``).
         """
         assert self.embryo_bafs is not None
         hmm = MetaHMM(disomy=True)
@@ -3489,14 +4197,20 @@ class PhaseCorrect:
         switch is counted.  If a majority of siblings switch, the haplotype
         orientations prior to that site are flipped for both strands.
 
-        Arguments:
-            - haps (`np.array`): 2 x m array of 0/1 haplotypes to be corrected
-            - paths (`np.array`): n_sib x m boolean array where entry ``[j, i]`` is
-              1 if sibling j copies haplotype 0 at site i (output of Viterbi decoding)
+        Parameters
+        ----------
+        haps : np.ndarray
+            2 x m array of 0/1 haplotypes to be corrected.
+        paths : np.ndarray
+            n_sib x m boolean array where entry ``[j, i]`` is 1 if sibling j
+            copies haplotype 0 at site i (output of Viterbi decoding).
 
-        Returns:
-            - n_mis (`np.array`): (m-1)-length array of per-interval mismatch counts
-            - fixed_haps (`np.array`): 2 x m phase-corrected haplotype array
+        Returns
+        -------
+        n_mis : np.ndarray
+            (m-1)-length array of per-interval mismatch counts.
+        fixed_haps : np.ndarray
+            2 x m phase-corrected haplotype array.
 
         """
         assert paths.shape[1] == haps.shape[1]
@@ -3522,9 +4236,23 @@ class PhaseCorrect:
     def viterbi_phase_correct(self, niter=5, r=1e-8):
         """Use the Viterbi decoding for phase correction in multiple iterations.
 
-        Arguments:
-            - niter (`int`): number of iterations to go through for viterbi-based phase correction
-            - r (`float`): recombination rate per basepair
+        Parameters
+        ----------
+        niter : int
+            Number of iterations for Viterbi-based phase correction.
+        r : float
+            Recombination rate per base pair.
+
+        Returns
+        -------
+        mat_haps : np.ndarray
+            Phase-corrected 2 x m maternal haplotype array.
+        pat_haps : np.ndarray
+            Phase-corrected 2 x m paternal haplotype array.
+        n_mis_mat_tot : np.ndarray
+            niter-length array of total maternal mismatch counts per iteration.
+        n_mis_pat_tot : np.ndarray
+            niter-length array of total paternal mismatch counts per iteration.
 
         """
         assert niter > 0
@@ -3576,13 +4304,19 @@ class PhaseCorrect:
         Genuine genotype errors are consistently flagged across siblings (same
         parental genotype), while per-embryo noise is uncorrelated and averages out.
 
-        Arguments:
-            - use_fixed (`bool`): use phase-corrected haplotypes if available (default: False)
-            - r (`float`): recombination rate per basepair
+        Parameters
+        ----------
+        use_fixed : bool
+            Use phase-corrected haplotypes if available (default: False).
+        r : float
+            Recombination rate per base pair.
 
-        Returns:
-            - mat_err_scores (`np.array`): m-length array of summed maternal error scores
-            - pat_err_scores (`np.array`): m-length array of summed paternal error scores
+        Returns
+        -------
+        mat_err_scores : np.ndarray
+            m-length array of summed maternal error scores.
+        pat_err_scores : np.ndarray
+            m-length array of summed paternal error scores.
 
         """
         assert self.embryo_bafs is not None
@@ -3631,17 +4365,27 @@ class PhaseCorrect:
         The switch error is defined as consecutive heterozygotes that are
         in the incorrect orientation.
 
-        Arguments:
-            - maternal (`bool`): apply the function to the maternal haplotypes (default: True)
-            - fixed (`bool`): apply the function to the fixed haplotypes (default: False)
+        Parameters
+        ----------
+        maternal : bool
+            Apply the function to the maternal haplotypes (default: True).
+        fixed : bool
+            Apply the function to the fixed haplotypes (default: False).
 
-        Returns:
-            - n_switches (`int`): number of switches between consecutive heterozygotes
-            - n_consecutive_hets (`int`): number of consecutive heterozygotes
-            - switch_err_rate (`float`): number of switches per consecutive heterozygote
-            - switch_idx (`np.array`): snps where the variant is out of phase with its predecessor
-            - het_idx (`np.array`): locations/indexs of the heterozygotes
-            - lods (`np.array`) : lod-scores for the estimated switches (default: None)
+        Returns
+        -------
+        n_switches : int
+            Number of switches between consecutive heterozygotes.
+        n_consecutive_hets : int
+            Number of consecutive heterozygotes.
+        switch_err_rate : float
+            Number of switches per consecutive heterozygote.
+        switch_idx : list
+            SNP pairs where the variant is out of phase with its predecessor.
+        het_idx : np.ndarray
+            Locations/indices of the heterozygotes.
+        lods : None
+            LOD-scores for the estimated switches (currently always None).
 
         """
         assert self.mat_haps_true is not None
@@ -3705,28 +4449,34 @@ class RecombEst(PhaseCorrect):
     """
 
     def __init__(self, **kwargs):
-        """Initialise RecombEst inheriting from PhaseCorrect.
+        """Initialize RecombEst inheriting from PhaseCorrect.
 
-        Arguments:
-            - **kwargs: forwarded to :meth:`PhaseCorrect.__init__`
-              (``mat_haps``, ``pat_haps``, ``pos``)
+        Parameters
+        ----------
+        **kwargs
+            Forwarded to :meth:`PhaseCorrect.__init__`
+            (``mat_haps``, ``pat_haps``, ``pos``).
         """
         super(RecombEst, self).__init__(**kwargs)
 
     def informative_markers(self, maternal=True):
-        """Return a boolean mask of allele-transmission–informative sites.
+        """Return a boolean mask of allele-transmission-informative sites.
 
         A site is informative for the maternal haplotype when the mother is
         heterozygous (genotype 1) and the father is homozygous (genotype 0 or 2),
         so the transmitted maternal allele is unambiguously determined by the
         embryo BAF.  The paternal case is the mirror image.
 
-        Arguments:
-            - maternal (`bool`): if ``True`` (default) return sites informative for
-              maternal crossovers; if ``False`` return sites informative for paternal crossovers
+        Parameters
+        ----------
+        maternal : bool
+            If True (default) return sites informative for maternal crossovers;
+            if False return sites informative for paternal crossovers.
 
-        Returns:
-            - info_idx (`np.array`): m-length boolean mask; ``True`` at informative sites
+        Returns
+        -------
+        info_idx : np.ndarray
+            m-length boolean mask; True at informative sites.
 
         """
         mat_geno = np.sum(self.mat_haps, axis=0)
@@ -3744,12 +4494,17 @@ class RecombEst(PhaseCorrect):
     def refine_recomb_events(self, potential_switches, npad=5):
         """Refine recombination estimation using the switch-clusters approach of Coop et al 2007.
 
-        Arguments:
-            - potential_switches (`np.array`): array of potential switches at informative markers
-            - npad (`int`): integer value of adjacent informative snps to consider as a switch cluster.
+        Parameters
+        ----------
+        potential_switches : np.ndarray
+            Array of potential switch indices at informative markers.
+        npad : int
+            Half-width (in informative SNPs) of the switch cluster window.
 
-        Returns:
-            - subset_co (`list`): only the isolated crossovers across all non-template embryos
+        Returns
+        -------
+        subset_co : list
+            Isolated crossover indices surviving the switch-cluster filter.
 
         """
         assert npad > 1
@@ -3772,18 +4527,27 @@ class RecombEst(PhaseCorrect):
     ):
         """Isolate specific recombination events.
 
-        NOTE: this uses paternal by default!
+        Parameters
+        ----------
+        template_embryo : int
+            Index of the template embryo.
+        maternal : bool
+            If True, estimate maternal crossovers; if False, estimate paternal crossovers.
+        ll_thresh : float
+            Log-likelihood ratio threshold for transmission assignment.
+        npad : int
+            Half-width (in informative SNPs) of the switch cluster window.
 
-        Arguments:
-            - template_embryo (`int`): index of the template embryo
-            - maternal (`bool`): indicator of estimating maternal crossovers.
-            - ll_thresh (`float`): indicator of the likelihood threshold for transmission.
-            - npad (`int`): integer value of adjacent informative snps to consider as a switch cluster.
-
-        Returns:
-            - Z (`np.array`): (m-1) x L array of switch indicators for allele copying in non-template embryos
-            - llr_z (`np.array`): raw llr values for switch indicators for allele-copying in non-template embryos
-            - potential_switches_filt (`np.array`): list of potential switches in template embryo.
+        Returns
+        -------
+        Z : np.ndarray
+            n_sib x n_info array of switch indicators for allele copying in non-template embryos.
+        llr_z : np.ndarray
+            n_sib x n_info raw LLR values for allele-copying in non-template embryos.
+        potential_switches_filt : np.ndarray
+            Majority-vote filtered switch indices at informative markers.
+        switch_cnts_filt : np.ndarray
+            Support counts for each filtered switch.
 
         """
         assert self.embryo_bafs is not None
@@ -3951,13 +4715,18 @@ class RecombEst(PhaseCorrect):
         Missing or uncertain sites (Z = 0) are imputed by forward-propagating the
         last non-zero sign before applying :meth:`refine_recomb_events` to each row.
 
-        Arguments:
-            - Z (`np.array`): n_sib x n_info matrix of transmission indicators
-              (+1 same allele, -1 different allele, 0 uncertain)
-            - npad (`int`): half-width of switch cluster used by :meth:`refine_recomb_events`
+        Parameters
+        ----------
+        Z : np.ndarray
+            n_sib x n_info matrix of transmission indicators
+            (+1 same allele, -1 different allele, 0 uncertain).
+        npad : int
+            Half-width of switch cluster used by :meth:`refine_recomb_events`.
 
-        Returns:
-            - isolated_switches (`list` of `list`): per-sibling lists of refined switch indices
+        Returns
+        -------
+        isolated_switches : list of list
+            Per-sibling lists of refined switch indices.
 
         """
         assert Z.ndim == 2
@@ -3991,15 +4760,23 @@ class RecombEst(PhaseCorrect):
         [start, end] to narrow the crossover location to the tightest flanking
         heterozygous-site pair that is consistent across all sibling pairs.
 
-        Arguments:
-            - template_embryo (`int`): index of the reference embryo; default 0
-            - maternal (`bool`): if ``True`` refine maternal crossovers; default ``True``
-            - start (`int`): left SNP index (inclusive) of the coarse interval
-            - end (`int`): right SNP index (inclusive) of the coarse interval
+        Parameters
+        ----------
+        template_embryo : int
+            Index of the reference embryo; default 0.
+        maternal : bool
+            If True refine maternal crossovers; default True.
+        start : int
+            Left SNP index (inclusive) of the coarse interval.
+        end : int
+            Right SNP index (inclusive) of the coarse interval.
 
-        Returns:
-            - p1 (`float`): refined left boundary position in base pairs
-            - p2 (`float`): refined right boundary position in base pairs
+        Returns
+        -------
+        p1 : float
+            Refined left boundary position in base pairs.
+        p2 : float
+            Refined right boundary position in base pairs.
 
         """
         assert (start is not None) and (end is not None)
@@ -4063,15 +4840,21 @@ class RecombEst(PhaseCorrect):
         For each entry in ``potential_switches`` calls :meth:`second_refine_recomb`
         on the flanking informative-marker pair to obtain a refined base-pair interval.
 
-        Arguments:
-            - potential_switches (`list`): list of informative-marker indices at which a
-              crossover is suspected (output of :meth:`isolate_recomb_events`)
-            - template_embryo (`int`): index of the reference embryo; default 0
-            - maternal (`bool`): if ``True`` refine maternal crossovers; default ``True``
+        Parameters
+        ----------
+        potential_switches : list
+            List of informative-marker indices at which a crossover is suspected
+            (output of :meth:`isolate_recomb_events`).
+        template_embryo : int
+            Index of the reference embryo; default 0.
+        maternal : bool
+            If True refine maternal crossovers; default True.
 
-        Returns:
-            - rec_locations (`list` of `tuple`): list of ``(p1, p2)`` base-pair intervals
-              bounding each crossover; empty list if ``potential_switches`` is empty
+        Returns
+        -------
+        rec_locations : list of tuple
+            List of ``(p1, p2)`` base-pair intervals bounding each crossover;
+            empty list if ``potential_switches`` is empty.
 
         """
         if potential_switches == []:
@@ -4105,22 +4888,29 @@ class RecombEst(PhaseCorrect):
 
         Requires :meth:`add_baf`, :meth:`est_sigma_pi0s` to have been called first.
 
-        Arguments:
-            - template_embryo (`int`): index of the reference embryo; default 0
-            - ll_thresh (`float`): log-likelihood ratio threshold separating "same" from
-              "different" allele transmission; default 0 (LLR sign flip)
-            - maternal (`bool`): if ``True`` detect maternal crossovers; default ``True``
-            - npad (`int`): half-width of the switch-cluster filter; default 5
+        Parameters
+        ----------
+        template_embryo : int
+            Index of the reference embryo; default 0.
+        ll_thresh : float
+            Log-likelihood ratio threshold separating "same" from "different"
+            allele transmission; default 0 (LLR sign flip).
+        maternal : bool
+            If True detect maternal crossovers; default True.
+        npad : int
+            Half-width of the switch-cluster filter; default 5.
 
-        Returns:
-            - Z (`np.array`): n_sib x n_info transmission-indicator matrix
-            - llr_z (`np.array`): n_sib x n_info raw LLR matrix
-            - potential_switches_filt (`np.array`): majority-vote filtered switch indices at informative markers
-            - switch_cnts_filt (`np.array`): support counts for each filtered switch
+        Returns
+        -------
+        rec_loc : list of tuple
+            Refined base-pair intervals ``(p1, p2)`` bounding each crossover.
+        switch_cnts : np.ndarray
+            Support counts for each filtered switch.
 
-        .. note::
-            To obtain refined base-pair intervals pass ``potential_switches_filt``
-            to :meth:`finalize_recomb_events`.
+        Notes
+        -----
+        To obtain the raw transmission-indicator matrix and LLR values call
+        :meth:`isolate_recomb_events` directly.
 
         """
         assert self.embryo_bafs is not None

@@ -26,6 +26,7 @@ Homepage = "https://github.com/aabiddanda/karyohmm"
 
 [project.optional-dependencies]
 tests = [ "pytest", "pytest-cov", "hypothesis", "pytest-xdist"]
+docs = ["sphinx", "furo", "numpydoc", "sphinx-autodoc-typehints"]
 
 [project.scripts]
 metahmm-infer = "karyohmm.metahmm_cli:main"
