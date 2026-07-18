@@ -76,7 +76,7 @@ logging.basicConfig(
     help="Probability of shifting between karyotype states between SNPs.",
 )
 @click.option(
-    "--maternal",
+    "--duo-maternal",
     "-m",
     required=False,
     default=False,

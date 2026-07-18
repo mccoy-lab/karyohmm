@@ -3,6 +3,8 @@
 Implements methods for both MetaHMM and PoCHMM-based datasets.
 """
 
+import warnings
+
 import numpy as np
 import polars as pl
 
@@ -62,6 +64,15 @@ class DataReader:
                 pl.Series(name="lrr", values=data["lrr"]),
                 pl.Series(name="sigmas", values=data["sigmas"]),
             )
+        else:
+            warnings.warn(
+                "No LRR/sigma data found in input; inference will fall back to "
+                "a copy-number-uninformative sentinel (lrr=-9.0, sigma=1.0) at "
+                "every site, reducing power to distinguish karyotypes that share "
+                "the same BAF pattern (e.g. monosomy vs. UPD isodisomy).",
+                UserWarning,
+                stacklevel=2,
+            )
         return df
 
     def read_data_df(self, input_fp):
@@ -94,6 +105,15 @@ class DataReader:
                 assert "pat_hap1" in df.columns
         if "lrr" in df.columns:
             assert "sigmas" in df.columns
+        else:
+            warnings.warn(
+                "No LRR/sigma columns found in input; inference will fall back "
+                "to a copy-number-uninformative sentinel (lrr=-9.0, sigma=1.0) at "
+                "every site, reducing power to distinguish karyotypes that share "
+                "the same BAF pattern (e.g. monosomy vs. UPD isodisomy).",
+                UserWarning,
+                stacklevel=2,
+            )
         return df
 
     def read_data(self, input_fp):
