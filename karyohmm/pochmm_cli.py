@@ -144,9 +144,17 @@ def main(
             )
             bafs = cur_df["baf"].to_numpy()
             pos = cur_df["pos"].to_numpy()
+            if "lrr" in cur_df.columns:
+                lrrs = cur_df["lrr"].to_numpy()
+                sigmas = cur_df["sigmas"].to_numpy()
+            else:
+                lrrs = np.repeat(-9.0, bafs.size)
+                sigmas = np.ones(bafs.size)
             if thin > 1:
                 pi0_est, sigma_est = hmm.est_sigma_pi0(
                     bafs=bafs[::thin],
+                    lrrs=lrrs[::thin],
+                    sigmas=sigmas[::thin],
                     pos=pos[::thin],
                     mat_haps=mat_haps[:, ::thin],
                     pat_haps=pat_haps[:, ::thin],
@@ -157,6 +165,8 @@ def main(
             else:
                 pi0_est, sigma_est = hmm.est_sigma_pi0(
                     bafs=bafs[::thin],
+                    lrrs=lrrs[::thin],
+                    sigmas=sigmas[::thin],
                     pos=pos[::thin],
                     mat_haps=mat_haps[:, ::thin],
                     pat_haps=pat_haps[:, ::thin],
@@ -171,6 +181,8 @@ def main(
             logging.info(f"Starting Forward-Backward algorithm tracing for {c} ...")
             gammas, states, karyotypes = hmm.forward_backward(
                 bafs=bafs,
+                lrrs=lrrs,
+                sigmas=sigmas,
                 pos=pos,
                 mat_haps=mat_haps,
                 pat_haps=pat_haps,
@@ -203,8 +215,10 @@ def main(
             gamma_dfs.append(gamma_df)
             if viterbi:
                 logging.info(f"Starting Viterbi algorithm tracing for {c} ...")
-                path, states, _, _ = hmm.viterbi(
+                path, states, _, _ = hmm.viterbi_algorithm(
                     bafs=bafs,
+                    lrrs=lrrs,
+                    sigmas=sigmas,
                     pos=pos,
                     mat_haps=mat_haps,
                     pat_haps=pat_haps,
@@ -245,6 +259,12 @@ def main(
                 )
             bafs = cur_df["baf"].to_numpy()
             pos = cur_df["pos"].to_numpy()
+            if "lrr" in cur_df.columns:
+                lrrs = cur_df["lrr"].to_numpy()
+                sigmas = cur_df["sigmas"].to_numpy()
+            else:
+                lrrs = np.repeat(-9.0, bafs.size)
+                sigmas = np.ones(bafs.size)
             ps = None
             if "af" in cur_df.columns:
                 if not cur_df["af"].is_nan().any():
@@ -252,6 +272,8 @@ def main(
             if thin > 1:
                 pi0_est, sigma_est = hmm.est_sigma_pi0(
                     bafs=bafs[::thin],
+                    lrrs=lrrs[::thin],
+                    sigmas=sigmas[::thin],
                     haps=haps[:, ::thin],
                     pos=pos[::thin],
                     freqs=ps if ps is None else ps[::thin],
@@ -262,6 +284,8 @@ def main(
             else:
                 pi0_est, sigma_est = hmm.est_sigma_pi0(
                     bafs=bafs,
+                    lrrs=lrrs,
+                    sigmas=sigmas,
                     haps=haps,
                     pos=pos,
                     freqs=ps,
@@ -276,6 +300,8 @@ def main(
             logging.info(f"Starting Forward-Backward algorithm tracing for {c} ...")
             gammas, states, karyotypes = hmm.forward_backward(
                 bafs=bafs,
+                lrrs=lrrs,
+                sigmas=sigmas,
                 pos=pos,
                 haps=haps,
                 freqs=ps,

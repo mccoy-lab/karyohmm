@@ -2341,11 +2341,14 @@ class PocHMM(MetaHMM):
         """Estimate allele frequencies for the unobserved parent using a haplotype reference panel.
 
         Identifies sites of opposite homozygosity — where the observed parent is homozygous
-        and BAF indicates the unobserved parent carries the opposite allele — then tags the
-        corresponding haplotypes in the reference panel. Frequencies at non-anchor sites are
-        estimated via distance-weighted interpolation between adjacent anchor sites (Eq. 9 in
-        the PocHMM methods document). Falls back to the reference-panel mean at sites with no
-        nearby anchors.
+        and BAF indicates the unobserved parent carries the opposite allele — then, treating
+        adjacent haplotype-row pairs ``(2i, 2i+1)`` in ``hap_matrix`` as the two haplotypes of
+        reference individual ``i``, tags every reference *individual* carrying at least one
+        copy of that allele. Frequencies at non-anchor sites are estimated via distance-weighted
+        interpolation between adjacent anchor sites (Eq. 9 in the PocHMM methods document),
+        averaging over **both** haplotypes of each tagged individual — not just the matching one
+        — so heterozygous carriers contribute their other, non-matching allele too. Falls back to
+        the reference-panel mean at sites with no nearby anchors.
 
         Parameters
         ----------
@@ -2354,7 +2357,9 @@ class PocHMM(MetaHMM):
         geno : np.ndarray
             m-length observed-parent genotype dosage array (0, 1, or 2).
         hap_matrix : np.ndarray
-            (2N, m) haplotype reference panel matrix (0/1 encoded).
+            (2N, m) haplotype reference panel matrix (0/1 encoded). Rows must be paired as
+            ``(2i, 2i+1)`` = the two haplotypes of reference individual ``i`` (i.e. an even
+            number of rows), since tagging operates at the individual level.
         pos : np.ndarray
             m-length array of genomic positions in basepairs.
         eps : float
@@ -2374,6 +2379,7 @@ class PocHMM(MetaHMM):
         assert geno.size == m
         assert hap_matrix.shape[1] == m
         assert pos.size == m
+        assert hap_matrix.shape[0] % 2 == 0
         assert 0.0 < eps < 0.5
         assert np.all(np.isin(geno, [0, 1, 2]))
         assert np.all((bafs >= 0.0) & (bafs <= 1.0))
@@ -2391,15 +2397,25 @@ class PocHMM(MetaHMM):
         if len(anchor_indices) == 0:
             return global_freq
 
-        # Tag reference haplotypes at each anchor by the inferred unobserved-parent allele:
-        #   geno==0 (observed hom-ref) → unobserved carries alt → tag alt haplotypes
-        #   geno==2 (observed hom-alt) → unobserved carries ref → tag ref haplotypes
+        # Genotype dosage (0/1/2) per reference individual, pairing rows (2i, 2i+1).
+        indiv_geno = hap_matrix[0::2, :] + hap_matrix[1::2, :]
+
+        # Tag reference *individuals* at each anchor by the inferred unobserved-parent allele:
+        #   geno==0 (observed hom-ref) → unobserved carries alt → tag individuals with >=1 alt copy
+        #   geno==2 (observed hom-alt) → unobserved carries ref → tag individuals with >=1 ref copy
+        # Both haplotype rows of each tagged individual are kept (not just the matching one), so
+        # heterozygous carriers still contribute their other allele when frequencies are averaged
+        # -- otherwise the estimate at the anchor site itself is tautologically 1.0 (or 0.0).
         tagged = {}
         for idx in anchor_indices:
             allele = 1 if geno[idx] == 0 else 0
-            x = np.where(hap_matrix[:, idx] == allele)[0]
-            if len(x) > 0:
-                tagged[int(idx)] = x
+            carriers = (
+                np.where(indiv_geno[:, idx] >= 1)[0]
+                if allele == 1
+                else np.where(indiv_geno[:, idx] <= 1)[0]
+            )
+            if len(carriers) > 0:
+                tagged[int(idx)] = np.concatenate([carriers * 2, carriers * 2 + 1])
 
         valid_anchors = sorted(tagged.keys())
         if len(valid_anchors) == 0:
