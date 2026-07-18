@@ -23,7 +23,7 @@ To install the package without cloning the entire repository, you can run (thoug
 pip install git+https://github.com/aabiddanda/karyohmm
 ```
 
-which should handle all of the key dependencies. Installation should be completed within two minutes.
+which should handle all of the key dependencies. Installation should be completed within two minutes. Note that `aabiddanda/karyohmm` is the development version of the package and is more frequently updated than `mccoy-lab/karyohmm`.
 
 While the majority of the interface uses `python`, many of the internal helper functions are built using `Cython` (see the `karyohmm_utils.pyx` file).
 
@@ -46,9 +46,17 @@ The states in the `MetaHMM` model correspond to specific karyotypes for chromoso
 * `3m` - extra maternal chromosome (maternal trisomy)
 * `3p` - extra paternal chromosome (paternal trisomy)
 
-## POCHMM
+In specific cases we can also add in four uniparental disomy. 
 
-The `POCHMM` (Products-of-Conception HMM) model similarly attempts to quantify the aneuploidy status of an embryo, but with the availability of only a **single** parent. This is primarily accomplished by marginalizing over the full set of possible genotypes for the unobserved parent (with a prior based on allele frequency).
+## `PocHMM`
+
+The `PocHMM` (Products-of-Conception HMM) model similarly attempts to quantify the aneuploidy status of an embryo, but with the availability of only a **single** parent. This is primarily accomplished by marginalizing over the full set of possible genotypes for the unobserved parent (with a prior based on allele frequency).
+
+The primary steps of inference are: 
+
+1. Infer unobserved parental allele frequencies
+2. Infer maximum-likelihood BAF emission parameters
+3. Infer posterior trace through ploidy states using the forward-backward algorithm
 
 ## CLI
 

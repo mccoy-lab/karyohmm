@@ -416,11 +416,11 @@ class PGTSimBase:
             for i in range(1, m):
                 d = pos[i] - pos[i - 1]
                 zs0_maternal[i] = (
-                    1 - zs0_paternal[i - 1]
+                    1 - zs0_maternal[i - 1]
                     if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                     else zs0_maternal[i - 1]
                 )
-                zs1_paternal[i] = (
+                zs1_maternal[i] = (
                     1 - zs1_maternal[i - 1]
                     if uniform.rvs() <= (1 - np.exp(-rec_rate * d))
                     else zs1_maternal[i - 1]
@@ -428,7 +428,7 @@ class PGTSimBase:
             zs_maternal = np.vstack([zs0_maternal, zs1_maternal])
             mat_real_hap = np.array(
                 [
-                    pat_haps[i, p] + pat_haps[j, p]
+                    mat_haps[i, p] + mat_haps[j, p]
                     for p, (i, j) in enumerate(zip(zs0_maternal, zs1_maternal))
                 ]
             )

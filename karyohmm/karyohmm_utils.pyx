@@ -99,7 +99,9 @@ cpdef double mat_dosage(mat_hap, state, int k=-1):
         if state[0] != -1:
             return <double>mat_hap[state[0]]
     elif k >= 2:
-        if state[1] != -1:
+        if state[0] == -1:
+            return 0.
+        elif state[1] != -1:
             return <double>mat_hap[state[0]] + <double>mat_hap[state[1]]
         else:
             return <double>mat_hap[state[0]]
@@ -128,7 +130,9 @@ cpdef double pat_dosage(pat_hap, state, int k=-1):
         if state[2] != -1:
             return <double>pat_hap[state[2]]
     elif k >= 2:
-        if state[3] != -1:
+        if state[2] == -1:
+            return 0.
+        elif state[3] != -1:
             return <double>pat_hap[state[2]] + <double>pat_hap[state[3]]
         else:
             return <double>pat_hap[state[2]]

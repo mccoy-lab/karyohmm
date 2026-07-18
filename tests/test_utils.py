@@ -18,6 +18,17 @@ from karyohmm import PGTSim
         ([0, 1], (1, -1, 1, -1), 1),
         ([1, 1], (0, 1, 1, -1), 2),
         ([1, 1], (-1, -1, -1, -1), -1),
+        # UPD states: total ploidy (k) is 2, but the maternal side of the
+        # state tuple is entirely -1 (paternal isodisomy/heterodisomy).
+        # The mother contributed nothing, so the dosage must be 0 -- NOT
+        # `hap[-1]`, which Python/Cython silently resolves to `hap[1]`.
+        ([0, 1], (-1, -1, 0, 0), 0),
+        ([0, 1], (-1, -1, 0, 1), 0),
+        ([1, 0], (-1, -1, 0, 0), 0),
+        # Maternal UPD states: both maternal copies are used and the
+        # paternal side is absent -- these should still sum correctly.
+        ([1, 0], (0, 1, -1, -1), 1),
+        ([1, 1], (0, 0, -1, -1), 2),
     ],
 )
 def test_mat_dosage(hap, state, expected):
@@ -35,6 +46,15 @@ def test_mat_dosage(hap, state, expected):
         ([1, 1], (1, -1, 0, 1), 2.0),
         ([1, 0], (1, -1, 0, 0), 2.0),
         ([1, 1], (-1, -1, -1, -1), -1),
+        # UPD states: total ploidy (k) is 2, but the paternal side of the
+        # state tuple is entirely -1 (maternal isodisomy/heterodisomy).
+        ([0, 1], (0, 0, -1, -1), 0),
+        ([0, 1], (0, 1, -1, -1), 0),
+        ([1, 0], (0, 0, -1, -1), 0),
+        # Paternal UPD states: both paternal copies are used and the
+        # maternal side is absent -- these should still sum correctly.
+        ([1, 0], (-1, -1, 0, 1), 1),
+        ([1, 1], (-1, -1, 0, 0), 2),
     ],
 )
 def test_pat_dosage(hap, state, expected):
