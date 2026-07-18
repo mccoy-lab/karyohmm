@@ -50,13 +50,15 @@ In specific cases we can also add in four uniparental disomy.
 
 ## `PocHMM`
 
-The `PocHMM` (Products-of-Conception HMM) model similarly attempts to quantify the aneuploidy status of an embryo, but with the availability of only a **single** parent. This is primarily accomplished by marginalizing over the full set of possible genotypes for the unobserved parent (with a prior based on allele frequency).
+The `PocHMM` (Products-of-Conception HMM) model quantifies the aneuploidy status of an embryo when only a **single** parent (mother or father) has been genotyped, as is common for products-of-conception samples following pregnancy loss. `PocHMM` extends `MetaHMM` and shares its karyotype state space (including the optional UPD states), but marginalizes over the unobserved parent's genotype at each site rather than conditioning on a second observed haplotype.
 
-The primary steps of inference are: 
+The unobserved parent's genotype is marginalized against a per-site allele frequency prior: if population allele frequencies are supplied (e.g. via an `af` column, or estimated from a haplotype reference panel using `infer_missing_af`), those are used; otherwise every site is treated as a 50/50 heterozygote for the unobserved parent.
 
-1. Infer unobserved parental allele frequencies
-2. Infer maximum-likelihood BAF emission parameters
-3. Infer posterior trace through ploidy states using the forward-backward algorithm
+We suggest applying the following steps on each chromosome:
+
+1. (Optional) Estimate unobserved-parent allele frequencies from a haplotype reference panel via `infer_missing_af`, if population allele frequencies aren't otherwise available.
+2. Estimate parameters ($\sigma, \pi_0$) via MLE using numerical optimization of the forward algorithm.
+3. Estimate the posterior probabilities of karyotype states using the Forward-Backward algorithm, using the inferred parameters from step 2.
 
 ## CLI
 
