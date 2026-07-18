@@ -1,4 +1,5 @@
 """Test suite for simulation of PGT-A data."""
+
 import numpy as np
 import pytest
 from hypothesis import given, settings
@@ -17,7 +18,7 @@ pgt_sim_segmental = PGTSimSegmental()
     ploidy=st.integers(min_value=0, max_value=3),
 )
 @settings(max_examples=100, deadline=5000)
-def test_pgt_sim(length, m, ploidy):
+def test_pgt_sim_baf(length, m, ploidy):
     """Test for PGT simulations."""
     data = pgt_sim.full_ploidy_sim(m=m, ploidy=ploidy, length=length)
     assert data["m"] == m
@@ -26,6 +27,24 @@ def test_pgt_sim(length, m, ploidy):
     assert "baf" in data.keys()
     if ploidy > 0:
         assert np.any(data["baf"] == 0.0) | np.any(data["baf"] == 1.0)
+
+
+@given(
+    length=st.floats(min_value=1e2, max_value=1e8),
+    m=st.integers(min_value=1000, max_value=5000),
+    ploidy=st.integers(min_value=0, max_value=3),
+)
+@settings(max_examples=100, deadline=5000)
+def test_pgt_sim_reads(length, m, ploidy):
+    """Test for PGT simulations."""
+    data = pgt_sim.full_ploidy_sim(m=m, reads=True, ploidy=ploidy, length=length)
+    assert data["m"] == m
+    assert data["length"] == length
+    assert np.max(data["pos"]) <= length
+    assert "alt_reads" in data.keys()
+    assert "ref_reads" in data.keys()
+    assert np.all(data["alt_reads"] >= 0)
+    assert np.all(data["ref_reads"] >= 0)
 
 
 @pytest.mark.parametrize(
@@ -61,6 +80,24 @@ def test_pgt_siblings(length, m, nsib):
     for i in range(nsib):
         assert f"baf_embryo{i}" in data.keys()
         assert f"geno_embryo{i}" in data.keys()
+
+
+@given(
+    length=st.floats(min_value=1e2, max_value=1e8),
+    m=st.integers(min_value=2, max_value=1000),
+    nsib=st.integers(min_value=2, max_value=5),
+)
+@settings(max_examples=20, deadline=5000)
+def test_pgt_siblings_reads(length, m, nsib):
+    """Test for PGT simulations."""
+    data = pgt_sim.sibling_euploid_sim(nsibs=nsib, reads=True, m=m, length=length)
+    assert data["m"] == m
+    assert data["length"] == length
+    assert data["nsibs"] == nsib
+    assert np.max(data["pos"]) <= length
+    for i in range(nsib):
+        assert f"alt_reads{i}" in data.keys()
+        assert f"ref_reads{i}" in data.keys()
 
 
 @given(
@@ -142,6 +179,10 @@ def test_pgt_sim_from_vcf(valid_vcf_file):
     )
     results = pgt_sim.sim_from_haps(mat_haps=mat_haps, pat_haps=pat_haps, pos=pos)
     assert "baf" in results
+    assert "alt_reads" in results
+    assert "ref_reads" in results
+    assert results["alt_reads"] is None
+    assert results["ref_reads"] is None
 
 
 @given(
@@ -163,3 +204,167 @@ def test_pgt_sim_ref_panel(length, m, k):
     assert ref_panel.ndim == 2
     assert ref_panel.shape[0] == k
     assert ref_panel.shape[1] == m
+
+
+@given(
+    length=st.floats(min_value=1e2, max_value=1e8),
+    m=st.integers(min_value=100, max_value=1000),
+    cc=st.floats(min_value=0.0, max_value=0.5),
+)
+@settings(max_examples=10, deadline=5000)
+def test_sim_mcc(length, m, cc):
+    """Test for PGT simulations."""
+    data = pgt_sim.full_ploidy_sim(m=m, ploidy=2, length=length)
+    assert data["m"] == m
+    assert data["length"] == length
+    assert np.max(data["pos"]) <= length
+    assert "baf" in data.keys()
+    cc_baf = pgt_sim.sim_cell_contamination(
+        baf=data["baf"], haps=data["mat_haps"], fraction=cc, seed=42
+    )
+    baf = data["baf"]
+    idx = (baf != 0) & (baf != 1)
+    if ~np.isclose(cc, 0):
+        assert np.all(cc_baf[idx] != baf[idx])
+
+
+@given(
+    length=st.floats(min_value=1e2, max_value=1e8),
+    m=st.integers(min_value=100, max_value=1000),
+    c=st.sampled_from(["2p0", "2p1", "2m0", "2m1"]),
+)
+def test_pgt_sim_upd(length, m, c):
+    data = pgt_sim.full_ploidy_sim(m=m, length=length, ploidy=2, upd=c)
+    assert data["m"] == m
+    assert data["length"] == length
+    assert np.max(data["pos"]) <= length
+    assert "baf" in data.keys()
+    assert "lrr" in data.keys()
+    if c in ["2p0", "2m0"]:
+        # isodisomy so no true hets
+        assert np.all((data["geno_embryo"] == 0) | (data["geno_embryo"] == 2))
+
+
+# ---------------------------------------------------------------------------
+# PGTSimMosaic tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "ploidies,props,ncells",
+    [
+        (np.array([2]), np.array([1.0]), 5),
+        (np.array([1, 2]), np.array([0.3, 0.7]), 10),
+        (np.array([2, 3]), np.array([0.6, 0.4]), 10),
+        (np.array([1, 2, 3]), np.array([0.2, 0.6, 0.2]), 15),
+    ],
+)
+def test_mosaic_sim_mixed_ploidy(ploidies, props, ncells):
+    """PGTSimMosaic.mixed_ploidy_sim returns expected keys and shapes."""
+    data = pgt_sim_mosaic.mixed_ploidy_sim(
+        ploidies=ploidies, props=props, ncells=ncells, m=500, length=1e6, seed=42
+    )
+    assert data["m"] == 500
+    assert "baf" in data
+    assert "lrr" in data
+    assert "sigmas" in data
+    assert "pos" in data
+    assert "mat_haps" in data
+    assert "pat_haps" in data
+    assert data["baf"].shape == (500,)
+    assert data["lrr"].shape == (500,)
+    assert np.all(data["baf"] >= 0) and np.all(data["baf"] <= 1)
+    assert np.max(data["pos"]) <= 1e6
+    # aploid list has one entry per unique ploidy actually sampled
+    assert len(data["aploid"]) == np.unique(data["ploidies"]).size
+
+
+@pytest.mark.parametrize(
+    "props",
+    [
+        np.array([0.0, 1.0, 0.0, 0.0]),
+        np.array([0.0, 0.3, 0.7, 0.0]),
+        np.array([0.0, 0.0, 0.6, 0.4]),
+    ],
+)
+def test_mosaic_sim_disomy_dominant(props):
+    """mixed_ploidy_sim with high disomy proportion produces near-disomy BAF."""
+    ploidies = np.array([0, 1, 2, 3])
+    data = pgt_sim_mosaic.mixed_ploidy_sim(
+        ploidies=ploidies,
+        props=props,
+        ncells=20,
+        m=1000,
+        length=5e6,
+        std_dev=0.05,
+        seed=1,
+    )
+    assert data["m"] == 1000
+    assert "baf" in data
+    assert data["baf"].shape == (1000,)
+
+
+def test_mosaic_sim_reproducible():
+    """Two runs with the same seed produce identical output."""
+    kwargs = dict(
+        ploidies=np.array([2, 3]),
+        props=np.array([0.6, 0.4]),
+        ncells=10,
+        m=500,
+        length=1e6,
+        seed=99,
+    )
+    d1 = pgt_sim_mosaic.mixed_ploidy_sim(**kwargs)
+    d2 = pgt_sim_mosaic.mixed_ploidy_sim(**kwargs)
+    np.testing.assert_array_equal(d1["baf"], d2["baf"])
+    np.testing.assert_array_equal(d1["pos"], d2["pos"])
+
+
+def test_mosaic_sim_from_haps():
+    """PGTSimMosaic.sim_from_haps works with pre-computed parental haplotypes."""
+    base = pgt_sim.full_ploidy_sim(m=500, ploidy=2, length=1e6, seed=7)
+    data = pgt_sim_mosaic.sim_from_haps(
+        mat_haps=base["mat_haps"],
+        pat_haps=base["pat_haps"],
+        pos=base["pos"],
+        ploidies=np.array([2, 3]),
+        props=np.array([0.7, 0.3]),
+        ncells=8,
+        seed=7,
+    )
+    assert "baf" in data
+    assert "lrr" in data
+    assert data["baf"].shape == (500,)
+    assert np.all(data["baf"] >= 0) and np.all(data["baf"] <= 1)
+
+
+def test_mosaic_sim_props_normalization():
+    """mixed_ploidy_sim normalizes props that do not sum to 1."""
+    data = pgt_sim_mosaic.mixed_ploidy_sim(
+        ploidies=np.array([2, 3]),
+        props=np.array([3.0, 1.0]),
+        ncells=10,
+        m=300,
+        length=5e5,
+        seed=5,
+    )
+    assert data["m"] == 300
+    assert "baf" in data
+
+
+@pytest.mark.parametrize("seed", [1, 2, 3, 42])
+def test_mosaic_sim_bulk_shapes(seed):
+    """Bulk BAF/LRR/sigmas arrays have shape (ncells, m)."""
+    ncells = 6
+    m = 400
+    data = pgt_sim_mosaic.mixed_ploidy_sim(
+        ploidies=np.array([2, 3]),
+        props=np.array([0.5, 0.5]),
+        ncells=ncells,
+        m=m,
+        length=2e6,
+        seed=seed,
+    )
+    assert data["baf_embryo_bulk"].shape == (ncells, m)
+    assert data["lrr_embryo_bulk"].shape == (ncells, m)
+    assert data["sigmas_embryo_bulk"].shape == (ncells, m)

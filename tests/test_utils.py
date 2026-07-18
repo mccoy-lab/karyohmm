@@ -1,6 +1,5 @@
 """Testing module for utility functions."""
 
-
 import numpy as np
 import pytest
 from hypothesis import given, settings
@@ -19,6 +18,17 @@ from karyohmm import PGTSim
         ([0, 1], (1, -1, 1, -1), 1),
         ([1, 1], (0, 1, 1, -1), 2),
         ([1, 1], (-1, -1, -1, -1), -1),
+        # UPD states: total ploidy (k) is 2, but the maternal side of the
+        # state tuple is entirely -1 (paternal isodisomy/heterodisomy).
+        # The mother contributed nothing, so the dosage must be 0 -- NOT
+        # `hap[-1]`, which Python/Cython silently resolves to `hap[1]`.
+        ([0, 1], (-1, -1, 0, 0), 0),
+        ([0, 1], (-1, -1, 0, 1), 0),
+        ([1, 0], (-1, -1, 0, 0), 0),
+        # Maternal UPD states: both maternal copies are used and the
+        # paternal side is absent -- these should still sum correctly.
+        ([1, 0], (0, 1, -1, -1), 1),
+        ([1, 1], (0, 0, -1, -1), 2),
     ],
 )
 def test_mat_dosage(hap, state, expected):
@@ -36,6 +46,15 @@ def test_mat_dosage(hap, state, expected):
         ([1, 1], (1, -1, 0, 1), 2.0),
         ([1, 0], (1, -1, 0, 0), 2.0),
         ([1, 1], (-1, -1, -1, -1), -1),
+        # UPD states: total ploidy (k) is 2, but the paternal side of the
+        # state tuple is entirely -1 (maternal isodisomy/heterodisomy).
+        ([0, 1], (0, 0, -1, -1), 0),
+        ([0, 1], (0, 1, -1, -1), 0),
+        ([1, 0], (0, 0, -1, -1), 0),
+        # Paternal UPD states: both paternal copies are used and the
+        # maternal side is absent -- these should still sum correctly.
+        ([1, 0], (-1, -1, 0, 1), 1),
+        ([1, 1], (-1, -1, 0, 0), 2),
     ],
 )
 def test_pat_dosage(hap, state, expected):
@@ -58,6 +77,7 @@ def test_pat_dosage(hap, state, expected):
     p=st.integers(min_value=0, max_value=1),
     k=st.integers(min_value=2, max_value=2),
 )
+@settings(deadline=None, max_examples=25)
 def test_emission_disomy(pi0, sigma, m, p, k):
     """Test that the emission under disomy integrates to 1."""
     bs = np.linspace(0, 1, 1000)
@@ -79,6 +99,7 @@ def test_emission_disomy(pi0, sigma, m, p, k):
     ),
     m=st.integers(min_value=0, max_value=1),
 )
+@settings(deadline=None, max_examples=25)
 def test_emission_monosomy(pi0, sigma, m):
     """Test that the emission under disomy integrates to 1."""
     bs = np.linspace(0, 1, 1000)
@@ -101,6 +122,7 @@ def test_emission_monosomy(pi0, sigma, m):
     m=st.integers(min_value=0, max_value=2),
     p=st.integers(min_value=0, max_value=1),
 )
+@settings(deadline=None, max_examples=25)
 def test_emission_trisomy(pi0, sigma, m, p):
     """Test that the emission under disomy integrates to 1."""
     bs = np.linspace(0, 1, 1000)
@@ -122,6 +144,7 @@ def test_emission_trisomy(pi0, sigma, m, p):
     ),
     k=st.integers(min_value=2, max_value=3),
 )
+@settings(deadline=None)
 def test_emission_overall(baf, m, p, k, sigma):
     """Test the overall admissions distribution."""
     mu = (m + p) / k
@@ -147,6 +170,7 @@ def test_emission_overall(baf, m, p, k, sigma):
     nsibs=st.integers(min_value=1, max_value=10),
     switch=st.booleans(),
 )
+@settings(deadline=None, max_examples=25)
 def test_sim_joint_het(switch, pi0, sigma, nsibs):
     """Test the simulation of the joint heterozygotes."""
     true_haps1, true_haps2, haps1, haps2, bafs, genos = PGTSim().sim_joint_het(

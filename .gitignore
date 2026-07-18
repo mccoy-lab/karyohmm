@@ -1,16 +1,32 @@
 sandbox/
 nohup.out
+
+# Cython build artifacts
 *.c
 *.so
-*.html
+
+# Python
+*.pyc
+*.pyo
+__pycache__/
 *.egg-info/
+dist/
 build/
+
+# Testing and coverage
 *.coverage*
+coverage.xml
 .hypothesis/
+.pytest_cache/
 htmlcov/
+
+# Sphinx documentation build output
 docs/_static/
 docs/_templates/
 docs/_build/
+
+# Data files
 *.tsv.gz
 *.tsv
 *.npz
+*.json
