@@ -1856,11 +1856,19 @@ class PocHMM(MetaHMM):
     disomy : bool, optional
         Restrict the state space to disomy (ignored in current implementation;
         the full MetaHMM state space is always used).  Default ``False``.
+    upd : bool, optional
+        Add uniparental disomy states to the state space.  As with
+        :class:`MetaHMM`, LRR data helps distinguish UPD from normal disomy.
+        In the duo setting, only the UPD states on the *observed* parent's
+        side (see ``maternal`` in :meth:`forward_algorithm`) are identifiable
+        from copy-number-neutral signal alone; UPD states on the unobserved
+        side are marginalised over population allele frequencies like any
+        other unobserved-parent state.  Default ``False``.
     """
 
-    def __init__(self, disomy=False):
+    def __init__(self, disomy=False, upd=False):
         """Initialize the PocHMM with the full MetaHMM state space."""
-        super().__init__()
+        super().__init__(disomy=disomy, upd=upd)
 
     def est_sigma_pi0(
         self,

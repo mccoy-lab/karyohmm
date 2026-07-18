@@ -69,6 +69,15 @@ logging.basicConfig(
     help="Probability of shifting between aneuploidy states between SNPs.",
 )
 @click.option(
+    "--upd",
+    is_flag=True,
+    required=False,
+    default=False,
+    show_default=True,
+    type=bool,
+    help="Add uniparental disomy (UPD) states to the model state space.",
+)
+@click.option(
     "--gzip",
     "-g",
     is_flag=True,
@@ -92,6 +101,7 @@ def main(
     thin=1,
     recomb_rate=1e-8,
     aneuploidy_rate=1e-2,
+    upd=False,
     gzip=False,
     out="karyohmm",
 ):
@@ -101,7 +111,7 @@ def main(
     data_df = data_reader.read_data(input)
     assert data_df is not None
     logging.info(f"Finished reading in {input}.")
-    hmm = MetaHMM()
+    hmm = MetaHMM(upd=upd)
     # Keep accumulators of the various dataframes to be output
     kar_dfs = []
     path_dfs = []

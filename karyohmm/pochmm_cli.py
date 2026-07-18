@@ -85,6 +85,15 @@ logging.basicConfig(
     help="Indicator of duo being mother-child duo.",
 )
 @click.option(
+    "--upd",
+    is_flag=True,
+    required=False,
+    default=False,
+    show_default=True,
+    type=bool,
+    help="Add uniparental disomy (UPD) states to the model state space.",
+)
+@click.option(
     "--gzip",
     "-g",
     is_flag=True,
@@ -110,6 +119,7 @@ def main(
     recomb_rate=1e-8,
     aneuploidy_rate=1e-2,
     duo_maternal=True,
+    upd=False,
     gzip=True,
     out="karyohmm",
 ):
@@ -120,9 +130,9 @@ def main(
     assert data_df is not None
     logging.info(f"Finished reading in {input}.")
     if mode == "Meta":
-        hmm = MetaHMM()
+        hmm = MetaHMM(upd=upd)
     elif mode == "Duo":
-        hmm = PocHMM()
+        hmm = PocHMM(upd=upd)
     else:
         raise NotImplementedError(
             f"Mode {mode} is not currently supported  in karyoHMM!"
