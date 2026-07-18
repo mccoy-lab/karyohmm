@@ -46,7 +46,7 @@ The states in the `MetaHMM` model correspond to specific karyotypes for chromoso
 * `3m` - extra maternal chromosome (maternal trisomy)
 * `3p` - extra paternal chromosome (paternal trisomy)
 
-In specific cases we can also add in four uniparental disomy. 
+In specific cases we can also add in four uniparental disomy.
 
 ## `PocHMM`
 

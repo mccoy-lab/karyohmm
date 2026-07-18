@@ -16,8 +16,12 @@ from karyohmm.simulator import PGTSimMosaic
 
 pgt_sim = PGTSim()
 data_disomy = pgt_sim.full_ploidy_sim(m=5000, length=1e7, std_dev=0.1, seed=42)
-data_trisomy = pgt_sim.full_ploidy_sim(m=5000, ploidy=3, length=1e7, std_dev=0.1, seed=42)
-data_monosomy = pgt_sim.full_ploidy_sim(m=5000, ploidy=1, length=1e7, std_dev=0.1, seed=42)
+data_trisomy = pgt_sim.full_ploidy_sim(
+    m=5000, ploidy=3, length=1e7, std_dev=0.1, seed=42
+)
+data_monosomy = pgt_sim.full_ploidy_sim(
+    m=5000, ploidy=1, length=1e7, std_dev=0.1, seed=42
+)
 
 # seed=42 → aploid 3m (maternal gain) and 1m (paternal loss, maternal retained)
 # seed=44 → aploid 3p (paternal gain) and 1p (maternal loss, paternal retained)
